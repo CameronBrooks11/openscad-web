@@ -21,8 +21,6 @@ export const checkSyntax =
       activePath,
       sources,
     } = sargs;
-    
-    const content = '$preview=true;\n' + sources[0].content;
 
     const outFile = 'out.json';
     const job = spawnOpenSCAD({
@@ -30,15 +28,12 @@ export const checkSyntax =
       inputs: sources,
       args: [activePath, "-o", outFile, "--export-format=param"],
       outputPaths: [outFile],
-    }, (streams) => {
-      console.log(JSON.stringify(streams));
-    });
+    }, (streams) => {});
 
     return AbortablePromise<SyntaxCheckOutput>((res, rej) => {
       (async () => {
         try {
           const result = await job;
-          // console.log(result);
 
           let parameterSet: ParameterSet | undefined = undefined;
           if (result.outputs && result.outputs.length == 1) {
@@ -46,7 +41,6 @@ export const checkSyntax =
             content = new TextDecoder().decode(content as any);
             try {
               parameterSet = JSON.parse(content)
-              // console.log('PARAMETER SET', JSON.stringify(parameterSet, null, 2))
             } catch (e) {
               console.error(`Error while parsing parameter set: ${e}\n${content}`);
             }
@@ -57,7 +51,7 @@ export const checkSyntax =
           res({
             ...processMergedOutputs(result.mergedOutputs, {shiftSourceLines: {
               sourcePath: sources[0].path,
-              skipLines: 1,
+              skipLines: 0,
             }}),
             parameterSet,
           });
