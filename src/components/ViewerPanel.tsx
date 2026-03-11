@@ -67,32 +67,27 @@ export default function ViewerPanel({className, style}: {className?: string, sty
   const modelUri = state.output?.displayFileURL ?? state.output?.outFileURL ?? '';
   const loaded = loadedUri === modelUri;
 
-  if (state?.preview) {
-    let {hash, uri} = cachedImageHash ?? {};
-    if (state.preview.blurhash && hash !== state.preview.blurhash) {
-      hash = state.preview.blurhash;
-      uri = blurHashToImage(hash, 100, 100);
-      setCachedImageHash({hash, uri});
-    } else if (state.preview.thumbhash && hash !== state.preview.thumbhash) {
-      hash = state.preview.thumbhash;
-      uri = thumbHashToImage(hash);
-      setCachedImageHash({hash, uri});
+  // Sync preview image hash with state
+  useEffect(() => {
+    if (state?.preview) {
+      const { hash } = cachedImageHash ?? {};
+      if (state.preview.blurhash && hash !== state.preview.blurhash) {
+        setCachedImageHash({ hash: state.preview.blurhash, uri: blurHashToImage(state.preview.blurhash, 100, 100) });
+      } else if (state.preview.thumbhash && hash !== state.preview.thumbhash) {
+        setCachedImageHash({ hash: state.preview.thumbhash, uri: thumbHashToImage(state.preview.thumbhash) });
+      }
+    } else if (cachedImageHash) {
+      setCachedImageHash(undefined);
     }
-  } else if (cachedImageHash) {
-    setCachedImageHash(undefined);
-  }
+  }, [state?.preview?.blurhash, state?.preview?.thumbhash]);
 
   const onLoad = useCallback(async (e: any) => {
     setLoadedUri(modelUri);
-    console.log('onLoad', e);
 
     if (!modelViewerRef.current) return;
 
     const uri = await modelViewerRef.current.toDataURL('image/png', 0.5);
     const preview = {blurhash: await imageToBlurhash(uri)};
-    // const preview = {thumbhash: await imageToThumbhash(uri)};
-    console.log(preview);
-    
     model?.mutate(s => s.preview = preview);
   }, [model, modelUri, setLoadedUri, modelViewerRef.current]);
 
@@ -105,25 +100,36 @@ export default function ViewerPanel({className, style}: {className?: string, sty
   }, [modelViewerRef.current, onLoad]);
 
 
-  for (const ref of [modelViewerRef, axesViewerRef]) {
-    const otherRef = ref === modelViewerRef ? axesViewerRef : modelViewerRef;
-    useEffect(() => {
-      if (!ref.current) return;
-
-      function handleCameraChange(e: any) {
-        if (!otherRef.current) return;
-        if (e.detail.source === 'user-interaction') {
-          const cameraOrbit = ref.current.getCameraOrbit();
-          cameraOrbit.radius = otherRef.current.getCameraOrbit().radius;
-        
-          otherRef.current.cameraOrbit = cameraOrbit.toString();
-        }
+  // Sync camera orbit between model viewer and axes viewer
+  useEffect(() => {
+    if (!modelViewerRef.current) return;
+    function handleCameraChange(e: any) {
+      if (!axesViewerRef.current) return;
+      if (e.detail.source === 'user-interaction') {
+        const cameraOrbit = modelViewerRef.current.getCameraOrbit();
+        cameraOrbit.radius = axesViewerRef.current.getCameraOrbit().radius;
+        axesViewerRef.current.cameraOrbit = cameraOrbit.toString();
       }
-      const element = ref.current;
-      element.addEventListener('camera-change', handleCameraChange);
-      return () => element.removeEventListener('camera-change', handleCameraChange);
-    }, [ref.current, otherRef.current]);
-  }
+    }
+    const element = modelViewerRef.current;
+    element.addEventListener('camera-change', handleCameraChange);
+    return () => element.removeEventListener('camera-change', handleCameraChange);
+  }, [modelViewerRef.current, axesViewerRef.current]);
+
+  useEffect(() => {
+    if (!axesViewerRef.current) return;
+    function handleCameraChange(e: any) {
+      if (!modelViewerRef.current) return;
+      if (e.detail.source === 'user-interaction') {
+        const cameraOrbit = axesViewerRef.current.getCameraOrbit();
+        cameraOrbit.radius = modelViewerRef.current.getCameraOrbit().radius;
+        modelViewerRef.current.cameraOrbit = cameraOrbit.toString();
+      }
+    }
+    const element = axesViewerRef.current;
+    element.addEventListener('camera-change', handleCameraChange);
+    return () => element.removeEventListener('camera-change', handleCameraChange);
+  }, [axesViewerRef.current, modelViewerRef.current]);
 
   // Cycle through predefined views when user clicks on the axes viewer
   useEffect(() => {
@@ -161,13 +167,11 @@ export default function ViewerPanel({className, style}: {className?: string, sty
     }
     window.addEventListener('mousedown', onMouseDown);
     window.addEventListener('mouseup', onMouseUp);
-    // window.addEventListener('click', onClick);
     return () => {
-      // window.removeEventListener('click', onClick);
       window.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  });
+  }, []);
 
   return (
     <div className={className}

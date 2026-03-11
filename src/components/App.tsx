@@ -1,6 +1,6 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import React, { CSSProperties, useEffect, useState } from 'react';
+import React, { CSSProperties, useEffect, useRef, useState } from 'react';
 import {MultiLayoutComponentId, State, StatePersister} from '../state/app-state'
 import { Model } from '../state/model';
 import EditorPanel from './EditorPanel';
@@ -14,8 +14,12 @@ import CustomizerPanel from './CustomizerPanel';
 
 export function App({initialState, statePersister, fs}: {initialState: State, statePersister: StatePersister, fs: FS}) {
   const [state, setState] = useState(initialState);
-  
-  const model = new Model(fs, state, setState, statePersister);
+
+  const modelRef = useRef<Model | null>(null);
+  if (!modelRef.current) {
+    modelRef.current = new Model(fs, state, setState, statePersister);
+  }
+  const model = modelRef.current;
   useEffect(() => model.init());
 
   useEffect(() => {
@@ -35,7 +39,7 @@ export function App({initialState, statePersister, fs}: {initialState: State, st
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []);
+  }, [model]);
 
   const zIndexOfPanelsDependingOnFocus = {
     editor: {

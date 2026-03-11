@@ -20,6 +20,27 @@ import "primereact/resources/primereact.min.css";
 import "primeicons/primeicons.css";
 import "primeflex/primeflex.min.css";
 
+class AppErrorBoundary extends React.Component<{children: React.ReactNode}, {error: Error | null}> {
+  constructor(props: any) {
+    super(props);
+    this.state = { error: null };
+  }
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: '2rem', fontFamily: 'monospace', color: 'red' }}>
+          <h2>Something went wrong.</h2>
+          <pre>{this.state.error.message}</pre>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const log = debug('app:log');
 
 if (process.env.NODE_ENV !== 'production') {
@@ -96,9 +117,10 @@ window.addEventListener('load', async () => {
   );
   root.render(
     <React.StrictMode>
-      <App initialState={initialState} statePersister={statePersister} fs={fs} />
+      <AppErrorBoundary>
+        <App initialState={initialState} statePersister={statePersister} fs={fs} />
+      </AppErrorBoundary>
     </React.StrictMode>
   );
 });
-
 
