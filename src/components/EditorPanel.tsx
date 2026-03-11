@@ -90,7 +90,7 @@ export default function EditorPanel({className, style}: {className?: string, sty
           {
             label: "New project",
             icon: 'pi pi-plus-circle',
-            command: () => window.open(buildUrlForStateParams(getBlankProjectState()), '_blank'),
+            command: async () => window.open(await buildUrlForStateParams(getBlankProjectState()), '_blank'),
             target: '_blank',
           },
           {

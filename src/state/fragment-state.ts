@@ -5,8 +5,8 @@ import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
 import { validateArray, validateBoolean, validateString, validateStringEnum } from "../utils.ts";
 import { createInitialState, defaultModelColor, defaultSourcePath } from "./initial-state.ts";
 
-export function buildUrlForStateParams(state: State) {//partialState: {params: State['params'], view: State['view']}) {
-  return `${location.protocol}//${location.host}${location.pathname}#${encodeStateParamsAsFragment(state)}`;
+export async function buildUrlForStateParams(state: State) {
+  return `${location.protocol}//${location.host}${location.pathname}#${await encodeStateParamsAsFragment(state)}`;
 }
 export async function writeStateInFragment(state: State) {
   history.replaceState(state, '', '#' + await encodeStateParamsAsFragment(state));
@@ -29,21 +29,12 @@ async function decompressString(compressedInput: string): Promise<string> {
   }).pipeThrough(new DecompressionStream('gzip'))).arrayBuffer());
 }
 
-// async function addFile(path: string, content: string) {
-//   const state = JSON.parse(await decompressString(window.location.hash.substring(1)));
-//   // console.log(JSON.stringify(state, null, 2)); // Put a breakpoint here if you wanna peek into the state
-//   state.params.sources.push({ path, content });
-//   window.history.pushState(state, '', '#' + await compressString(JSON.stringify(state)));
-//   window.location.reload();
-// }
-
 export function encodeStateParamsAsFragment(state: State) {
   const json = JSON.stringify({
     params: state.params,
     view: state.view,
     preview: state.preview,
   });
-  // return encodeURIComponent(json);
   return compressString(json);
 }
 export async function readStateFromFragment(): Promise<State | null> {
@@ -100,8 +91,8 @@ export async function readStateFromFragment(): Promise<State | null> {
           },
           collapsedCustomizerTabs: validateArray(view?.collapsedCustomizerTabs, validateString),
           color: validateString(view?.color, () => defaultModelColor),
-          showAxes: validateBoolean(view?.layout?.showAxis, () => true),
-          lineNumbers: validateBoolean(view?.layout?.lineNumbers, () => false)
+          showAxes: validateBoolean(view?.showAxes, () => true),
+          lineNumbers: validateBoolean(view?.lineNumbers, () => false)
         }
       };
     } catch (e) {
