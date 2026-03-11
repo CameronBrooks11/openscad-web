@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import AdmZip from 'adm-zip';
 import { exec } from 'node:child_process';
 import { createWriteStream, existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
@@ -118,51 +119,115 @@ class OpenSCADLibrariesPlugin {
     async createZip(sourceDir, outputPath, includes = [], excludes = [], workingDir = '.') {
         await this.ensureDir(path.dirname(outputPath));
 
-        const fullSourceDir = path.join(sourceDir, workingDir);
+        const baseDir = path.resolve(path.join(sourceDir, workingDir));
+        const zip = new AdmZip();
 
-        // Build find command for includes
-        let findCmd = '';
-        if (includes.length > 0) {
-            const findPatterns = includes.map(pattern => {
-                if (pattern.includes('**/*.')) {
-                    const parts = pattern.split('/');
-                    const dir = parts[0];
-                    const filePattern = parts[parts.length - 1];
-                    return `-path "./${dir}/*" -name "${filePattern}"`;
-                } else if (pattern.includes('**')) {
-                    const filePattern = pattern.replace('**/', '');
-                    return `-name "${filePattern}"`;
-                } else if (pattern.includes('*')) {
-                    return `-name "${pattern}"`;
-                } else if (pattern.includes('/')) {
-                    return `-path "./${pattern}"`;
-                } else {
-                    return `-name "${pattern}" -o -path "./${pattern}/*"`;
-                }
-            }).join(' -o ');
-            findCmd = `find . \\( ${findPatterns} \\)`;
-        } else {
-            findCmd = 'find . -name "*.scad"';
+        // Walk and include files relative to baseDir
+        const allFiles = await this.walkDir(baseDir);
+        for (const absPath of allFiles) {
+            const relPath = path.relative(baseDir, absPath).split(path.sep).join('/');
+            const effectiveIncludes = includes.length > 0 ? includes : ['**/*.scad'];
+            if (this.matchesAnyInclude(relPath, effectiveIncludes) && !this.matchesAnyExclude(relPath, excludes)) {
+                zip.addFile(relPath, await fs.readFile(absPath));
+            }
         }
 
-        // Add excludes
-        if (excludes.length > 0) {
-            const excludePatterns = excludes.map(pattern => {
-                const cleanPattern = pattern.replace('**/', '').replace('/**', '');
-                return `-not -path "*/${cleanPattern}*"`;
-            }).join(' ');
-            findCmd += ` ${excludePatterns}`;
+        // Handle "../file" patterns (files outside workingDir, e.g. boltsparts' "../LICENSE")
+        for (const pattern of includes) {
+            if (!pattern.startsWith('../')) continue;
+            const absPath = path.resolve(baseDir, pattern);
+            if (existsSync(absPath)) {
+                try {
+                    const stat = await fs.stat(absPath);
+                    if (stat.isFile()) {
+                        zip.addFile(path.basename(pattern), await fs.readFile(absPath));
+                    }
+                } catch { /* ignore */ }
+            }
         }
 
-        const zipCmd = `cd ${fullSourceDir} && ${findCmd} | zip -r ${path.resolve(outputPath)} -@`;
+        zip.writeZip(path.resolve(outputPath));
+        console.log(`Created zip: ${outputPath}`);
+    }
 
-        console.log(`Creating zip: ${outputPath}`);
+    // Recursively list all files under dir.
+    async walkDir(dir) {
+        let files = [];
+        let entries;
         try {
-            await execAsync(zipCmd);
-        } catch (error) {
-            console.error(`Failed to create zip ${outputPath}:`, error.message);
-            throw error;
+            entries = await fs.readdir(dir, { withFileTypes: true });
+        } catch {
+            return files;
         }
+        for (const entry of entries) {
+            const fullPath = path.join(dir, entry.name);
+            if (entry.isDirectory()) {
+                files = files.concat(await this.walkDir(fullPath));
+            } else if (entry.isFile()) {
+                files.push(fullPath);
+            }
+        }
+        return files;
+    }
+
+    matchesAnyInclude(relPath, includes) {
+        for (const pattern of includes) {
+            if (pattern.startsWith('../')) continue;
+            if (this.matchIncludePattern(relPath, pattern)) return true;
+        }
+        return false;
+    }
+
+    // Match a relative file path against a single include pattern.
+    // Mirrors the semantics of the original find commands.
+    matchIncludePattern(relPath, pattern) {
+        const segments = relPath.split('/');
+        const filename = segments[segments.length - 1];
+
+        if (pattern.includes('**')) {
+            if (pattern.startsWith('**/')) {
+                // "**/*.scad" → match filename at any depth
+                return this.matchGlob(filename, pattern.slice(3));
+            }
+            // "examples/**/*.scad" → files under prefix dir matching file glob
+            const patParts = pattern.split('/');
+            const prefixDir = patParts[0];
+            const fileGlob = patParts[patParts.length - 1];
+            return segments[0] === prefixDir && this.matchGlob(filename, fileGlob);
+        }
+
+        if (pattern.includes('/')) {
+            const patParts = pattern.split('/');
+            const lastPart = patParts[patParts.length - 1];
+            if (lastPart.includes('*')) {
+                // "bitmap/*.scad" → files directly inside that directory
+                return segments.length >= 2 && segments[segments.length - 2] === patParts[patParts.length - 2] && this.matchGlob(filename, lastPart);
+            }
+            // "examples/UBexamples" → exact path match or anything under it
+            return relPath === pattern || relPath.startsWith(pattern + '/');
+        }
+
+        if (pattern.includes('*')) {
+            // "*.scad" → match filename at any depth (find -name behaviour)
+            return this.matchGlob(filename, pattern);
+        }
+
+        // Plain name ("LICENSE", "COPYING") → match filename anywhere, or exact path
+        return filename === pattern || relPath === pattern || relPath.startsWith(pattern + '/');
+    }
+
+    matchGlob(name, pattern) {
+        const re = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+        return new RegExp(`^${re}$`).test(name);
+    }
+
+    matchesAnyExclude(relPath, excludes) {
+        for (const pattern of excludes) {
+            // "**/tests/**" → extract the directory name and check if it appears in the path
+            const clean = pattern.replace(/\*\*\//g, '').replace(/\/\*\*/g, '').replace(/\*/g, '');
+            if (clean && relPath.split('/').includes(clean)) return true;
+        }
+        return false;
     }
 
     async buildWasm() {
@@ -172,12 +237,15 @@ class OpenSCADLibrariesPlugin {
 
         await this.ensureDir(this.libsDir);
 
-        if (!existsSync(wasmDir)) {
+        // Check for the actual output file, not just the directory, so a previously
+        // failed/partial extraction doesn't cause us to skip re-downloading.
+        if (!existsSync(path.join(wasmDir, 'openscad.js'))) {
             await this.ensureDir(wasmDir);
             await this.downloadFile(wasmBuild.url, wasmZip);
 
             console.log(`Extracting WASM to ${wasmDir}`);
-            await execAsync(`cd ${wasmDir} && unzip ../${path.basename(wasmZip)}`);
+            const zip = new AdmZip(path.resolve(wasmZip));
+            zip.extractAllTo(path.resolve(wasmDir), /*overwrite=*/true);
         }
 
         await this.ensureDir('public');
@@ -186,24 +254,50 @@ class OpenSCADLibrariesPlugin {
         const wasmTarget = 'public/openscad.wasm';
 
         // Remove existing symlinks/files
-        try {
-            await fs.unlink(jsTarget);
-        } catch { /* ignore */ }
-        try {
-            await fs.unlink(wasmTarget);
-        } catch { /* ignore */ }
+        for (const target of [jsTarget, wasmTarget, this.srcWasmDir]) {
+            try { await fs.unlink(target); } catch { /* ignore */ }
+        }
 
-        // Create new symlinks
-        await fs.symlink(path.relative('public', path.join(wasmDir, 'openscad.js')), jsTarget);
-        await fs.symlink(path.relative('public', path.join(wasmDir, 'openscad.wasm')), wasmTarget);
-
-        // Create src/wasm symlink
-        try {
-            await fs.unlink(this.srcWasmDir);
-        } catch { /* ignore */ }
-        await fs.symlink(path.relative('src', wasmDir), this.srcWasmDir);
+        // Try symlink first; fall back to copy on Windows where symlinks require elevated privileges
+        const jsSrc = path.join(wasmDir, 'openscad.js');
+        const wasmSrc = path.join(wasmDir, 'openscad.wasm');
+        await this.createSymlinkOrCopy(path.relative('public', jsSrc), jsTarget, jsSrc);
+        await this.createSymlinkOrCopy(path.relative('public', wasmSrc), wasmTarget, wasmSrc);
+        await this.createSymlinkOrCopy(path.relative('src', wasmDir), this.srcWasmDir, wasmDir);
 
         console.log('WASM setup completed');
+    }
+
+    async createSymlinkOrCopy(linkTarget, linkPath, copySource) {
+        try {
+            await fs.symlink(linkTarget, linkPath);
+        } catch (e) {
+            if (e.code === 'EPERM' || e.code === 'EINVAL') {
+                console.log(`  Symlink unavailable, copying ${copySource} → ${linkPath}`);
+                const stat = await fs.stat(copySource);
+                if (stat.isDirectory()) {
+                    await this.copyDir(copySource, linkPath);
+                } else {
+                    await fs.copyFile(copySource, linkPath);
+                }
+            } else {
+                throw e;
+            }
+        }
+    }
+
+    async copyDir(src, dest) {
+        await this.ensureDir(dest);
+        const entries = await fs.readdir(src, { withFileTypes: true });
+        for (const entry of entries) {
+            const srcPath = path.join(src, entry.name);
+            const destPath = path.join(dest, entry.name);
+            if (entry.isDirectory()) {
+                await this.copyDir(srcPath, destPath);
+            } else {
+                await fs.copyFile(srcPath, destPath);
+            }
+        }
     }
 
     async buildFonts() {
@@ -227,14 +321,26 @@ class OpenSCADLibrariesPlugin {
             await this.cloneRepo(fonts.liberationRepo, liberationDir, fonts.liberationBranch);
         }
 
-        // Create fonts zip
+        // Create fonts zip — files go flat at zip root (replicating original `zip -j` behaviour)
         const fontsZip = path.join(this.publicLibsDir, 'fonts.zip');
         await this.ensureDir(this.publicLibsDir);
 
         console.log('Creating fonts.zip');
-        const fontsCmd = `zip -r ${fontsZip} -j fonts.conf libs/noto/*.ttf libs/liberation/*.ttf libs/liberation/LICENSE libs/liberation/AUTHORS`;
-        await execAsync(fontsCmd);
+        const zip = new AdmZip();
 
+        zip.addLocalFile('fonts.conf');
+
+        for (const f of await fs.readdir(notoDir)) {
+            if (f.endsWith('.ttf')) zip.addLocalFile(path.join(notoDir, f));
+        }
+
+        for (const f of await fs.readdir(liberationDir)) {
+            if (f.endsWith('.ttf') || f === 'LICENSE' || f === 'AUTHORS') {
+                zip.addLocalFile(path.join(liberationDir, f));
+            }
+        }
+
+        zip.writeZip(path.resolve(fontsZip));
         console.log('Fonts setup completed');
     }
 
@@ -275,20 +381,14 @@ class OpenSCADLibrariesPlugin {
             'build',
             'public/openscad.js',
             'public/openscad.wasm',
-            `${this.publicLibsDir}/*.zip`,
-            this.srcWasmDir
+            this.publicLibsDir,
+            this.srcWasmDir,
         ];
 
         for (const cleanPath of cleanPaths) {
             try {
-                if (cleanPath.includes('*')) {
-                    await execAsync(`rm -f ${cleanPath}`);
-                } else {
-                    await fs.rm(cleanPath, { recursive: true, force: true });
-                }
-            } catch {
-                // Ignore errors for files that don't exist
-            }
+                await fs.rm(cleanPath, { recursive: true, force: true });
+            } catch { /* ignore */ }
         }
 
         console.log('Clean completed');
