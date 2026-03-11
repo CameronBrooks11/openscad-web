@@ -1,0 +1,11 @@
+{
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.expand": false,
+  "explorer.fileNesting.patterns": {
+    "LICENSE.md": "LICENSE.monaco, LICENSE.viewstl",
+    "jest.config.js": "jest.unit.config.cjs, jest-puppeteer.config.js, jest-node24-environment.cjs",
+    "tsconfig.json": "tsconfig.test.json",
+    "webpack.config.js": "webpack.libs.config.js, webpack-libs-plugin.js",
+    "package.json": "package-lock.json, .nvmrc"
+  }
+}
