@@ -30,41 +30,6 @@ export function turnIntoDelayableExecution<T extends any[], R>(
     job: (...args: T) => AbortablePromise<R>) {
   let pendingId: number | null;
   let runningJobKillSignal: (() => void) | null;
-  // return AbortablePromise<SyntaxCheckOutput>((res, rej) => {
-  //   (async () => {
-  //     try {
-  //       const result = await job;
-  //       // console.log(result);
-
-  //       let parameterSet: ParameterSet | undefined = undefined;
-  //       if (result.outputs && result.outputs.length == 1) {
-  //         let [[, content]] = result.outputs;
-  //         content = new TextDecoder().decode(content as any);
-  //         try {
-  //           parameterSet = JSON.parse(content)
-  //           // console.log('PARAMETER SET', JSON.stringify(parameterSet, null, 2))
-  //         } catch (e) {
-  //           console.error(`Error while parsing parameter set: ${e}\n${content}`);
-  //         }
-  //       } else {
-  //         console.error('No output from runner!');
-  //       }
-
-  //       res({
-  //         ...processMergedOutputs(result.mergedOutputs, {shiftSourceLines: {
-  //           sourcePath: sources[0].path,
-  //           skipLines: 1,
-  //         }}),
-  //         parameterSet,
-  //       });
-  //     } catch (e) {
-  //       console.error(e);
-  //       rej(e);
-  //     }
-  //   })()
-  //   return () => job.kill();
-  // });
-  //return (...args: T) => async ({now, callback}: {now: boolean, callback: (result?: R, error?: any) => void}) => {
   return (...args: T) => ({now}: {now: boolean}) => AbortablePromise<R>((resolve, reject) => {
     let abortablePromise: AbortablePromise<R> | undefined = undefined;
     (async () => {
@@ -93,7 +58,13 @@ export function turnIntoDelayableExecution<T extends any[], R>(
         pendingId = window.setTimeout(doExecute, delay);
       }
     })();
-    return () => abortablePromise?.kill();
+    return () => {
+      if (pendingId) {
+        clearTimeout(pendingId);
+        pendingId = null;
+      }
+      abortablePromise?.kill();
+    };
   });
 }
 
@@ -139,7 +110,8 @@ export function registerCustomAppHeightCSSProperty() {
 
 // In PWA mode, persist files in LocalStorage instead of the hash fragment.
 export function isInStandaloneMode() {
-  return Boolean(('standalone' in window.navigator) && (window.navigator.standalone));
+  return window.matchMedia('(display-mode: standalone)').matches ||
+    Boolean(('standalone' in window.navigator) && (window.navigator as any).standalone);
 }
 
 export function downloadUrl(url: string, filename: string) {
