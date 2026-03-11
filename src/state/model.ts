@@ -198,6 +198,8 @@ export class Model {
       });
     } catch (err) {
       console.error('Error while checking syntax:', err)
+    } finally {
+      this.mutate(s => { if (s.checkingSyntax) s.checkingSyntax = false; });
     }
   }
 
