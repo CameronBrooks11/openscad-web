@@ -131,10 +131,12 @@ async function fetchAndMountLibrary(name: string): Promise<void> {
 
 /**
  * Parses library names from SCAD source texts, fetches and mounts only those
- * referenced. Returns the resolved set of mounted library names.
+ * referenced. `extraNames` allows the caller to force-mount additional libraries
+ * (e.g. when the active source path itself lives inside a library directory).
+ * Returns the resolved set of mounted library names.
  */
-export async function mountDemandLibraries(sourceTexts: string[]): Promise<string[]> {
-  const needed = [...new Set(sourceTexts.flatMap(extractLibraryNames))];
+export async function mountDemandLibraries(sourceTexts: string[], extraNames: string[] = []): Promise<string[]> {
+  const needed = [...new Set([...sourceTexts.flatMap(extractLibraryNames), ...extraNames])];
   await Promise.all(needed.map(fetchAndMountLibrary));
   return needed.filter(n => mountedLibraryZips.has(n));
 }

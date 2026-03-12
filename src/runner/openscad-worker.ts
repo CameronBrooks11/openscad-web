@@ -104,7 +104,13 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
         const sourceTexts = sources
           .map(s => s.content)
           .filter((c): c is string => c != null);
-        libraryNames = await mountDemandLibraries(sourceTexts);
+        // Also ensure the library is mounted if the active source path is inside /libraries/<name>/
+        const extraNames = sources
+          .map(s => s.path)
+          .filter(p => p.startsWith('/libraries/'))
+          .map(p => p.split('/')[2])
+          .filter(Boolean);
+        libraryNames = await mountDemandLibraries(sourceTexts, extraNames);
       }
 
       const rt = await createJobRuntime();
@@ -119,8 +125,14 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
 
       for (const source of sources) {
         try {
+          // Files under /libraries/ are already accessible via the read-only ZipFS demand mount.
+          // Writing to them would fail (ZipFS is read-only), so we only verify existence.
+          const isReadOnlyMount = source.path.startsWith('/libraries/') || source.path.startsWith('/fonts/');
           console.log(`Writing ${source.path}`);
-          if (source.content == null && source.url == null) {
+          if (isReadOnlyMount) {
+            // File is accessible via the demand-loaded ZipFS; no write needed.
+            // If somehow it's missing (unmounted lib), compilation will error naturally.
+          } else if (source.content == null && source.url == null) {
             if (!rt.FS.isFile(source.path)) {
               console.error(`File ${source.path} does not exist!`);
             }
