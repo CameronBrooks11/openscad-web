@@ -12,6 +12,7 @@ export default function SettingsMenu({className, style}: {className?: string, st
   const model = useContext(ModelContext);
   if (!model) throw new Error('No model');
   const state = model.state;
+  const backend = state.params.backend ?? 'manifold';
 
   const settingsMenu = useRef<Menu>(null);
   return (
@@ -39,6 +40,16 @@ export default function SettingsMenu({className, style}: {className?: string, st
           icon: 'pi pi-list',
           // disabled: true,
           command: () => model.mutate(s => s.view.lineNumbers = !s.view.lineNumbers)
+        },
+        {
+          separator: true
+        },
+        {
+          label: backend === 'manifold' ? 'Switch to CGAL backend' : 'Switch to Manifold backend',
+          icon: 'pi pi-cog',
+          command: () => model.mutate(s => {
+            s.params.backend = s.params.backend === 'cgal' ? 'manifold' : 'cgal';
+          }),
         },
         ...(isInStandaloneMode() ? [
           {

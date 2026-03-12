@@ -28,7 +28,7 @@ export const checkSyntax =
       inputs: sources,
       args: [activePath, "-o", outFile, "--export-format=param"],
       outputPaths: [outFile],
-    }, (_streams) => {});
+    }, (_streams) => {}, 'syntax');
 
     return AbortablePromise<SyntaxCheckOutput>((res, rej) => {
       (async () => {
@@ -37,13 +37,12 @@ export const checkSyntax =
 
           let parameterSet: ParameterSet | undefined = undefined;
           if (result.outputs && result.outputs.length == 1) {
-            let [[, content]] = result.outputs;
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            content = new TextDecoder().decode(content as any);
+            const [[, rawContent]] = result.outputs;
+            const decoded = new TextDecoder().decode(rawContent);
             try {
-              parameterSet = JSON.parse(content)
+              parameterSet = JSON.parse(decoded)
             } catch (e) {
-              console.error(`Error while parsing parameter set: ${e}\n${content}`);
+              console.error(`Error while parsing parameter set: ${e}\n${decoded}`);
             }
           } else {
             console.error('No output from runner!');
@@ -83,6 +82,7 @@ export type RenderArgs = {
   mountArchives: boolean,
   renderFormat: keyof typeof VALID_EXPORT_FORMATS_2D | keyof typeof VALID_EXPORT_FORMATS_3D,
   streamsCallback: (ps: ProcessStreams) => void,
+  backend?: 'manifold' | 'cgal',
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -107,6 +107,7 @@ export const render =
       extraArgs,
       renderFormat,
       streamsCallback,
+      backend,
     }  = renderArgs;
 
     const prefixLines: string[] = [];
@@ -128,7 +129,7 @@ export const render =
     const args = [
       scadPath,
       "-o", outFile,
-      "--backend=manifold",
+      `--backend=${backend ?? 'manifold'}`,
       "--export-format=" + (actualRenderFormat == 'stl' ? 'binstl' : actualRenderFormat),
       ...(Object.entries(vars ?? {}).flatMap(([k, v]) => [`-D${k}=${formatValue(v)}`])),
       ...(features ?? []).map(f => `--enable=${f}`),
@@ -140,7 +141,7 @@ export const render =
       inputs: sources.map(s => s.path === scadPath ? {path: s.path, content} : s),
       args,
       outputPaths: [outFile],
-    }, streamsCallback);
+    }, streamsCallback, isPreview ? 'preview' : 'render');
 
     return AbortablePromise<RenderOutput>((resolve, reject) => {
       (async () => {
@@ -170,7 +171,8 @@ export const render =
 
           // TODO: have the runner accept and return files.
           const type = filePath.endsWith('.svg') ? 'image/svg+xml' : 'application/octet-stream';
-          const blob = new Blob([content]);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const blob = new Blob([content as any]);
           const outFile = new File([blob], fileName, {type});
           resolve({outFile, logText, markers, elapsedMillis: result.elapsedMillis});
         } catch (e) {

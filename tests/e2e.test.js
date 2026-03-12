@@ -160,3 +160,21 @@ describe('e2e', () => {
   }, longTimeout);
 });
 
+describe('worker integration', () => {
+  test('compiles a trivial model successfully (exit code 0)', async () => {
+    await loadSrc('cube(10);');
+    await waitForViewer();
+    // A successful compile surfaces the geometry summary on stderr
+    expect3DPolySet();
+  }, longTimeout);
+
+  test('exactly one worker is created per page session', async () => {
+    await loadSrc('cube(5);');
+    await waitForViewer();
+    const workerCreatedLogs = messages.filter(
+      msg => msg.type === 'log' && msg.text === '[runner] Worker created'
+    );
+    expect(workerCreatedLogs).toHaveLength(1);
+  }, longTimeout);
+});
+

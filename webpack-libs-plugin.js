@@ -269,12 +269,26 @@ class OpenSCADLibrariesPlugin {
         const { wasmBuild } = this.config;
         const wasmDir = wasmBuild.target;
         const wasmZip = `${wasmDir}.zip`;
+        const hashFile = `${wasmDir}.sha256`;
 
         await this.ensureDir(this.libsDir);
 
-        // Check for the actual output file, not just the directory, so a previously
-        // failed/partial extraction doesn't cause us to skip re-downloading.
-        if (!existsSync(path.join(wasmDir, 'openscad.js'))) {
+        // R1-2: always verify SHA256 against stored sidecar; re-download on mismatch.
+        // This makes URL changes automatically trigger a fresh download.
+        let needDownload = true;
+        if (existsSync(hashFile) && existsSync(path.join(wasmDir, 'openscad.js'))) {
+            const cachedHash = (await fs.readFile(hashFile, 'utf8')).trim();
+            if (cachedHash === wasmBuild.sha256) {
+                console.log('[build-wasm] Artifact up to date, skipping download.');
+                needDownload = false;
+            } else {
+                console.log('[build-wasm] SHA256 mismatch — re-downloading artifact.');
+                await fs.rm(wasmDir, { recursive: true, force: true });
+                try { await fs.unlink(hashFile); } catch { /* ignore */ }
+            }
+        }
+
+        if (needDownload) {
             await this.ensureDir(wasmDir);
             await this.downloadFile(wasmBuild.url, wasmZip);
 
@@ -285,6 +299,11 @@ class OpenSCADLibrariesPlugin {
             console.log(`Extracting WASM to ${wasmDir}`);
             const zip = new AdmZip(path.resolve(wasmZip));
             zip.extractAllTo(path.resolve(wasmDir), /*overwrite=*/true);
+            try { await fs.unlink(wasmZip); } catch { /* ignore */ }
+
+            if (wasmBuild.sha256) {
+                await fs.writeFile(hashFile, wasmBuild.sha256);
+            }
         }
 
         await this.ensureDir('public');
@@ -390,6 +409,15 @@ class OpenSCADLibrariesPlugin {
         // Clone repository if not exists
         if (!existsSync(libDir)) {
             await this.cloneRepo(library.repo, libDir, library.branch);
+        }
+
+        // R1-3: if a commit pin is specified, checkout exactly that commit
+        if (library.commit) {
+            try {
+                await execAsync(`git -C ${libDir} fetch --quiet origin`);
+            } catch { /* fetch is best-effort; continue with local state */ }
+            await execAsync(`git -C ${libDir} checkout --quiet ${library.commit}`);
+            console.log(`Pinned ${library.name} @ ${library.commit.slice(0, 12)}`);
         }
 
         // Create zip

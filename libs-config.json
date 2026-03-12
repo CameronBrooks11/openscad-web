@@ -2,13 +2,15 @@
     "wasmBuild": {
         "url": "https://files.openscad.org/playground/OpenSCAD-2025.03.25.wasm24456-WebAssembly-web.zip",
         "target": "libs/openscad-wasm",
-        "sha256": null
+        "sha256": "0968af31b9c9b3bba68d9031de1695ccae51c32231a1aab4ef27b18c86379f3b",
+        "notes": "Missing -sEXPORT_EXCEPTION_HANDLING_HELPERS=1 — DXF parse errors inside linear_extrude() surface as opaque numeric exit codes rather than readable strings. Track upstream openscad/openscad-wasm for fix."
     },
     "libraries": [
         {
             "name": "openscad",
             "repo": "https://github.com/openscad/openscad.git",
             "branch": "master",
+            "commit": "1e5d8ca4bb937582781a99b65cc0b3b5bd047ec8",
             "zipIncludes": [
                 "examples/**/*.scad"
             ],
@@ -20,6 +22,7 @@
             "name": "BOSL2",
             "repo": "https://github.com/BelfrySCAD/BOSL2.git",
             "branch": "master",
+            "commit": "330c98cf8457ea9bc5c82a0b9d01c67da47572f6",
             "zipIncludes": [
                 "*.scad",
                 "LICENSE",
@@ -30,6 +33,7 @@
             "name": "BOSL",
             "repo": "https://github.com/revarbat/BOSL.git",
             "branch": "master",
+            "commit": "4ce427a8a38786e5f74b728c1e33d9fe7d4904d2",
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
@@ -39,6 +43,7 @@
             "name": "NopSCADlib",
             "repo": "https://github.com/nophead/NopSCADlib.git",
             "branch": "master",
+            "commit": "c9baa0ed0faa23e849141c3d8c6728545d6af910",
             "zipIncludes": [
                 "**/*.scad",
                 "COPYING"
@@ -48,6 +53,7 @@
             "name": "funcutils",
             "repo": "https://github.com/thehans/funcutils.git",
             "branch": "master",
+            "commit": "fac6ac1269d3578b839ece088c03f404a76fb43b",
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
@@ -57,6 +63,7 @@
             "name": "FunctionalOpenSCAD",
             "repo": "https://github.com/thehans/FunctionalOpenSCAD.git",
             "branch": "master",
+            "commit": "51588ffe13d3124b5ea5c04e521cd8e25ab5d0a9",
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
@@ -66,6 +73,7 @@
             "name": "YAPP_Box",
             "repo": "https://github.com/mrWheel/YAPP_Box.git",
             "branch": "main",
+            "commit": "f9400c419ef1dea7dc0b3607876989b4f3faa2b7",
             "zipIncludes": [
                 "**/*.scad",
                 "LICENSE"
@@ -75,6 +83,7 @@
             "name": "MCAD",
             "repo": "https://github.com/openscad/MCAD.git",
             "branch": "master",
+            "commit": "bd0a7ba3f042bfbced5ca1894b236cea08904e26",
             "zipIncludes": [
                 "*.scad",
                 "bitmap/*.scad",
@@ -85,6 +94,7 @@
             "name": "boltsparts",
             "repo": "https://github.com/boltsparts/boltsparts.git",
             "branch": "main",
+            "commit": "5c83300a57761f70db87f50c9a1f647c7278a4c2",
             "zipIncludes": [
                 "**/*.scad",
                 "../LICENSE"
@@ -98,6 +108,7 @@
             "name": "OpenSCAD-Snippet",
             "repo": "https://github.com/AngeloNicoli/OpenSCAD-Snippet.git",
             "branch": "main",
+            "commit": "a718aaf84821dc229353257359cf940f7dbd90da",
             "zipIncludes": [
                 "**/*.scad",
                 "LICENSE"
@@ -107,6 +118,7 @@
             "name": "Stemfie_OpenSCAD",
             "repo": "https://github.com/Cantareus/Stemfie_OpenSCAD.git",
             "branch": "main",
+            "commit": "440c084488915d79b06de88aac8a2a3cdb1662eb",
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
@@ -116,6 +128,7 @@
             "name": "pathbuilder",
             "repo": "https://github.com/dinther/pathbuilder.git",
             "branch": "main",
+            "commit": "ab6322fe43e2a4103a28e9ba2d554428c3df7386",
             "zipIncludes": [
                 "*.scad",
                 "demo/*.scad",
@@ -126,6 +139,7 @@
             "name": "openscad_attachable_text3d",
             "repo": "https://github.com/jon-gilbert/openscad_attachable_text3d.git",
             "branch": "main",
+            "commit": "f8ba8786112d3b45cc05e30d66ba400af00e9b2f",
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
@@ -135,6 +149,7 @@
             "name": "brailleSCAD",
             "repo": "https://github.com/BelfrySCAD/brailleSCAD.git",
             "branch": "main",
+            "commit": "6b2e4288620f31d109f681395914679dbdbc276a",
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
@@ -144,6 +159,7 @@
             "name": "smooth-prim",
             "repo": "https://github.com/rcolyer/smooth-prim.git",
             "branch": "master",
+            "commit": "0d0038f984465f3eb0f6026a4d5de2f79d2dcea8",
             "zipIncludes": [
                 "*.scad",
                 "LICENSE.txt"
@@ -153,6 +169,7 @@
             "name": "plot-function",
             "repo": "https://github.com/rcolyer/plot-function.git",
             "branch": "master",
+            "commit": "5f78d0399632ded49a03edb7b695c443056ebbbd",
             "zipIncludes": [
                 "*.scad",
                 "LICENSE.txt"
@@ -162,6 +179,7 @@
             "name": "closepoints",
             "repo": "https://github.com/rcolyer/closepoints.git",
             "branch": "master",
+            "commit": "8ce827f5a7fec8afe4ab9a13a3427d685bca2ce0",
             "zipIncludes": [
                 "*.scad",
                 "LICENSE.txt"
@@ -171,6 +189,7 @@
             "name": "UB.scad",
             "repo": "https://github.com/UBaer21/UB.scad.git",
             "branch": "main",
+            "commit": "a1be5f0a281d435be7841236dbeba4378e9f55a0",
             "zipIncludes": [
                 "libraries/*.scad",
                 "LICENSE",
@@ -181,6 +200,7 @@
             "name": "openscad-tray",
             "repo": "https://github.com/sofian/openscad-tray.git",
             "branch": "main",
+            "commit": "9fc472032fad5d5fd3f25ea0e230b44fe95c9ccf",
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
@@ -190,6 +210,7 @@
             "name": "lasercut",
             "repo": "https://github.com/bmsleight/lasercut.git",
             "branch": "master",
+            "commit": "a9815be6fcca9bc46411409aa503bbb60921264a",
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"

@@ -34,6 +34,7 @@ export interface State {
     exportFormat2D: keyof typeof VALID_EXPORT_FORMATS_2D,
     exportFormat3D: keyof typeof VALID_EXPORT_FORMATS_3D,
     extruderColors?: string[],
+    backend?: 'manifold' | 'cgal',
   },
 
   

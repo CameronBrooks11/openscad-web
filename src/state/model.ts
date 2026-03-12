@@ -388,7 +388,8 @@ export class Model {
       features,
       isPreview,
       renderFormat: this.state.is2D ? 'svg' : 'off',
-      streamsCallback: this.rawStreamsCallback.bind(this)
+      streamsCallback: this.rawStreamsCallback.bind(this),
+      backend: this.state.params.backend,
     };
     try {
       const output = await render(renderArgs)({now});
