@@ -27,6 +27,20 @@ function notifyHost(type: string, payload?: Record<string, unknown>) {
   }
 }
 
+/** Best-effort coerce URL string values to number / boolean / string. */
+function coerceUrlVars(vars: Record<string, string>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(vars)) {
+    if (v === 'true') result[k] = true;
+    else if (v === 'false') result[k] = false;
+    else {
+      const n = Number(v);
+      result[k] = v.trim() !== '' && !isNaN(n) ? n : v;
+    }
+  }
+  return result;
+}
+
 export function EmbedShell({
   initialState,
   statePersister,
@@ -48,8 +62,10 @@ export function EmbedShell({
   const model = modelRef.current;
 
   useEffect(() => {
-    model.init();
-  }, [model]);
+    if (!urlParams.modelUrl) {
+      model.init();
+    }
+  }, [model]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply view overrides from URL params.
   useEffect(() => {
@@ -75,7 +91,7 @@ export function EmbedShell({
       const preVars = urlParams.prePopulatedVars;
       if (Object.keys(preVars).length > 0) {
         model.mutate(s => {
-          s.params.vars = { ...(s.params.vars ?? {}), ...preVars };
+          s.params.vars = { ...(s.params.vars ?? {}), ...coerceUrlVars(preVars) };
         });
       }
       model.source = result;

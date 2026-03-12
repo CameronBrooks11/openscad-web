@@ -9,6 +9,27 @@ import { ModelContext, FSContext } from './contexts.ts';
 import ViewerPanel from './ViewerPanel.tsx';
 import CustomizerPanel from './CustomizerPanel.tsx';
 
+/** Best-effort coerce URL string values to number / boolean / string. */
+function coerceUrlVars(vars: Record<string, string>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(vars)) {
+    if (v === 'true') result[k] = true;
+    else if (v === 'false') result[k] = false;
+    else {
+      const n = Number(v);
+      result[k] = v.trim() !== '' && !isNaN(n) ? n : v;
+    }
+  }
+  return result;
+}
+
+/** Build the equivalent editor-mode URL by removing the mode param cleanly. */
+function buildEditorUrl(): string {
+  const url = new URL(window.location.href);
+  url.searchParams.delete('mode');
+  return url.toString();
+}
+
 export function CustomizerShell({
   initialState,
   statePersister,
@@ -30,8 +51,13 @@ export function CustomizerShell({
   const model = modelRef.current;
 
   useEffect(() => {
-    model.init();
-  }, [model]);
+    // Only run the default init (compiles initial source) when no external
+    // model URL is provided.  When a URL is given, fetchExternalModel below
+    // will set model.source which triggers processSource itself.
+    if (!urlParams.modelUrl) {
+      model.init();
+    }
+  }, [model]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Apply view overrides from URL params.
   useEffect(() => {
@@ -54,10 +80,12 @@ export function CustomizerShell({
         return;
       }
       // Apply pre-populated vars from URL before first compile.
+      // Best-effort type coercion: numbers and booleans must arrive as their
+      // native types so formatValue() emits -Dteeth=30 not -Dteeth="30".
       const preVars = urlParams.prePopulatedVars;
       if (Object.keys(preVars).length > 0) {
         model.mutate(s => {
-          s.params.vars = { ...(s.params.vars ?? {}), ...preVars };
+          s.params.vars = { ...(s.params.vars ?? {}), ...coerceUrlVars(preVars) };
         });
       }
       model.source = result;
@@ -82,7 +110,7 @@ export function CustomizerShell({
           <CustomizerPanel style={{ width: '280px', minWidth: '220px' }} />
         </div>
         <div style={{ padding: '4px 8px', fontSize: '0.8em', background: 'rgba(0,0,0,0.05)' }}>
-          <a href={window.location.href.replace(/[?&]mode=customizer/, '')} target="_blank" rel="noreferrer">
+          <a href={buildEditorUrl()} target="_blank" rel="noreferrer">
             View in Editor
           </a>
         </div>
