@@ -18,37 +18,42 @@ declare const BrowserFS: any;
 let currentJobId: string | null = null;
 // Points at the current job's mergedOutputs accumulator so print/printErr can push to it
 let currentMergedOutputs: MergedOutput[] | null = null;
-let runtimePromise: Promise<OpenSCADRuntime> | null = null;
 
-function getRuntime(): Promise<OpenSCADRuntime> {
-  if (!runtimePromise) {
-    runtimePromise = createRuntime({
-      print: (text: string) => {
-        console.debug('stdout: ' + text);
-        if (currentJobId != null) {
-          self.postMessage({ type: 'stdout', id: currentJobId, text } satisfies CompileStdout);
-          currentMergedOutputs?.push({ stdout: text });
-        }
-      },
-      printErr: (text: string) => {
-        console.debug('stderr: ' + text);
-        if (currentJobId != null) {
-          self.postMessage({ type: 'stderr', id: currentJobId, text } satisfies CompileStderr);
-          currentMergedOutputs?.push({ stderr: text });
-        }
-      },
-    });
-  }
-  return runtimePromise;
+// NOTE: runtimePromise is NOT a singleton — Emscripten's callMain calls exit() internally,
+// setting Module.ABORT=true. A second callMain on the same instance throws
+// "program has already aborted!". We therefore create a fresh runtime per compile job.
+// The persistent-worker model (R3) still avoids worker-startup overhead; only the WASM
+// module instance is recreated. The compiled .wasm binary is cached by the browser's
+// WebAssembly module cache so subsequent instantiations are fast.
+function createJobRuntime(): Promise<OpenSCADRuntime> {
+  return createRuntime({
+    print: (text: string) => {
+      console.debug('stdout: ' + text);
+      if (currentJobId != null) {
+        self.postMessage({ type: 'stdout', id: currentJobId, text } satisfies CompileStdout);
+        currentMergedOutputs?.push({ stdout: text });
+      }
+    },
+    printErr: (text: string) => {
+      console.debug('stderr: ' + text);
+      if (currentJobId != null) {
+        self.postMessage({ type: 'stderr', id: currentJobId, text } satisfies CompileStderr);
+        currentMergedOutputs?.push({ stderr: text });
+      }
+    },
+  });
 }
 
-// BrowserFS mount state: mounted once per worker, toggled by mountArchives
-let archivesMounted = false;
-let mountedRuntime: OpenSCADRuntime | null = null;
+// BrowserFS (global) is initialized once per worker. The per-instance WASM FS mounts
+// (mkdir + mount + symlinks) must be re-done for every fresh WASM instance.
+let editorFSInitialized = false;
 
 async function ensureArchivesMounted(rt: OpenSCADRuntime): Promise<void> {
-  if (archivesMounted && mountedRuntime === rt) return;
-  await createEditorFS({ prefix: '', allowPersistence: false });
+  if (!editorFSInitialized) {
+    await createEditorFS({ prefix: '', allowPersistence: false });
+    editorFSInitialized = true;
+  }
+  // Always re-mount: each job gets a new WASM instance with a fresh FS
   rt.mkdir('/libraries');
   const BFS = new BrowserFS.EmscriptenFS(
     rt.FS,
@@ -60,8 +65,6 @@ async function ensureArchivesMounted(rt: OpenSCADRuntime): Promise<void> {
   );
   rt.FS.mount(BFS, { root: '/' }, '/libraries');
   await symlinkLibraries(deployedArchiveNames, rt.FS, '/libraries', '/');
-  archivesMounted = true;
-  mountedRuntime = rt;
 }
 
 self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
@@ -81,7 +84,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
     const start = performance.now();
 
     try {
-      const rt = await getRuntime();
+      const rt = await createJobRuntime();
 
       if (mountArchives) {
         await ensureArchivesMounted(rt);
@@ -147,11 +150,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
     } finally {
       currentJobId = null;
       currentMergedOutputs = null;
-      // Clean /tmp between jobs so outputs from previous run don't pollute the next
-      try {
-        const rt = await runtimePromise;
-        rt?.cleanTmp();
-      } catch { /* ignore */ }
+      // No cleanTmp needed — the WASM instance is discarded after each job
     }
   }
 });

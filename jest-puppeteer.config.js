@@ -1,7 +1,7 @@
 /** @type {import('jest-environment-puppeteer').JestPuppeteerConfig} */
 const config = {
   launch: {
-    headless: process.env.CI === "true",
+    headless: process.env.PUPPETEER_HEADFUL !== 'true',
     args: [
       // https://chromium.googlesource.com/chromium/src/+/main/docs/security/apparmor-userns-restrictions.md#what-if-i-dont-have-root-access-to-the-machine-and-cant-install-anything
       '--no-sandbox',
