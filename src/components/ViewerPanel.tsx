@@ -76,6 +76,11 @@ export default function ViewerPanel({ className, style }: { className?: string; 
         const geometry = offToBufferGeometry(data);
         scene.loadGeometry(geometry, state.view.color ?? '#f9d72c');
 
+        // Mark geometry loaded (used by E2E tests)
+        if (containerRef.current) {
+          containerRef.current.dataset.geometryLoaded = 'true';
+        }
+
         // Generate thumbhash preview from the rendered canvas
         const dataUrl = scene.renderer.domElement.toDataURL('image/png', 0.5);
         const hash = await imageToThumbhash(dataUrl);
@@ -147,6 +152,7 @@ export default function ViewerPanel({ className, style }: { className?: string; 
       {/* Three.js renderer canvas is appended here by ThreeScene constructor */}
       <div
         ref={containerRef}
+        data-testid="viewer-canvas"
         style={{ flex: 1, position: 'relative', width: '100%', height: '100%' }}
       />
 

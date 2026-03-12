@@ -42,11 +42,11 @@ function loadUrl(url) {
   return page.goto(`${baseUrl}#url=${encodeURIComponent(url)}`);
 }
 async function waitForViewer() {
-  await page.waitForSelector('model-viewer');
+  await page.waitForSelector('[data-testid="viewer-canvas"] canvas');
   await page.waitForFunction(() => {
-    const viewer = document.querySelector('model-viewer.main-viewer');
-    return viewer && viewer.src !== '';
-  });
+    const container = document.querySelector('[data-testid="viewer-canvas"]');
+    return container && container.dataset.geometryLoaded === 'true';
+  }, { timeout: 60000 });
 }
 // Poll the Node-scope `messages` array until a matching console entry arrives.
 // Must be used instead of page.waitForFunction when the predicate inspects the
@@ -233,16 +233,15 @@ describe('conformance — geometry primitives', () => {
     expect3DManifold();
   }, longTimeout);
 
-  test('model-viewer receives a non-empty src after compile', async () => {
+  test('viewer canvas is populated after compile', async () => {
     await loadSrc('cube(10);');
     await waitForViewer();
-    // Confirm the model-viewer element actually received a model blob URL
-    const src = await page.evaluate(() => {
-      const viewer = document.querySelector('model-viewer.main-viewer');
-      return viewer ? viewer.getAttribute('src') : null;
+    // Confirm the Three.js canvas is present and geometry has been loaded
+    const loaded = await page.evaluate(() => {
+      const container = document.querySelector('[data-testid="viewer-canvas"]');
+      return container ? container.dataset.geometryLoaded === 'true' : false;
     });
-    expect(src).toBeTruthy();
-    expect(src).toMatch(/^blob:|^data:/);
+    expect(loaded).toBe(true);
   }, longTimeout);
 });
 
