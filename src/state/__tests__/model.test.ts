@@ -32,7 +32,6 @@ jest.mock('../../runner/actions.ts', () => {
 // Mock heavy IO that model.render() uses after a successful compile (avoided
 // because the mock render resolves immediately but we still need the symbols).
 jest.mock('../../io/import_off.ts', () => ({ parseOff: jest.fn() }));
-jest.mock('../../io/export_glb.ts', () => ({ exportGlb: jest.fn().mockResolvedValue(new Uint8Array(0)) }));
 
 // ---------------------------------------------------------------------------
 // Import mocked actions so we can inspect call counts.

@@ -60,6 +60,8 @@ export interface State {
     collapsedCustomizerTabs?: string[],
     /** When true, all customizer groups start collapsed. */
     customizerGroupsCollapsed?: boolean,
+    /** Persisted Three.js camera position / target / zoom. */
+    camera?: CameraState,
     
     color: string,
     showAxes?: boolean,
@@ -88,6 +90,12 @@ export interface State {
 
 export interface StatePersister {
   set(state: State): Promise<void>;
+}
+
+export interface CameraState {
+  position: [number, number, number];
+  target: [number, number, number];
+  zoom: number;
 }
 
 export {}

@@ -11,7 +11,6 @@ import JSZip from 'jszip';
 import { ProcessStreams } from "../runner/openscad-runner.ts";
 import { is2DFormatExtension } from "./formats.ts";
 import { parseOff } from "../io/import_off.ts";
-import { exportGlb } from "../io/export_glb.ts";
 import { export3MF } from "../io/export_3mf.ts";
 import chroma from "chroma-js";
 
@@ -489,10 +488,6 @@ export class Model {
         displayFile = extrudedOutput.outFile;
       } else {
         is2D = false;
-      }
-      if (displayFile.name.endsWith('.off')) {
-        const offData = parseOff(await displayFile.text());
-        displayFile = new File([await exportGlb(offData)], displayFile.name.replace('.off', '.glb'));
       }
       const outFileURL = URL.createObjectURL(output.outFile);
       const displayFileURL = displayFile && await readFileAsDataURL(displayFile);
