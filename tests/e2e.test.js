@@ -207,10 +207,12 @@ describe('conformance — geometry primitives', () => {
     expect3DPolySet();
   }, longTimeout);
 
-  test('difference of cube and sphere produces a PolySet', async () => {
+  test('difference of cube and sphere produces a manifold', async () => {
+    // difference() goes through the Manifold CSG kernel (--backend=manifold),
+    // so the compiler reports a manifold result, not a plain PolySet.
     await loadSrc('difference() { cube(10); sphere(5, $fn=20); }');
     await waitForViewer();
-    expect3DPolySet();
+    expect3DManifold();
   }, longTimeout);
 
   test('model-viewer receives a non-empty src after compile', async () => {
@@ -234,12 +236,30 @@ describe('e2e — keyboard shortcuts', () => {
   test('pressing F5 after a render triggers a new render', async () => {
     await loadSrc('cube(5);');
     await waitForViewer();
-    // Clear messages collected from initial load
+
+    // Capture the current model-viewer src so we can detect when a NEW render
+    // completes (waitForViewer alone would resolve immediately since src is
+    // already non-empty from the previous render).
+    const oldSrc = await page.evaluate(() => {
+      const v = document.querySelector('model-viewer.main-viewer');
+      return v ? v.src : '';
+    });
     messages.length = 0;
 
     // Press F5 (preview render shortcut)
     await page.keyboard.press('F5');
-    await waitForViewer();
+
+    // Wait until model-viewer receives a different src URL
+    await page.waitForFunction(
+      (old) => {
+        const v = document.querySelector('model-viewer.main-viewer');
+        return !!v && v.src !== '' && v.src !== old;
+      },
+      { timeout: longTimeout },
+      oldSrc,
+    );
+    // Brief grace period for remaining console messages to propagate
+    await new Promise(r => setTimeout(r, 300));
 
     // A new render should have produced a PolySet message
     expect3DPolySet();
