@@ -32,7 +32,7 @@ describe('checkingSyntax is cleared in finally (BUG-8)', () => {
     try {
       await fakeRunner();
       checkingSyntax = false;
-    } catch (err) {
+    } catch {
       // swallow
     } finally {
       checkingSyntax = false; // fix

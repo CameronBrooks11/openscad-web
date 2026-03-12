@@ -49,6 +49,7 @@ describe('isInStandaloneMode (BUG-9)', () => {
     });
     // Remove the standalone property if it was added
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       delete (window.navigator as any).standalone;
     } catch {
       // read-only in some environments — ignore

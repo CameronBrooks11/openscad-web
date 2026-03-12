@@ -37,7 +37,7 @@ export default function PanelSwitcher() {
                 {multiTargets.map(({icon, label, id}) => 
                   <ToggleButton
                     key={id}
-                    checked={(state.view.layout as any)[id]}
+                    checked={(state.view.layout as unknown as Record<string, boolean>)[id]}
                     onLabel={label}
                     offLabel={label}
                     onIcon={icon}

@@ -17,8 +17,8 @@ export const processMergedOutputs = (outputs: MergedOutputs, opts: MergedOutputs
   markers: parseMergedOutputs(outputs, opts)
 });
 
-export function joinMergedOutputs(mergedOutputs: MergedOutputs, opts: MergedOutputsOptions) {
-  let allLines = [];
+export function joinMergedOutputs(mergedOutputs: MergedOutputs, _opts: MergedOutputsOptions) {
+  const allLines = [];
   for (const {stderr, stdout, error} of mergedOutputs){
     const line = stderr ?? stdout ?? `EXCEPTION: ${error}`;
     if (ignoredLogs.has(line)) {

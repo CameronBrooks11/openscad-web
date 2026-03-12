@@ -19,6 +19,7 @@ export default function CustomizerPanel({className, style}: {className?: string,
 
   const state = model.state;
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleChange = (name: string, value: any) => {
     model.setVar(name, value);
   };
@@ -29,6 +30,7 @@ export default function CustomizerPanel({className, style}: {className?: string,
     }
     acc[param.group].push(param);
     return acc;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   }, {} as { [key: string]: any[] });
 
   const groups = Object.entries(groupedParameters);
@@ -79,7 +81,8 @@ export default function CustomizerPanel({className, style}: {className?: string,
   );
 };
 
-function ParameterInput({param, value, className, style, handleChange}: {param: Parameter, value: any, className?: string, style?: CSSProperties, handleChange: (key: string, value: any) => void}) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ParameterInput({param, value, className: _className, style, handleChange}: {param: Parameter, value: any, className?: string, style?: CSSProperties, handleChange: (key: string, value: any) => void}) {
   return (
     <div 
       style={{
@@ -163,7 +166,7 @@ function ParameterInput({param, value, className, style, handleChange}: {param: 
                 <InputNumber
                   style={{flex: 1}}
                   key={index}
-                  value={value?.[index] ?? (param.initial as any)[index]}
+                  value={value?.[index] ?? (param.initial as number[])[index]}
                   min={param.min}
                   max={param.max}
                   showButtons

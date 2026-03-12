@@ -10,7 +10,7 @@ import { MenuItem } from 'primereact/menuitem';
 import { Menu } from 'primereact/menu';
 import { buildUrlForStateParams } from '../state/fragment-state.ts';
 import { getBlankProjectState, defaultSourcePath } from '../state/initial-state.ts';
-import { ModelContext, FSContext } from './contexts.ts';
+import { ModelContext } from './contexts.ts';
 import FilePicker, {  } from './FilePicker.tsx';
 
 // const isMonacoSupported = false;
@@ -193,7 +193,7 @@ export default function EditorPanel({className, style}: {className?: string, sty
         overflowY: 'scroll',
         height: 'calc(min(200px, 30vh))',
       }}>
-        {(state.currentRunLogs ?? []).map(([type, text], i) => (
+        {(state.currentRunLogs ?? []).map(([_type, text], i) => (
           <pre key={i}>{text}</pre>
         ))}
       </div>

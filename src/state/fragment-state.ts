@@ -59,7 +59,7 @@ export async function readStateFromFragment(): Promise<State | null> {
       let obj;
       try {
         obj = JSON.parse(await decompressString(serialized));
-      } catch (e) {
+      } catch {
         // Backwards compatibility
         obj = JSON.parse(decodeURIComponent(serialized));
       }
@@ -71,8 +71,9 @@ export async function readStateFromFragment(): Promise<State | null> {
           vars: params?.vars, // TODO: validate!
           // Source deserialization also handles legacy links (source + sourcePath)
           sources: params?.sources ?? (params?.source ? [{path: params?.sourcePath, content: params?.source}] : undefined), // TODO: validate!
-          exportFormat2D: validateStringEnum(params?.exportFormat2D, Object.keys(VALID_EXPORT_FORMATS_2D), s => 'svg'),
-          exportFormat3D: validateStringEnum(params?.exportFormat3D, Object.keys(VALID_EXPORT_FORMATS_3D), s => 'stl'),
+          exportFormat2D: validateStringEnum(params?.exportFormat2D, Object.keys(VALID_EXPORT_FORMATS_2D), _s => 'svg'),
+          exportFormat3D: validateStringEnum(params?.exportFormat3D, Object.keys(VALID_EXPORT_FORMATS_3D), _s => 'stl'),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           extruderColors: validateArray(params?.extruderColors, validateString, () => undefined as any as []),
         },
         preview: preview ? {
@@ -81,10 +82,10 @@ export async function readStateFromFragment(): Promise<State | null> {
         } : undefined,
         view: {
           logs: validateBoolean(view?.logs),
-          extruderPickerVisibility: validateStringEnum(view?.extruderPickerVisibility, ['editing', 'exporting'], s => undefined),
+          extruderPickerVisibility: validateStringEnum(view?.extruderPickerVisibility, ['editing', 'exporting'], _s => undefined),
           layout: {
             mode: validateStringEnum(view?.layout?.mode, ['multi', 'single']),
-            focus: validateStringEnum(view?.layout?.focus, ['editor', 'viewer', 'customizer'], s => false),
+            focus: validateStringEnum(view?.layout?.focus, ['editor', 'viewer', 'customizer'], _s => false),
             editor: validateBoolean(view?.layout['editor']),
             viewer: validateBoolean(view?.layout['viewer']),
             customizer: validateBoolean(view?.layout['customizer']),

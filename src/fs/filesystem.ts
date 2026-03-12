@@ -2,7 +2,7 @@
 
 import { deployedArchiveNames, zipArchives } from "./zip-archives";
 
-declare var BrowserFS: BrowserFSInterface
+declare let BrowserFS: BrowserFSInterface
 
 export type FSMounts = {
   [n: string]: {fs: string, options: {zipData: Buffer}}
@@ -11,7 +11,7 @@ export type FSMounts = {
 export type Symlinks = {[alias: string]: string};
 
 export const getParentDir = (path: string) => {
-  let d = path.split('/').slice(0, -1).join('/');
+  const d = path.split('/').slice(0, -1).join('/');
   return d === '' ? (path.startsWith('/') ? '/' : '.') : d;
 } 
 
@@ -64,10 +64,12 @@ export async function symlinkLibraries(archiveNames: string[], fs: FS, prefix='/
   })()));
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function configureAndInstallFS(windowOrSelf: Window, options: any) {
   return new Promise(async (resolve, reject) => {
     BrowserFS.install(windowOrSelf);
     try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       BrowserFS.configure(options, function (e: any) {
         if (e) reject(e);
         else resolve(null);
@@ -104,7 +106,7 @@ export async function createEditorFS({prefix, allowPersistence}: {prefix: string
     },
   });
 
-  var fs = BrowserFS.BFSRequire('fs');
+  const fs = BrowserFS.BFSRequire('fs');
 
   return fs;
 }

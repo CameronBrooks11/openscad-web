@@ -28,7 +28,7 @@ export const checkSyntax =
       inputs: sources,
       args: [activePath, "-o", outFile, "--export-format=param"],
       outputPaths: [outFile],
-    }, (streams) => {});
+    }, (_streams) => {});
 
     return AbortablePromise<SyntaxCheckOutput>((res, rej) => {
       (async () => {
@@ -38,6 +38,7 @@ export const checkSyntax =
           let parameterSet: ParameterSet | undefined = undefined;
           if (result.outputs && result.outputs.length == 1) {
             let [[, content]] = result.outputs;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             content = new TextDecoder().decode(content as any);
             try {
               parameterSet = JSON.parse(content)
@@ -64,7 +65,7 @@ export const checkSyntax =
     });
   });
 
-var renderDelay = 1000;
+const renderDelay = 1000;
 export type RenderOutput = {
   outFile: File,
   logText: string,
@@ -74,6 +75,7 @@ export type RenderOutput = {
 export type RenderArgs = {
   scadPath: string,
   sources: Source[],
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vars?: {[name: string]: any},
   features?: string[],
   extraArgs?: string[],
@@ -83,13 +85,14 @@ export type RenderArgs = {
   streamsCallback: (ps: ProcessStreams) => void,
 }
 
-function formatValue(any: any): string {
-  if (typeof any === 'string') {
-    return `"${any}"`;
-  } else if (any instanceof Array) {
-    return `[${any.map(formatValue).join(', ')}]`;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatValue(value: any): string {
+  if (typeof value === 'string') {
+    return `"${value}"`;
+  } else if (value instanceof Array) {
+    return `[${value.map(formatValue).join(', ')}]`;
   } else {
-    return `${any}`;
+    return `${value}`;
   }
 }
 export const render =
@@ -163,12 +166,12 @@ export const render =
           }
           const [filePath, content] = output;
           const filePathFragments = filePath.split('/');
-          let fileName = filePathFragments[filePathFragments.length - 1];
+          const fileName = filePathFragments[filePathFragments.length - 1];
 
           // TODO: have the runner accept and return files.
           const type = filePath.endsWith('.svg') ? 'image/svg+xml' : 'application/octet-stream';
-          let blob = new Blob([content]);
-          let outFile = new File([blob], fileName, {type});
+          const blob = new Blob([content]);
+          const outFile = new File([blob], fileName, {type});
           resolve({outFile, logText, markers, elapsedMillis: result.elapsedMillis});
         } catch (e) {
           console.error(e);

@@ -42,7 +42,7 @@ export default function MultimaterialColorsDialog() {
                     icon="pi pi-check"
                     disabled={!tempExtruderColors.every(c => chroma.valid(c) || c.trim() === '')}
                     autoFocus
-                    onClick={e => {
+                    onClick={() => {
                         const wasExporting = state.view.extruderPickerVisibility === 'exporting';
                         model!.mutate(s => {
                             s.params.extruderColors = tempExtruderColors.filter(c => c.trim() !== '');

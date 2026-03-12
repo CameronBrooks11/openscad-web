@@ -67,11 +67,13 @@ export function App({initialState, statePersister, fs}: {initialState: State, st
       return {
         flex: 1,
         maxWidth: Math.floor(100/itemCount) + '%',
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         display: (state.view.layout as any)[id] ? 'flex' : 'none'
       }
     } else {
       return {
         flex: 1,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         zIndex: Number((zIndexOfPanelsDependingOnFocus as any)[id][layout.focus]),
       }
     }

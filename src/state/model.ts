@@ -29,8 +29,8 @@ export class Model {
 
   private setState(state: State) {
     this.state = state;
-    this.statePersister && this.statePersister.set(state);
-    this.setStateCallback && this.setStateCallback(state);
+    this.statePersister?.set(state);
+    this.setStateCallback?.(state);
   }
 
   mutate(f: (state: State) => void) {
@@ -53,6 +53,7 @@ export class Model {
       if (exportFormat3D != null) s.params.exportFormat3D = exportFormat3D;
     });
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setVar(name: string, value: any) {
     this.mutate(s => s.params.vars = {...s.params.vars ?? {}, [name]: value});
     this.render({isPreview: true, now: false});
@@ -163,9 +164,10 @@ export class Model {
   }
 
   private async processSource() {
-    let src = this.state.params.sources.find(src => src.path === this.state.params.activePath);
+    const src = this.state.params.sources.find(src => src.path === this.state.params.activePath);
     if (src && src.content == null) {
-      let {path, url} = src;
+      const { path } = src;
+      let { url } = src;
       // Transform https://github.com/tenstad/keyboard/blob/main/keyboard.scad to https://raw.githubusercontent.com/tenstad/keyboard/refs/heads/main/keyboard.scad
       let match;
       if (url && (match = url.match(githubRx))) {
@@ -235,7 +237,7 @@ export class Model {
       }
     }
     if (!this.state.is2D && this.state.params.exportFormat3D == '3mf' && !this.state.params.extruderColors) {
-      this.mutate(s => this.state.view.extruderPickerVisibility = 'exporting');
+      this.mutate(_s => this.state.view.extruderPickerVisibility = 'exporting');
       return;
     }
     this.mutate(s => {
@@ -353,6 +355,8 @@ export class Model {
     let {
       activePath,
       sources,
+    } = this.state.params;
+    const {
       vars,
       features,
     } = this.state.params;
@@ -387,7 +391,7 @@ export class Model {
       streamsCallback: this.rawStreamsCallback.bind(this)
     };
     try {
-      let output = await render(renderArgs)({now});
+      const output = await render(renderArgs)({now});
       let displayFile = output.outFile;
       if (output.outFile.name.endsWith('.svg') || output.outFile.name.endsWith('.dxf')) {
         is2D = true;
@@ -462,8 +466,7 @@ export class Model {
     if (retryInOtherDim) {
       let is2D: boolean | undefined;
       let is3D: boolean | undefined;
-      let isMixed: boolean | undefined;
-      for (const [pipe, line] of this.state.currentRunLogs ?? []) {
+      for (const [, line] of this.state.currentRunLogs ?? []) {
         if (line == 'Current top level object is not a 3D object.') {
           is3D = false;
         } else if (line == 'Top level object is a 3D object:') {
@@ -472,8 +475,6 @@ export class Model {
           is2D = false;
         } else if (line == 'Top level object is a 2D object:') {
           is2D = true;
-        } else if (line.includes('WARNING: Mixing 2D and 3D objects is not supported')) {
-          isMixed = true;
         }
       }
       if (is2D === false || is3D === false) {//} || isMixed !== undefined) {

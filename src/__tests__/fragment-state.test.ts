@@ -64,7 +64,7 @@ describe('readStateFromFragment – view.showAxes / lineNumbers (BUG-5)', () => 
 describe('buildUrlForStateParams – must be async (BUG-6)', () => {
   it('returns a Promise (not a string with "[object Promise]" in it)', () => {
     // Import createInitialState lazily to avoid window.matchMedia issues at module load
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { createInitialState } = require('../state/initial-state.ts');
 
     // Mock matchMedia so createInitialState doesn't throw

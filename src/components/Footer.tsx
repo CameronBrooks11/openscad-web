@@ -28,10 +28,6 @@ export default function Footer({style}: {style?: CSSProperties}) {
   const markers = state.lastCheckerRun?.markers ?? [];
   const getBadge = (s: monaco.MarkerSeverity) => {
     const count = markers.filter(m => m.severity == s).length;
-    const sev = s == monaco.MarkerSeverity.Error ? 'danger'
-      : s == monaco.MarkerSeverity.Warning ? 'warning'
-      : s == monaco.MarkerSeverity.Info ? 'info'
-      : 'success';
     return <>{count > 0 && <Badge value={count} severity={severityByMarkerSeverity.get(s)}></Badge>}</>;
   };
 

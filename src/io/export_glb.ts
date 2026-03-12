@@ -1,6 +1,6 @@
 import { Document, NodeIO, Accessor, Primitive } from '@gltf-transform/core';
 import { Light as LightDef, KHRLightsPunctual } from '@gltf-transform/extensions';
-import { Vertex, Color, Face, IndexedPolyhedron, DEFAULT_FACE_COLOR } from './common';
+import { Color, Face, IndexedPolyhedron, DEFAULT_FACE_COLOR } from './common';
 
 // TS 5.7+ made TypedArrays generic; explicitly use <ArrayBuffer> since these
 // arrays are always constructed via `new Float32Array()` / `.slice()`, which
@@ -39,7 +39,7 @@ function createPrimitive(doc: Document, baseColorFactor: Color, {positions, indi
 }
 
 function getGeom(data: IndexedPolyhedron): Geom {
-    let positions = new Float32Array(data.vertices.length * 3);
+    const positions = new Float32Array(data.vertices.length * 3);
     const indices = new Uint32Array(data.faces.length * 3);
 
     const addedVertices = new Map<number, number>();
@@ -73,7 +73,7 @@ function getGeom(data: IndexedPolyhedron): Geom {
     };
 }
 
-export async function exportGlb(data: IndexedPolyhedron, defaultColor: Color = DEFAULT_FACE_COLOR): Promise<Blob> {
+export async function exportGlb(data: IndexedPolyhedron, _defaultColor: Color = DEFAULT_FACE_COLOR): Promise<Blob> {
     const doc = new Document();
     const lightExt = doc.createExtension(KHRLightsPunctual);
     doc.createBuffer();
@@ -103,8 +103,8 @@ export async function exportGlb(data: IndexedPolyhedron, defaultColor: Color = D
         if (!faces) facesByColor.set(face.colorIndex, faces = []);
         faces.push(face);
     });
-    for (let [colorIndex, faces] of facesByColor.entries()) {
-        let color = data.colors[colorIndex];
+    for (const [colorIndex, faces] of facesByColor.entries()) {
+        const color = data.colors[colorIndex];
         mesh.addPrimitive(
             createPrimitive(doc, color, getGeom({ vertices: data.vertices, faces, colors: data.colors })));
     }

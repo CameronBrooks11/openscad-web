@@ -27,7 +27,6 @@ export function spawnOpenSCAD(
   streamsCallback: (ps: ProcessStreams) => void
 ): AbortablePromise<OpenSCADInvocationResults> {
   let worker: Worker | null;
-  let rejection: (err: any) => void;
 
   function terminate() {
     if (!worker) {
@@ -37,9 +36,8 @@ export function spawnOpenSCAD(
     worker = null;
   }
     
-  return AbortablePromise<OpenSCADInvocationResults>((resolve: (result: OpenSCADInvocationResults) => void, reject: (error: any) => void) => {
+  return AbortablePromise<OpenSCADInvocationResults>((resolve: (result: OpenSCADInvocationResults) => void) => {
     worker = new Worker('./openscad-worker.js');//, { type: 'module' });
-    rejection = reject;
     worker.onmessage = (e: MessageEvent<OpenSCADInvocationCallback>) => {
       if ('result' in e.data) {
         resolve(e.data.result);

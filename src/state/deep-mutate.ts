@@ -1,6 +1,8 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type KVObject = {[key: string]: any};
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type KVEntriesMap = Map<KVObject, [string, any][]>;
 
 /**

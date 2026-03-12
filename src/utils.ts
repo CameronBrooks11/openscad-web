@@ -2,6 +2,7 @@
 
 import { Source } from "./state/app-state.ts";
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function mapObject(o: any, f: (key: string, value: any) => any, ifPred: (key: string) => boolean) {
   const ret = [];
   for (const key of Object.keys(o)) {
@@ -15,6 +16,7 @@ export function mapObject(o: any, f: (key: string, value: any) => any, ifPred: (
 
 type Killer = () => void;
 export type AbortablePromise<T> = Promise<T> & {kill: Killer}
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function AbortablePromise<T>(f: (resolve: (result: T) => void, reject: (error: any) => void) => Killer): AbortablePromise<T>
 {
   let kill: Killer;
@@ -25,6 +27,7 @@ export function AbortablePromise<T>(f: (resolve: (result: T) => void, reject: (e
 }
 
 // <T extends any[]>(...args: T)
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function turnIntoDelayableExecution<T extends any[], R>(
     delay: number,
     job: (...args: T) => AbortablePromise<R>) {
@@ -111,7 +114,7 @@ export function registerCustomAppHeightCSSProperty() {
 // In PWA mode, persist files in LocalStorage instead of the hash fragment.
 export function isInStandaloneMode() {
   return window.matchMedia('(display-mode: standalone)').matches ||
-    Boolean(('standalone' in window.navigator) && (window.navigator as any).standalone);
+    Boolean(('standalone' in window.navigator) && (window.navigator as Navigator & {standalone?: boolean}).standalone);
 }
 
 export function downloadUrl(url: string, filename: string) {

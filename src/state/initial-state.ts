@@ -30,7 +30,7 @@ export function createInitialState(state: State | null, source?: {content?: stri
       path = defaultSourcePath;
       blurhash = defaultBlurhash;
     }
-    let activePath = path ?? (url && new URL(url).pathname.split('/').pop()) ?? defaultSourcePath;
+    const activePath = path ?? (url && new URL(url).pathname.split('/').pop()) ?? defaultSourcePath;
     initialState = {
       params: {
         activePath,
@@ -45,6 +45,7 @@ export function createInitialState(state: State | null, source?: {content?: stri
           editor: true,
           viewer: true,
           customizer: false,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
 
         color: defaultModelColor,

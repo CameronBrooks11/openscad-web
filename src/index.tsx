@@ -21,7 +21,7 @@ import "primeicons/primeicons.css";
 import "primeflex/primeflex.min.css";
 
 class AppErrorBoundary extends React.Component<{children: React.ReactNode}, {error: Error | null}> {
-  constructor(props: any) {
+  constructor(props: {children: React.ReactNode}) {
     super(props);
     this.state = { error: null };
   }
@@ -50,7 +50,7 @@ if (process.env.NODE_ENV !== 'production') {
   debug.disable();
 }
 
-declare var BrowserFS: BrowserFSInterface
+declare let BrowserFS: BrowserFSInterface
 
 
 window.addEventListener('load', async () => {

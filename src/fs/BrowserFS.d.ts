@@ -1,4 +1,5 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-empty-object-type */
 
 declare interface FS {
   writeFile(path: string, content: string): void;
@@ -31,7 +32,7 @@ declare interface BrowserFSInterface {
   WorkerFS?: any;
 }
 
-declare var BrowserFS: BrowserFSInterface;
+declare let BrowserFS: BrowserFSInterface;
 
 declare module 'browserfs' {
   export = BrowserFS;

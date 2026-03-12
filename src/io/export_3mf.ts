@@ -6,7 +6,7 @@ import chroma from "chroma-js";
 function getColorMapping(colors: chroma.Color[], projectedColors: chroma.Color[]): number[] {
     const projectedLabs = projectedColors.map(c => c.lab());
 
-    return colors.map((targetColor, i) => {
+    return colors.map((targetColor) => {
         const targetLab = targetColor.lab();
 
         let closestIndex = 0;
@@ -65,10 +65,10 @@ export function export3MF(data: IndexedPolyhedron, extruderColors?: chroma.Color
                     `<object id="1" name="OpenSCAD Model" type="model" p:UUID="${objectUuid}" pid="2" pindex="0">`,
                         '<mesh>',
                             '<vertices>',
-                                ...data.vertices.map((vertex, i) => `<vertex x="${vertex.x}" y="${vertex.y}" z="${vertex.z}" />`),
+                                ...data.vertices.map((vertex) => `<vertex x="${vertex.x}" y="${vertex.y}" z="${vertex.z}" />`),
                             '</vertices>',
                             '<triangles>',
-                                ...data.faces.map((face, i) => {
+                                ...data.faces.map((face) => {
                                     const { vertices, colorIndex } = face;
                                     if (vertices.length != 3) throw new Error('Face must have 3 vertices');
                                     const attrs = vertices.map((v, i) => `v${i + 1}="${v}"`);

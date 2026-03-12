@@ -77,7 +77,7 @@ export default function ExportButton({className, style}: {className?: string, st
         icon="pi pi-download" 
         model={dropdownModel}
         severity="secondary"
-        onClick={e => model!.export()}
+        onClick={() => model!.export()}
         className="p-button-sm"
       />
     </div>

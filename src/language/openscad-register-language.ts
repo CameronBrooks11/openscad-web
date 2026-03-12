@@ -6,6 +6,7 @@ import { buildOpenSCADCompletionItemProvider } from './openscad-completions';
 import openscadLanguage from './openscad-language';
 
 // https://microsoft.github.io/monaco-editor/playground.html#extending-language-services-custom-languages
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function registerOpenSCADLanguage(fs: any, workingDir: string, zipArchives: ZipArchives) {
   const monaco = await loader.init();
   

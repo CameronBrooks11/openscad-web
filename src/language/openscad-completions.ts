@@ -94,6 +94,7 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
     path = toAbsolutePath(path);
     try {
       const bytes = await fs.readFileSync(path);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const src = new TextDecoder("utf-8").decode(bytes as any);
       return src;
     } catch (e) {
@@ -101,10 +102,9 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
     }
   }
   const builtinsPath = '<builtins>';
-  let builtinsDefs: ParsedFile;
 
   function getParsed(path: string, src: string, {skipPrivates, addBuiltins}: {skipPrivates: boolean, addBuiltins: boolean}) {
-    return parsedFiles[path] ??= new Promise(async (res, rej) => {
+    return parsedFiles[path] ??= new Promise(async (res, _rej) => {
       if (src == null) {
         src = await readFile(path);
       }
@@ -161,24 +161,24 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
     });
   }
 
-  builtinsDefs = await getParsed(builtinsPath, builtinSignatures, {skipPrivates: false, addBuiltins: false});
+  const builtinsDefs: ParsedFile = await getParsed(builtinsPath, builtinSignatures, {skipPrivates: false, addBuiltins: false});
 
   return {
     triggerCharacters: ["<", "/"], //, "\n"],
     //provideCompletionItems: (async (model, position, context, token) => {
-    provideCompletionItems: ((async (model: monaco.editor.ITextModel, position: monaco.Position, context: monaco.languages.CompletionContext, token: monaco.CancellationToken) => {
+    provideCompletionItems: ((async (model: monaco.editor.ITextModel, position: monaco.Position, _context: monaco.languages.CompletionContext, _token: monaco.CancellationToken) => {
       try {
         const {word} = model.getWordUntilPosition(position);
         const offset = model.getOffsetAt(position);
         const text = model.getValue();
         let previous = text.substring(0, offset);
-        let i = previous.lastIndexOf('\n');
+        const i = previous.lastIndexOf('\n');
         previous = previous.substring(i + 1);
 
         const includeMatch = /\b(include|use)\s*<([^<>\n"]*)$/.exec(previous);
         if (includeMatch) {
           const prefix = includeMatch[2];
-          let folder, filePrefix, folderPrefix;
+          let filePrefix, folderPrefix;
           const i = prefix.lastIndexOf('/');
           if (i < 0) {
             folderPrefix = '';
@@ -196,7 +196,7 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
               // files = [...(await readDirAsArray(fs, folder) ?? []), ...files];
               // console.log('readDir', folder, files);
               break;
-            } catch (e) {
+            } catch {
               //console.error(e);
             }
           }
@@ -277,8 +277,6 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
           return { suggestions };
         }
 
-        const allWithoutComments = stripComments(text);
-        
         const named: [string, CompletionItem][] = [
           ...mapObject(parsed.functions ?? {},
             (name, mod) => [name, makeFunctionoidSuggestion(name, mod)],
@@ -291,13 +289,15 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
         //   insertText: name
         // }));
 
-        const suggestions = named.map(([n, s]) => s as any as monaco.languages.CompletionItem);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const suggestions = named.map(([_n, s]) => s as any as monaco.languages.CompletionItem);
         return { suggestions };
         
       } catch (e) {
         console.error(e);//, (e as any).stackTrace);
         return { suggestions: [] };
       }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
     }) as any),
   } as monaco.languages.CompletionItemProvider;
 }

@@ -27,6 +27,7 @@ self.addEventListener('message', async (e: MessageEvent<OpenSCADInvocation>) => 
   } = e.data;
 
   const mergedOutputs: MergedOutputs = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let instance: any;
   const start = performance.now();
   try {

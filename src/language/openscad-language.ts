@@ -27,7 +27,7 @@ const builtInVarNames = [
   '$fa', '$fn', '$fs', '$t', '$vpd', '$vpr', '$vpt',
 ]
 
-var conf: monaco.languages.LanguageConfiguration = {
+const conf: monaco.languages.LanguageConfiguration = {
 
   colorizedBracketPairs: [['{', '}'], ['(', ')'], ['[', ']']], 
   
@@ -89,7 +89,7 @@ var conf: monaco.languages.LanguageConfiguration = {
   }
 };
 
-var language: monaco.languages.IMonarchLanguage = {
+const language: monaco.languages.IMonarchLanguage = {
   defaultToken: "invalid",
   tokenPostfix: ".js",
   keywords: [...builtInFunctionNames, ...builtInModuleNames, ...builtInVarNames, 'each'],

@@ -28,6 +28,7 @@ export interface State {
   params: {
     activePath: string,
     sources: Source[],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vars?: {[name: string]: any},
     features: string[],
     exportFormat2D: keyof typeof VALID_EXPORT_FORMATS_2D,

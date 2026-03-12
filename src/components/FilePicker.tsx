@@ -35,7 +35,7 @@ function listFilesAsNodes(fs: FS, path: string, accept?: (path: string) => boole
   for (const [arr, isDirectory] of [[files, false], [dirs, true]] as [[string, string][], boolean][]) {
     for (const [name, path] of arr) {
       let children: TreeNode[] = [];
-      let label = name;
+      const label = name;
       if (path.lastIndexOf('/') === 0) {
         const config = zipArchives[name];
         if (config && config.gitOrigin) {

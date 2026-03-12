@@ -3,11 +3,13 @@
 import { CSSProperties, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { ModelContext } from './contexts.ts';
 import { Toast } from 'primereact/toast';
-import { blurHashToImage, imageToBlurhash, imageToThumbhash, thumbHashToImage } from '../io/image_hashes.ts';
+import { blurHashToImage, imageToBlurhash, thumbHashToImage } from '../io/image_hashes.ts';
 
 declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace JSX {
     interface IntrinsicElements {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       "model-viewer": any;
     }
   }
@@ -48,7 +50,7 @@ function getClosestPredefinedOrbitIndex(theta: number, phi: number): [number, nu
   return [index, dist, radDistances[index]];
 }
 
-const originalOrbit = (([name, theta, phi]) => `${theta}rad ${phi}rad auto`)(PREDEFINED_ORBITS[0]);
+const originalOrbit = (([_name, theta, phi]) => `${theta}rad ${phi}rad auto`)(PREDEFINED_ORBITS[0]);
 
 export default function ViewerPanel({className, style}: {className?: string, style?: CSSProperties}) {
   const model = useContext(ModelContext);
@@ -56,7 +58,9 @@ export default function ViewerPanel({className, style}: {className?: string, sty
 
   const state = model.state;
   const [interactionPrompt, setInteractionPrompt] = useState('auto');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const modelViewerRef = useRef<any>();
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const axesViewerRef = useRef<any>();
   const toastRef = useRef<Toast>(null);
 
@@ -81,7 +85,8 @@ export default function ViewerPanel({className, style}: {className?: string, sty
     }
   }, [state?.preview?.blurhash, state?.preview?.thumbhash]);
 
-  const onLoad = useCallback(async (e: any) => {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const onLoad = useCallback(async (_e: any) => {
     setLoadedUri(modelUri);
 
     if (!modelViewerRef.current) return;
@@ -103,6 +108,7 @@ export default function ViewerPanel({className, style}: {className?: string, sty
   // Sync camera orbit between model viewer and axes viewer
   useEffect(() => {
     if (!modelViewerRef.current) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function handleCameraChange(e: any) {
       if (!axesViewerRef.current) return;
       if (e.detail.source === 'user-interaction') {
@@ -118,6 +124,7 @@ export default function ViewerPanel({className, style}: {className?: string, sty
 
   useEffect(() => {
     if (!axesViewerRef.current) return;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function handleCameraChange(e: any) {
       if (!modelViewerRef.current) return;
       if (e.detail.source === 'user-interaction') {
@@ -160,7 +167,7 @@ export default function ViewerPanel({className, style}: {className?: string, sty
         const newIndex = dist < euclEps && radDist < radEps ? (currentIndex + 1) % PREDEFINED_ORBITS.length : currentIndex;
         const [name, theta, phi] = PREDEFINED_ORBITS[newIndex];
         Object.assign(modelOrbit, {theta, phi});
-        const newOrbit = modelViewerRef.current.cameraOrbit = axesViewerRef.current.cameraOrbit = modelOrbit.toString();
+        modelViewerRef.current.cameraOrbit = axesViewerRef.current.cameraOrbit = modelOrbit.toString();
         toastRef.current?.show({severity: 'info', detail: `${name} view`, life: 1000,});
         setInteractionPrompt('none');
       }
