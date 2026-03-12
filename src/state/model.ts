@@ -311,7 +311,10 @@ export class Model {
   async saveProject() {
     if (this.state.params.sources.length == 1) {
       const content = this.state.params.sources[0].content;
-      const contentBytes = new TextEncoder().encode(content);
+      // TextEncoder.encode() always returns an ArrayBuffer-backed Uint8Array;
+      // cast required because the TS lib defines encode() → Uint8Array (= <ArrayBufferLike>)
+      // while Blob's BlobPart expects ArrayBufferView<ArrayBuffer>. TS 5.7+ issue.
+      const contentBytes = new TextEncoder().encode(content) as Uint8Array<ArrayBuffer>;
       const blob = new Blob([contentBytes], {type: 'text/plain'});
       const file = new File([blob], this.state.params.activePath.split('/').pop()!);
       downloadUrl(URL.createObjectURL(file), file.name);
