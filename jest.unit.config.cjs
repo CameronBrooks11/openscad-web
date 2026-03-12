@@ -17,4 +17,21 @@ module.exports = {
     // Unit tests never exercise the GLB export path, so a stub is safe here.
     '^@gltf-transform/.+$': '<rootDir>/__mocks__/empty-module.cjs',
   },
+
+  // Coverage — only active in CI (CI=true) to keep local test runs fast.
+  // Baseline established at Phase 3 (74 tests). Threshold: 40% lines globally.
+  collectCoverage: process.env.CI === 'true',
+  coverageDirectory: 'coverage',
+  coverageReporters: ['lcov', 'text-summary'],
+  collectCoverageFrom: [
+    'src/state/**/*.ts',
+    'src/fs/**/*.ts',
+    'src/language/**/*.ts',
+    'src/runner/**/*.ts',
+    '!src/**/__tests__/**',
+    '!src/**/*.d.ts',
+  ],
+  coverageThresholds: {
+    global: { lines: 40 },
+  },
 };

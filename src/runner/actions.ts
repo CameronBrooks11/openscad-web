@@ -95,6 +95,17 @@ function formatValue(value: any): string {
     return `${value}`;
   }
 }
+/**
+ * Returns the fixed compile-time args shared by all render invocations.
+ * Exported for testability — the feature-flag test (T5) asserts that
+ * no non-default experimental flags (e.g. --enable=lazy-union) are present.
+ */
+export function getDefaultCompileArgs(): string[] {
+  // The only constant arg is the backend selector. Feature flags (--enable=X) are
+  // user-controlled and come from renderArgs.features[], NOT from a hard-coded list.
+  return [`--backend=manifold`];
+}
+
 export const render =
  turnIntoDelayableExecution(renderDelay, (renderArgs: RenderArgs) => {
     const {

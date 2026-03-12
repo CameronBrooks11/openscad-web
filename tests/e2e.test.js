@@ -178,3 +178,83 @@ describe('worker integration', () => {
   }, longTimeout);
 });
 
+// ---------------------------------------------------------------------------
+// T5 — Conformance tests
+//
+// These tests verify that specific SCAD primitives produce geometrically
+// correct output by checking the compiler's stderr summary.  Full numeric
+// geometry checks (vertex/face counts, topology hash) require parsing the raw
+// OFF output — that is tracked as a future enhancement in
+// working/reference/deferred-items.md.
+// ---------------------------------------------------------------------------
+
+describe('conformance — geometry primitives', () => {
+  test('cube(10) produces a PolySet', async () => {
+    await loadSrc('cube(10);');
+    await waitForViewer();
+    expect3DPolySet();
+  }, longTimeout);
+
+  test('sphere(5, $fn=20) produces a PolySet', async () => {
+    await loadSrc('sphere(5, $fn=20);');
+    await waitForViewer();
+    expect3DPolySet();
+  }, longTimeout);
+
+  test('cylinder(h=10, r=5) produces a PolySet', async () => {
+    await loadSrc('cylinder(h=10, r=5);');
+    await waitForViewer();
+    expect3DPolySet();
+  }, longTimeout);
+
+  test('difference of cube and sphere produces a PolySet', async () => {
+    await loadSrc('difference() { cube(10); sphere(5, $fn=20); }');
+    await waitForViewer();
+    expect3DPolySet();
+  }, longTimeout);
+
+  test('model-viewer receives a non-empty src after compile', async () => {
+    await loadSrc('cube(10);');
+    await waitForViewer();
+    // Confirm the model-viewer element actually received a model blob URL
+    const src = await page.evaluate(() => {
+      const viewer = document.querySelector('model-viewer.main-viewer');
+      return viewer ? viewer.getAttribute('src') : null;
+    });
+    expect(src).toBeTruthy();
+    expect(src).toMatch(/^blob:|^data:/);
+  }, longTimeout);
+});
+
+// ---------------------------------------------------------------------------
+// T6 — Keyboard shortcuts
+// ---------------------------------------------------------------------------
+
+describe('e2e — keyboard shortcuts', () => {
+  test('pressing F5 after a render triggers a new render', async () => {
+    await loadSrc('cube(5);');
+    await waitForViewer();
+    // Clear messages collected from initial load
+    messages.length = 0;
+
+    // Press F5 (preview render shortcut)
+    await page.keyboard.press('F5');
+    await waitForViewer();
+
+    // A new render should have produced a PolySet message
+    expect3DPolySet();
+  }, longTimeout);
+
+  test('pressing F6 after a render triggers a full render', async () => {
+    await loadSrc('cube(5);');
+    await waitForViewer();
+    messages.length = 0;
+
+    // Press F6 (full render shortcut)
+    await page.keyboard.press('F6');
+    await waitForViewer();
+
+    expect3DPolySet();
+  }, longTimeout);
+});
+

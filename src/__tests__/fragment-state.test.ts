@@ -1,4 +1,5 @@
-// Tests for fragment-state.ts — BUG-5 (showAxes key nesting) and BUG-6 (async buildUrl)
+// Tests for fragment-state.ts — BUG-5 (showAxes key nesting), BUG-6 (async buildUrl),
+// and T2 (Phase 3 round-trip coverage)
 
 import { readStateFromFragment, buildUrlForStateParams, encodeStateParamsAsFragment } from '../state/fragment-state.ts';
 
@@ -145,5 +146,64 @@ describe('buildUrlForStateParams – must be async (BUG-6)', () => {
     // Before fix: result is a string (sync return), and it contains '[object Promise]'
     // After fix: result is a Promise
     expect(result).toBeInstanceOf(Promise);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// T2 — Additional round-trip and encoding tests (Phase 3)
+// ---------------------------------------------------------------------------
+
+describe('fragment-state — edge cases (T2)', () => {
+  it('returns null for an empty fragment string', async () => {
+    window.location.hash = '';
+    const state = await readStateFromFragment();
+    // Empty hash → no serialized state → returns null
+    expect(state).toBeNull();
+  });
+
+  it('returns null for a malformed/corrupt fragment string', async () => {
+    window.location.hash = '#' + encodeURIComponent('this-is-not-valid-gzip-base64!!!');
+    const state = await readStateFromFragment();
+    // Should not throw; corrupt data is caught and null is returned
+    expect(state).toBeNull();
+  });
+
+  it('produces a fragment string that survives encodeURIComponent round-trip', async () => {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: jest.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: jest.fn(),
+        removeListener: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        dispatchEvent: jest.fn(),
+      })),
+    });
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createInitialState } = require('../state/initial-state.ts');
+    const state = createInitialState(null, { content: 'sphere(5);' });
+
+    const fragment = await encodeStateParamsAsFragment(state);
+    // The fragment must be decodable after URI encoding/decoding
+    const uriEncoded = encodeURIComponent(fragment);
+    const decoded = decodeURIComponent(uriEncoded);
+    expect(decoded).toBe(fragment);
+  });
+
+  it('blank fragment produces a state with empty source content', async () => {
+    window.location.hash = '#blank';
+    const state = await readStateFromFragment();
+    expect(state).not.toBeNull();
+    expect(state?.params.sources[0]?.content).toBe('');
+  });
+
+  it('src= fragment produces state with the given source', async () => {
+    window.location.hash = '#src=' + encodeURIComponent('cylinder(5, 3);');
+    const state = await readStateFromFragment();
+    expect(state?.params.sources[0]?.content).toBe('cylinder(5, 3);');
   });
 });
