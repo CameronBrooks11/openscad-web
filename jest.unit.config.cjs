@@ -13,5 +13,8 @@ module.exports = {
   moduleNameMapper: {
     '^monaco-editor/esm/vs/editor/editor\\.api$': '<rootDir>/__mocks__/monaco-editor.cjs',
     '\\.css$': '<rootDir>/__mocks__/file-mock.cjs',
+    // @gltf-transform/core pulls in property-graph (ESM-only) via its CJS bundle.
+    // Unit tests never exercise the GLB export path, so a stub is safe here.
+    '^@gltf-transform/.+$': '<rootDir>/__mocks__/empty-module.cjs',
   },
 };

@@ -20,7 +20,7 @@ export function App({initialState, statePersister, fs}: {initialState: State, st
     modelRef.current = new Model(fs, state, setState, statePersister);
   }
   const model = modelRef.current;
-  useEffect(() => model.init());
+  useEffect(() => { model.init(); }, [model]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {

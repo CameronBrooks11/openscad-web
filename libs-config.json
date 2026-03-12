@@ -1,7 +1,8 @@
 {
     "wasmBuild": {
         "url": "https://files.openscad.org/playground/OpenSCAD-2025.03.25.wasm24456-WebAssembly-web.zip",
-        "target": "libs/openscad-wasm"
+        "target": "libs/openscad-wasm",
+        "sha256": null
     },
     "libraries": [
         {

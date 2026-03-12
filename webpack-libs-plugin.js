@@ -2,9 +2,10 @@
 
 import AdmZip from 'adm-zip';
 import { exec } from 'node:child_process';
-import { createWriteStream, existsSync } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync } from 'node:fs';
 import fs from 'node:fs/promises';
 import https from 'node:https';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { promisify } from 'node:util';
@@ -230,6 +231,21 @@ class OpenSCADLibrariesPlugin {
         return false;
     }
 
+    async verifySha256(filePath, expectedSha256) {
+        const hash = createHash('sha256');
+        await new Promise((resolve, reject) => {
+            const stream = createReadStream(filePath);
+            stream.on('data', (chunk) => hash.update(chunk));
+            stream.on('end', resolve);
+            stream.on('error', reject);
+        });
+        const actual = hash.digest('hex');
+        if (actual !== expectedSha256) {
+            throw new Error(`SHA256 mismatch for ${path.basename(filePath)}: expected ${expectedSha256}, got ${actual}`);
+        }
+        console.log(`SHA256 verified: ${path.basename(filePath)}`);
+    }
+
     async buildWasm() {
         const { wasmBuild } = this.config;
         const wasmDir = wasmBuild.target;
@@ -242,6 +258,10 @@ class OpenSCADLibrariesPlugin {
         if (!existsSync(path.join(wasmDir, 'openscad.js'))) {
             await this.ensureDir(wasmDir);
             await this.downloadFile(wasmBuild.url, wasmZip);
+
+            if (wasmBuild.sha256) {
+                await this.verifySha256(wasmZip, wasmBuild.sha256);
+            }
 
             console.log(`Extracting WASM to ${wasmDir}`);
             const zip = new AdmZip(path.resolve(wasmZip));

@@ -1,6 +1,6 @@
 // Tests for fragment-state.ts — BUG-5 (showAxes key nesting) and BUG-6 (async buildUrl)
 
-import { readStateFromFragment, buildUrlForStateParams } from '../state/fragment-state.ts';
+import { readStateFromFragment, buildUrlForStateParams, encodeStateParamsAsFragment } from '../state/fragment-state.ts';
 
 // ---------------------------------------------------------------------------
 // BUG-5 — readStateFromFragment reads view?.layout?.showAxis instead of view?.showAxes
@@ -60,6 +60,63 @@ describe('readStateFromFragment – view.showAxes / lineNumbers (BUG-5)', () => 
 // ---------------------------------------------------------------------------
 // BUG-6 — buildUrlForStateParams is sync but encodeStateParamsAsFragment is async
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Round-trip: encodeStateParamsAsFragment → readStateFromFragment
+// ---------------------------------------------------------------------------
+
+describe('round-trip: encodeStateParamsAsFragment → readStateFromFragment', () => {
+  function mockMatchMedia() {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: jest.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: jest.fn(),
+        removeListener: jest.fn(),
+        addEventListener: jest.fn(),
+        removeEventListener: jest.fn(),
+        dispatchEvent: jest.fn(),
+      })),
+    });
+  }
+
+  it('preserves all key state fields through gzip+base64 encode/decode cycle', async () => {
+    mockMatchMedia();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { createInitialState } = require('../state/initial-state.ts');
+
+    const state = createInitialState(null, { content: 'cube(10);' });
+    // Override non-default values to verify round-trip fidelity for each field.
+    state.params.exportFormat2D = 'dxf';
+    state.params.exportFormat3D = 'off';
+    state.params.vars = { size: 20 };
+    state.view.showAxes = false;
+    state.view.lineNumbers = true;
+    state.view.color = '#ff0000';
+    // Use single-layout to exercise layout.focus round-trip
+    state.view.layout = { mode: 'single' as const, focus: 'viewer' as const };
+
+    const fragment = await encodeStateParamsAsFragment(state);
+    // Replicate exactly what writeStateInFragment does in the real app
+    history.replaceState(null, '', '#' + fragment);
+
+    const restored = await readStateFromFragment();
+
+    expect(restored?.params.activePath).toBe('/playground.scad');
+    expect(restored?.params.sources?.[0].content).toBe('cube(10);');
+    expect(restored?.params.exportFormat2D).toBe('dxf');
+    expect(restored?.params.exportFormat3D).toBe('off');
+    expect(restored?.params.vars).toEqual({ size: 20 });
+    expect(restored?.view.showAxes).toBe(false);
+    expect(restored?.view.lineNumbers).toBe(true);
+    expect(restored?.view.color).toBe('#ff0000');
+    expect(restored?.view.layout.mode).toBe('single');
+    expect((restored?.view.layout as { focus?: string }).focus).toBe('viewer');
+  });
+});
 
 describe('buildUrlForStateParams – must be async (BUG-6)', () => {
   it('returns a Promise (not a string with "[object Promise]" in it)', () => {

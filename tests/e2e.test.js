@@ -131,7 +131,10 @@ describe('e2e', () => {
   }, longTimeout);
 
   test('load a demo by url', async () => {
-    await loadUrl('https://github.com/tenstad/keyboard/blob/main/keyboard.scad');
+    // Use a locally-served fixture instead of an external URL so the test is hermetic.
+    // public/test-fixture.scad is copied to dist/ by CopyPlugin and served by
+    // both the dev server (port 4000) and the production server.
+    await loadUrl(`${baseUrl}test-fixture.scad`);
     await waitForViewer();
     expect3DManifold();
   }, longTimeout);
