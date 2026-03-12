@@ -25,7 +25,22 @@ jobs:
         with:
           node-version: ${{ matrix.node.version }}
       - run: npm install
-      - run: npm run build:all
+
+      - name: Cache build libs
+        id: cache-libs
+        uses: actions/cache@v4
+        with:
+          path: |
+            libs/
+            src/wasm/
+            public/libraries/
+          key: v2-libs-${{ hashFiles('libs-config.json') }}
+
+      - name: Build libs (if cache miss)
+        if: steps.cache-libs.outputs.cache-hit != 'true'
+        run: npm run build:libs
+
+      - run: npm run build
       - name: Archive production artifacts
         uses: actions/upload-artifact@v7
         with:

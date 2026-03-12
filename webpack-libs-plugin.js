@@ -73,18 +73,37 @@ class OpenSCADLibrariesPlugin {
         }
     }
 
-    async downloadFile(url, outputPath) {
+    async downloadFile(url, outputPath, retries = 3, retryDelayMs = 1000) {
         console.log(`Downloading ${url} to ${outputPath}`);
 
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                await this._downloadOnce(url, outputPath);
+                return;
+            } catch (err) {
+                const isTransient = /5\d\d/.test(err.message) || err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT';
+                if (isTransient && attempt < retries) {
+                    const delay = retryDelayMs * attempt;
+                    console.warn(`Download failed (attempt ${attempt}/${retries}): ${err.message} — retrying in ${delay}ms`);
+                    await new Promise(r => setTimeout(r, delay));
+                } else {
+                    throw err;
+                }
+            }
+        }
+    }
+
+    _downloadOnce(url, outputPath) {
         return new Promise((resolve, reject) => {
             https.get(url, (response) => {
                 if (response.statusCode === 302 || response.statusCode === 301) {
-                    return this.downloadFile(response.headers.location, outputPath)
+                    return this._downloadOnce(response.headers.location, outputPath)
                         .then(resolve)
                         .catch(reject);
                 }
 
                 if (response.statusCode !== 200) {
+                    response.resume(); // drain to free socket
                     reject(new Error(`Failed to download: ${response.statusCode}`));
                     return;
                 }
