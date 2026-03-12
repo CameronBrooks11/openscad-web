@@ -406,16 +406,16 @@ class OpenSCADLibrariesPlugin {
         const libDir = path.join(this.libsDir, library.name);
         const zipPath = path.join(this.publicLibsDir, `${library.name}.zip`);
 
-        // Clone repository if not exists
+        // Clone repository if not exists.
+        // R1-3: When a commit pin is set we need the full history, so skip --depth 1.
+        // Shallow clones only fetch the branch tip; an arbitrary pinned commit won't be
+        // present in the shallow pack and git checkout will fail with "unable to read tree".
         if (!existsSync(libDir)) {
-            await this.cloneRepo(library.repo, libDir, library.branch);
+            await this.cloneRepo(library.repo, libDir, library.branch, /*shallow=*/!library.commit);
         }
 
         // R1-3: if a commit pin is specified, checkout exactly that commit
         if (library.commit) {
-            try {
-                await execAsync(`git -C ${libDir} fetch --quiet origin`);
-            } catch { /* fetch is best-effort; continue with local state */ }
             await execAsync(`git -C ${libDir} checkout --quiet ${library.commit}`);
             console.log(`Pinned ${library.name} @ ${library.commit.slice(0, 12)}`);
         }
