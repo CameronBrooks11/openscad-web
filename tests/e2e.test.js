@@ -136,7 +136,7 @@ describe('e2e', () => {
     // both the dev server (port 4000) and the production server.
     await loadUrl(`${baseUrl}test-fixture.scad`);
     await waitForViewer();
-    expect3DManifold();
+    expect3DPolySet();
   }, longTimeout);
 
   test('customizer & windows line endings work', async () => {
