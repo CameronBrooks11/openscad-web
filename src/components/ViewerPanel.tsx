@@ -59,9 +59,9 @@ export default function ViewerPanel({className, style}: {className?: string, sty
   const state = model.state;
   const [interactionPrompt, setInteractionPrompt] = useState('auto');
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const modelViewerRef = useRef<any>();
+  const [modelViewerNode, setModelViewerNode] = useState<any>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const axesViewerRef = useRef<any>();
+  const [axesViewerNode, setAxesViewerNode] = useState<any>(null);
   const toastRef = useRef<Toast>(null);
 
   const [loadedUri, setLoadedUri] = useState<string | undefined>();
@@ -73,85 +73,83 @@ export default function ViewerPanel({className, style}: {className?: string, sty
 
   // Sync preview image hash with state
   useEffect(() => {
-    if (state?.preview) {
-      const { hash } = cachedImageHash ?? {};
-      if (state.preview.blurhash && hash !== state.preview.blurhash) {
-        setCachedImageHash({ hash: state.preview.blurhash, uri: blurHashToImage(state.preview.blurhash, 100, 100) });
-      } else if (state.preview.thumbhash && hash !== state.preview.thumbhash) {
-        setCachedImageHash({ hash: state.preview.thumbhash, uri: thumbHashToImage(state.preview.thumbhash) });
+    setCachedImageHash(current => {
+      if (state?.preview?.blurhash) {
+        return current?.hash === state.preview.blurhash ? current
+          : { hash: state.preview.blurhash, uri: blurHashToImage(state.preview.blurhash, 100, 100) };
+      } else if (state?.preview?.thumbhash) {
+        return current?.hash === state.preview.thumbhash ? current
+          : { hash: state.preview.thumbhash, uri: thumbHashToImage(state.preview.thumbhash) };
       }
-    } else if (cachedImageHash) {
-      setCachedImageHash(undefined);
-    }
+      return current ? undefined : current;
+    });
   }, [state?.preview?.blurhash, state?.preview?.thumbhash]);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onLoad = useCallback(async (_e: any) => {
     setLoadedUri(modelUri);
 
-    if (!modelViewerRef.current) return;
+    if (!modelViewerNode) return;
 
-    const uri = await modelViewerRef.current.toDataURL('image/png', 0.5);
+    const uri = await modelViewerNode.toDataURL('image/png', 0.5);
     const preview = {blurhash: await imageToBlurhash(uri)};
     model?.mutate(s => s.preview = preview);
-  }, [model, modelUri, setLoadedUri, modelViewerRef.current]);
+  }, [model, modelUri, modelViewerNode]);
 
   useEffect(() => {
-    if (!modelViewerRef.current) return;
+    if (!modelViewerNode) return;
 
-    const element = modelViewerRef.current;
-    element.addEventListener('load', onLoad);
-    return () => element.removeEventListener('load', onLoad);
-  }, [modelViewerRef.current, onLoad]);
+    modelViewerNode.addEventListener('load', onLoad);
+    return () => modelViewerNode.removeEventListener('load', onLoad);
+  }, [modelViewerNode, onLoad]);
 
 
   // Sync camera orbit between model viewer and axes viewer
   useEffect(() => {
-    if (!modelViewerRef.current) return;
+    if (!modelViewerNode) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function handleCameraChange(e: any) {
-      if (!axesViewerRef.current) return;
+      if (!axesViewerNode) return;
       if (e.detail.source === 'user-interaction') {
-        const cameraOrbit = modelViewerRef.current.getCameraOrbit();
-        cameraOrbit.radius = axesViewerRef.current.getCameraOrbit().radius;
-        axesViewerRef.current.cameraOrbit = cameraOrbit.toString();
+        const cameraOrbit = modelViewerNode.getCameraOrbit();
+        cameraOrbit.radius = axesViewerNode.getCameraOrbit().radius;
+        axesViewerNode.cameraOrbit = cameraOrbit.toString();
       }
     }
-    const element = modelViewerRef.current;
-    element.addEventListener('camera-change', handleCameraChange);
-    return () => element.removeEventListener('camera-change', handleCameraChange);
-  }, [modelViewerRef.current, axesViewerRef.current]);
+    modelViewerNode.addEventListener('camera-change', handleCameraChange);
+    return () => modelViewerNode.removeEventListener('camera-change', handleCameraChange);
+  }, [modelViewerNode, axesViewerNode]);
 
   useEffect(() => {
-    if (!axesViewerRef.current) return;
+    if (!axesViewerNode) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function handleCameraChange(e: any) {
-      if (!modelViewerRef.current) return;
+      if (!modelViewerNode) return;
       if (e.detail.source === 'user-interaction') {
-        const cameraOrbit = axesViewerRef.current.getCameraOrbit();
-        cameraOrbit.radius = modelViewerRef.current.getCameraOrbit().radius;
-        modelViewerRef.current.cameraOrbit = cameraOrbit.toString();
+        const cameraOrbit = axesViewerNode.getCameraOrbit();
+        cameraOrbit.radius = modelViewerNode.getCameraOrbit().radius;
+        modelViewerNode.cameraOrbit = cameraOrbit.toString();
       }
     }
-    const element = axesViewerRef.current;
-    element.addEventListener('camera-change', handleCameraChange);
-    return () => element.removeEventListener('camera-change', handleCameraChange);
-  }, [axesViewerRef.current, modelViewerRef.current]);
+    axesViewerNode.addEventListener('camera-change', handleCameraChange);
+    return () => axesViewerNode.removeEventListener('camera-change', handleCameraChange);
+  }, [axesViewerNode, modelViewerNode]);
 
   // Cycle through predefined views when user clicks on the axes viewer
   useEffect(() => {
+    if (!axesViewerNode || !modelViewerNode) return;
     let mouseDownSpherePoint: [number, number, number] | undefined;
     function getSpherePoint() {
-      const orbit = axesViewerRef.current.getCameraOrbit();
+      const orbit = axesViewerNode.getCameraOrbit();
       return spherePoint(orbit.theta, orbit.phi);
     }
     function onMouseDown(e: MouseEvent) {
-      if (e.target === axesViewerRef.current) {
+      if (e.target === axesViewerNode) {
         mouseDownSpherePoint = getSpherePoint();
       }
     }
     function onMouseUp(e: MouseEvent) {
-      if (e.target === axesViewerRef.current) {
+      if (e.target === axesViewerNode) {
         const euclEps = 0.01;
         const radEps = 0.1;
 
@@ -161,13 +159,13 @@ export default function ViewerPanel({className, style}: {className?: string, sty
           return;
         }
         // Note: unlike the axes viewer, the model viewer has a prompt that makes the model wiggle around, we only fetch it to get the radius.
-        const axesOrbit = axesViewerRef.current.getCameraOrbit();
-        const modelOrbit = modelViewerRef.current.getCameraOrbit();
+        const axesOrbit = axesViewerNode.getCameraOrbit();
+        const modelOrbit = modelViewerNode.getCameraOrbit();
         const [currentIndex, dist, radDist] = getClosestPredefinedOrbitIndex(axesOrbit.theta, axesOrbit.phi);
         const newIndex = dist < euclEps && radDist < radEps ? (currentIndex + 1) % PREDEFINED_ORBITS.length : currentIndex;
         const [name, theta, phi] = PREDEFINED_ORBITS[newIndex];
         Object.assign(modelOrbit, {theta, phi});
-        modelViewerRef.current.cameraOrbit = axesViewerRef.current.cameraOrbit = modelOrbit.toString();
+        modelViewerNode.cameraOrbit = axesViewerNode.cameraOrbit = modelOrbit.toString();
         toastRef.current?.show({severity: 'info', detail: `${name} view`, life: 1000,});
         setInteractionPrompt('none');
       }
@@ -178,7 +176,7 @@ export default function ViewerPanel({className, style}: {className?: string, sty
       window.removeEventListener('mousedown', onMouseDown);
       window.removeEventListener('mouseup', onMouseUp);
     };
-  }, []);
+  }, [axesViewerNode, modelViewerNode]);
 
   return (
     <div className={className}
@@ -231,7 +229,7 @@ export default function ViewerPanel({className, style}: {className?: string, sty
         min-camera-orbit="auto 0deg auto"
         camera-controls
         ar
-        ref={modelViewerRef}
+        ref={setModelViewerNode}
       >
         <span slot="progress-bar"></span>
       </model-viewer>
@@ -259,7 +257,7 @@ export default function ViewerPanel({className, style}: {className?: string, sty
                 disable-zoom
                 disable-tap 
                 disable-pan
-                ref={axesViewerRef}
+                ref={setAxesViewerNode}
         >
           <span slot="progress-bar"></span>
         </model-viewer>
