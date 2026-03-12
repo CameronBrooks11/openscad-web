@@ -25,9 +25,10 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
+            libs/
             src/wasm/
             public/libraries/
-          key: libs-${{ hashFiles('libs-config.json') }}
+          key: v2-libs-${{ hashFiles('libs-config.json') }}
 
       - name: Build libs
         if: steps.cache-libs.outputs.cache-hit != 'true'
