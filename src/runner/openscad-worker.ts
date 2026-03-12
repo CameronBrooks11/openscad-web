@@ -2,10 +2,9 @@
 
 /// <reference lib="webworker" />
 
-import { createEditorFS, symlinkLibraries } from "../fs/filesystem.ts";
+import { createEditorFS, mountDemandLibraries, symlinkLibraries } from "../fs/filesystem.ts";
 import { createRuntime, OpenSCADRuntime } from "./openscad-runtime.ts";
 import { CompileRequest, CompileResult, CompileError, CompileStdout, CompileStderr, MergedOutput, WorkerRequest } from "./worker-protocol.ts";
-import { deployedArchiveNames } from "../fs/zip-archives.ts";
 import { fetchSource } from "../utils.ts";
 
 importScripts("browserfs.min.js");
@@ -44,27 +43,38 @@ function createJobRuntime(): Promise<OpenSCADRuntime> {
   });
 }
 
-// BrowserFS (global) is initialized once per worker. The per-instance WASM FS mounts
-// (mkdir + mount + symlinks) must be re-done for every fresh WASM instance.
+// BrowserFS (global) is initialized once per worker.
+// The per-instance WASM FS mounts (mkdir + mount + symlinks) are re-done for every fresh WASM instance.
 let editorFSInitialized = false;
 
-async function ensureArchivesMounted(rt: OpenSCADRuntime): Promise<void> {
-  if (!editorFSInitialized) {
-    await createEditorFS({ prefix: '', allowPersistence: false });
-    editorFSInitialized = true;
-  }
-  // Always re-mount: each job gets a new WASM instance with a fresh FS
-  rt.mkdir('/libraries');
+/**
+ * Mounts the BrowserFS canonical partitions into the given WASM FS instance:
+ *   - /libraries  → BrowserFS /libraries (demand-loaded ZipFS sub-mounts)
+ *   - /fonts      → BrowserFS /fonts     (ZipFS from fonts.zip, pre-loaded at init)
+ * Then creates WASM FS symlinks so OpenSCAD can resolve `use <LibName/...>` from CWD.
+ */
+async function ensureArchivesMounted(rt: OpenSCADRuntime, libraryNames: string[]): Promise<void> {
   const BFS = new BrowserFS.EmscriptenFS(
     rt.FS,
     rt.PATH ?? {
       join2: (a: string, b: string) => `${a}/${b}`,
       join: (...args: string[]) => args.join('/'),
     },
-    rt.ERRNO_CODES ?? {}
+    rt.ERRNO_CODES ?? {},
   );
-  rt.FS.mount(BFS, { root: '/' }, '/libraries');
-  await symlinkLibraries(deployedArchiveNames, rt.FS, '/libraries', '/');
+
+  // Mount BrowserFS /libraries subtree at WASM /libraries
+  rt.mkdir('/libraries');
+  rt.FS.mount(BFS, { root: '/libraries' }, '/libraries');
+
+  // Mount BrowserFS /fonts subtree at WASM /fonts (no symlink needed — direct mount)
+  rt.mkdir('/fonts');
+  rt.FS.mount(BFS, { root: '/fonts' }, '/fonts');
+
+  // Create WASM FS symlinks so `use <MCAD/shapes.scad>` resolves from CWD /
+  if (libraryNames.length > 0) {
+    await symlinkLibraries(libraryNames, rt.FS, '/libraries', '/');
+  }
 }
 
 self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
@@ -84,13 +94,26 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
     const start = performance.now();
 
     try {
+      // F3: Demand-load only the libraries referenced in the source texts
+      let libraryNames: string[] = [];
+      if (mountArchives) {
+        if (!editorFSInitialized) {
+          await createEditorFS({ allowPersistence: false });
+          editorFSInitialized = true;
+        }
+        const sourceTexts = sources
+          .map(s => s.content)
+          .filter((c): c is string => c != null);
+        libraryNames = await mountDemandLibraries(sourceTexts);
+      }
+
       const rt = await createJobRuntime();
 
       if (mountArchives) {
-        await ensureArchivesMounted(rt);
+        await ensureArchivesMounted(rt, libraryNames);
       }
 
-      // Fonts resolved from cwd/fonts
+      // Fonts resolved from cwd/fonts (via /fonts mount point)
       rt.FS.chdir('/');
       rt.mkdir('/locale');
 
@@ -154,5 +177,3 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
     }
   }
 });
-
-// The worker uses fetchSource from utils for URL-based sources (Phase 2 will remove this).

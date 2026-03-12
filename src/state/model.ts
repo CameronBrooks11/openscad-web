@@ -5,6 +5,7 @@ import { MultiLayoutComponentId, SingleLayoutComponentId, State, StatePersister 
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
 import { bubbleUpDeepMutations } from "./deep-mutate.ts";
 import { downloadUrl, fetchSource, formatBytes, formatMillis, readFileAsDataURL } from '../utils.ts'
+import { openLocalFile, saveActiveFile } from '../fs/filesystem.ts';
 
 import JSZip from 'jszip';
 import { ProcessStreams } from "../runner/openscad-runner.ts";
@@ -310,9 +311,74 @@ export class Model {
     }
   }
 
+  /** F6: Creates a new empty .scad file in /home/ and activates it. */
+  newFile(): void {
+    const base = '/home/untitled';
+    let path = `${base}.scad`;
+    let n = 2;
+    const existing = new Set(this.state.params.sources.map(s => s.path));
+    while (existing.has(path)) path = `${base}-${n++}.scad`;
+    try { this.fs.writeFile(path, ''); } catch { /* fs may not support it yet */ }
+    this.mutate(s => {
+      s.params.sources = [...s.params.sources, { path, content: '' }];
+      s.params.activePath = path;
+      s.lastCheckerRun = undefined;
+      s.output = undefined;
+    });
+  }
+
+  /** F6: Extracts a ZIP archive into /home/ and activates the entry .scad. */
+  async importProjectZip(zipBuffer: ArrayBuffer): Promise<void> {
+    const zip = await JSZip.loadAsync(zipBuffer);
+    const files: [string, string][] = [];
+    for (const [relPath, zipObj] of Object.entries(zip.files)) {
+      if (!zipObj.dir) {
+        files.push([relPath, await zipObj.async('string')]);
+      }
+    }
+    for (const [relPath, content] of files) {
+      try { this.fs.writeFile(`/home/${relPath}`, content); } catch { /* ignore */ }
+    }
+    const entryRel = (
+      files.find(([p]) => p === 'main.scad') ??
+      files.find(([p]) => p.endsWith('.scad')) ??
+      files[0]
+    )?.[0];
+    if (entryRel) {
+      const fullEntry = `/home/${entryRel}`;
+      this.mutate(s => {
+        s.params.sources = files.map(([p, content]) => ({ path: `/home/${p}`, content }));
+        s.params.activePath = fullEntry;
+        s.lastCheckerRun = undefined;
+        s.output = undefined;
+      });
+      this.processSource();
+    }
+  }
+
+  /** F5: Opens a local file via the File System Access API. Returns true if opened. */
+  async openFileViaFSAPI(): Promise<boolean> {
+    const result = await openLocalFile();
+    if (!result) return false;
+    const path = `/home/${result.name}`;
+    try { this.fs.writeFile(path, result.content); } catch { /* ignore */ }
+    this.mutate(s => {
+      const withoutExisting = s.params.sources.filter(src => src.path !== path);
+      s.params.sources = [...withoutExisting, { path, content: result.content }];
+      s.params.activePath = path;
+      s.lastCheckerRun = undefined;
+      s.output = undefined;
+    });
+    this.processSource();
+    return true;
+  }
+
   async saveProject() {
     if (this.state.params.sources.length == 1) {
-      const content = this.state.params.sources[0].content;
+      const content = this.state.params.sources[0].content ?? '';
+      // Try FSAPI save first (if user opened file via File System Access API)
+      const saved = await saveActiveFile(content);
+      if (saved) return;
       // TextEncoder.encode() always returns an ArrayBuffer-backed Uint8Array;
       // cast required because the TS lib defines encode() → Uint8Array (= <ArrayBufferLike>)
       // while Blob's BlobPart expects ArrayBufferView<ArrayBuffer>. TS 5.7+ issue.

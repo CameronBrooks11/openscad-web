@@ -1,11 +1,11 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
-import { join, Symlinks } from '../fs/filesystem';
+import { join } from '../fs/filesystem';
 import { ParsedFile, ParsedFunctionoidDef, parseOpenSCAD, stripComments } from './openscad-pseudoparser';
 import builtinSignatures from './openscad-builtins'
 import { mapObject } from '../utils';
-import { ZipArchives } from '../fs/zip-archives';
+import { ZipArchive } from '../fs/zip-archives.generated';
 import openscadLanguage from './openscad-language';
 
 function makeFunctionoidSuggestion(name: string, mod: ParsedFunctionoidDef) {
@@ -70,21 +70,16 @@ function cleanupVariables(snippet: string) {
 }
 
 // https://microsoft.github.io/monaco-editor/playground.html#extending-language-services-custom-languages
-export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: string, zipArchives: ZipArchives) {
+export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: string, zipArchives: ZipArchive[]) {
 
   const parsedFiles: {[path: string]: Promise<ParsedFile>} = {};
   const toAbsolutePath = (path: string) => path.startsWith('/') ? path : `${workingDir}/${path}`;
-  
-  const allSymlinks: Symlinks = {};
-  for (const [n, {deployed, symlinks}] of Object.entries(zipArchives)) {
-    if (n == 'fonts') {
-      continue;
-    }
-    if (deployed === false) {
-      continue;
-    }
-    for (const s in symlinks) {
-      allSymlinks[s] = `${n}/${symlinks[s]}`;
+
+  // Build a symlink map from the archive registry (for path resolution in completions)
+  const allSymlinks: Record<string, string> = {};
+  for (const archive of zipArchives) {
+    for (const [from, to] of Object.entries(archive.symlinks ?? {})) {
+      allSymlinks[from] = `${archive.name}/${to}`;
     }
   }
   async function readFile(path: string) {
@@ -211,7 +206,7 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
               if (/^(LICENSE.*|fonts)$/.test(file)) {
                 continue;
               }
-              if (folderPrefix == '' && (file in zipArchives) && zipArchives[file].symlinks) {
+              if (folderPrefix == '' && zipArchives.find(a => a.name === file)?.symlinks) {
                 continue;
               }
               const isFolder = !file.endsWith('.scad');

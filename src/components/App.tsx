@@ -33,6 +33,9 @@ export function App({initialState, statePersister, fs}: {initialState: State, st
       } else if (event.key === 'F7') {
         event.preventDefault();
         model.export();
+      } else if (event.key === 's' && (event.ctrlKey || event.metaKey)) {
+        event.preventDefault();
+        model.saveProject();
       }
     };
     window.addEventListener('keydown', handleKeyDown);

@@ -1,13 +1,13 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import loader from '@monaco-editor/loader';
-import { ZipArchives } from '../fs/zip-archives';
+import { ZipArchive } from '../fs/zip-archives.generated';
 import { buildOpenSCADCompletionItemProvider } from './openscad-completions';
 import openscadLanguage from './openscad-language';
 
 // https://microsoft.github.io/monaco-editor/playground.html#extending-language-services-custom-languages
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function registerOpenSCADLanguage(fs: any, workingDir: string, zipArchives: ZipArchives) {
+export async function registerOpenSCADLanguage(fs: any, workingDir: string, zipArchives: ZipArchive[]) {
   const monaco = await loader.init();
   
   monaco.languages.register({

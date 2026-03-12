@@ -2,6 +2,7 @@
 
 import { AbortablePromise } from "../utils.ts";
 import { Source } from "../state/app-state.ts";
+import { mountDemandLibraries } from "../fs/filesystem.ts";
 import {
   CompileRequest,
   CancelRequest,
@@ -215,3 +216,47 @@ export function spawnOpenSCAD(
   });
 }
 
+// ---------------------------------------------------------------------------
+// F4 — On-demand fallback for missing libraries
+// ---------------------------------------------------------------------------
+
+/**
+ * Pattern that matches OpenSCAD's "Can't open library" error in stderr.
+ * Example: "Can't open library 'MCAD/involute_gears.scad'."
+ */
+const MISSING_LIBRARY_RE = /Can't open library '([^']+)'/;
+
+/**
+ * Dispatches a compile job and, if it fails because of a missing library that is
+ * known to the registry, mounts that library on-demand and retries once.
+ *
+ * This covers cases where the static `use <...>` parser in the worker missed a
+ * dynamically-constructed library path.
+ */
+export async function compileWithFallback(
+  invocation: OpenSCADInvocation,
+  streamsCallback: (ps: ProcessStreams) => void,
+  priority: JobPriority = 'render',
+): Promise<OpenSCADInvocationResults> {
+  let result = await spawnOpenSCAD(invocation, streamsCallback, priority);
+
+  if (result.exitCode !== 0) {
+    // Inspect stderr lines for a missing-library error
+    const stderrText = result.mergedOutputs
+      .filter(o => 'stderr' in o)
+      .map(o => (o as { stderr: string }).stderr)
+      .join('\n');
+    const match = stderrText.match(MISSING_LIBRARY_RE);
+    if (match) {
+      const missingPath = match[1]; // e.g. "MCAD/involute_gears.scad"
+      const topLevel = missingPath.split('/')[0];
+      const needed = await mountDemandLibraries([`use <${missingPath}>`]);
+      if (needed.includes(topLevel)) {
+        // Retry once with the library now mounted
+        result = await spawnOpenSCAD(invocation, streamsCallback, priority);
+      }
+    }
+  }
+
+  return result;
+}

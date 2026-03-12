@@ -105,7 +105,7 @@ describe('round-trip: encodeStateParamsAsFragment → readStateFromFragment', ()
 
     const restored = await readStateFromFragment();
 
-    expect(restored?.params.activePath).toBe('/playground.scad');
+    expect(restored?.params.activePath).toBe('/home/playground.scad');
     expect(restored?.params.sources?.[0].content).toBe('cube(10);');
     expect(restored?.params.exportFormat2D).toBe('dxf');
     expect(restored?.params.exportFormat3D).toBe('off');

@@ -3,9 +3,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import {App} from './components/App.tsx';
-import { createEditorFS } from './fs/filesystem.ts';
+import { createEditorFS, preloadAllLibraries } from './fs/filesystem.ts';
 import { registerOpenSCADLanguage } from './language/openscad-register-language.ts';
-import { zipArchives } from './fs/zip-archives.ts';
+import { zipArchives } from './fs/zip-archives.generated.ts';
 import {readStateFromFragment} from './state/fragment-state.ts'
 import { createInitialState } from './state/initial-state.ts';
 import './index.css';
@@ -82,9 +82,12 @@ window.addEventListener('load', async () => {
   
   registerCustomAppHeightCSSProperty();
 
-  const fs = await createEditorFS({prefix: '/libraries/', allowPersistence: isInStandaloneMode()});
+  const fs = await createEditorFS({ allowPersistence: isInStandaloneMode() });
 
-  await registerOpenSCADLanguage(fs, '/', zipArchives);
+  // Pre-load all library ZIPs so FilePicker and code completion work immediately
+  await preloadAllLibraries();
+
+  await registerOpenSCADLanguage(fs, '/libraries', zipArchives);
 
   let statePersister: StatePersister;
   let persistedState: State | null = null;
@@ -92,7 +95,7 @@ window.addEventListener('load', async () => {
   if (isInStandaloneMode()) {
     const fs: FS = BrowserFS.BFSRequire('fs')
     try {
-      const data = JSON.parse(new TextDecoder("utf-8").decode(fs.readFileSync('/state.json')));
+      const data = JSON.parse(new TextDecoder("utf-8").decode(fs.readFileSync('/home/state.json')));
       const {view, params} = data
       persistedState = {view, params};
     } catch (e) {
@@ -100,7 +103,7 @@ window.addEventListener('load', async () => {
     }
     statePersister = {
       set: async ({view, params}) => {
-        fs.writeFile('/state.json', JSON.stringify({view, params}));
+      fs.writeFile('/home/state.json', JSON.stringify({view, params}));
       }
     };
   } else {

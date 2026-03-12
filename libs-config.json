@@ -16,7 +16,13 @@
             ],
             "zipExcludes": [
                 "**/tests/**"
-            ]
+            ],
+            "description": "OpenSCAD",
+            "docs": {
+                "CheatSheet": "https://openscad.org/cheatsheet/index.html",
+                "Documentation": "https://openscad.org/documentation.html"
+            },
+            "prefetch": false
         },
         {
             "name": "BOSL2",
@@ -27,7 +33,13 @@
                 "*.scad",
                 "LICENSE",
                 "examples"
-            ]
+            ],
+            "description": "The Belfry OpenScad Library, v2.0",
+            "docs": {
+                "CheatSheet": "https://github.com/BelfrySCAD/BOSL2/wiki/CheatSheet",
+                "Wiki": "https://github.com/BelfrySCAD/BOSL2/wiki"
+            },
+            "prefetch": true
         },
         {
             "name": "BOSL",
@@ -37,7 +49,9 @@
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
-            ]
+            ],
+            "description": "The Belfry OpenScad Library",
+            "prefetch": true
         },
         {
             "name": "NopSCADlib",
@@ -47,7 +61,9 @@
             "zipIncludes": [
                 "**/*.scad",
                 "COPYING"
-            ]
+            ],
+            "includeAssets": [".stl", ".dxf"],
+            "prefetch": true
         },
         {
             "name": "funcutils",
@@ -57,7 +73,9 @@
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
-            ]
+            ],
+            "description": "OpenSCAD collection of functional programming utilities",
+            "prefetch": true
         },
         {
             "name": "FunctionalOpenSCAD",
@@ -67,7 +85,9 @@
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
-            ]
+            ],
+            "description": "Implementing OpenSCAD in OpenSCAD",
+            "prefetch": true
         },
         {
             "name": "YAPP_Box",
@@ -77,7 +97,9 @@
             "zipIncludes": [
                 "**/*.scad",
                 "LICENSE"
-            ]
+            ],
+            "description": "Yet Another Parametric Projectbox Box",
+            "prefetch": true
         },
         {
             "name": "MCAD",
@@ -88,7 +110,9 @@
                 "*.scad",
                 "bitmap/*.scad",
                 "LICENSE"
-            ]
+            ],
+            "description": "OpenSCAD Parametric CAD Library",
+            "prefetch": true
         },
         {
             "name": "boltsparts",
@@ -102,7 +126,12 @@
             "zipExcludes": [
                 "**/tests/**"
             ],
-            "workingDir": "openscad"
+            "workingDir": "openscad",
+            "description": "OpenSCAD library for generating bolt/nut models",
+            "docs": {
+                "Usage": "https://boltsparts.github.io/en/docs/0.3/document/openscad/usage.html"
+            },
+            "prefetch": false
         },
         {
             "name": "OpenSCAD-Snippet",
@@ -112,7 +141,13 @@
             "zipIncludes": [
                 "**/*.scad",
                 "LICENSE"
-            ]
+            ],
+            "description": "OpenSCAD Snippet Library",
+            "symlinks": {
+                "Asset_SCAD": "Asset_SCAD",
+                "Import_Library.scad": "Import_Library.scad"
+            },
+            "prefetch": false
         },
         {
             "name": "Stemfie_OpenSCAD",
@@ -122,7 +157,9 @@
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
-            ]
+            ],
+            "description": "OpenSCAD Stemfie Library",
+            "prefetch": true
         },
         {
             "name": "pathbuilder",
@@ -133,7 +170,8 @@
                 "*.scad",
                 "demo/*.scad",
                 "LICENSE"
-            ]
+            ],
+            "prefetch": false
         },
         {
             "name": "openscad_attachable_text3d",
@@ -143,7 +181,8 @@
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
-            ]
+            ],
+            "prefetch": false
         },
         {
             "name": "brailleSCAD",
@@ -153,7 +192,11 @@
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
-            ]
+            ],
+            "docs": {
+                "Documentation": "https://github.com/BelfrySCAD/brailleSCAD/wiki/TOC"
+            },
+            "prefetch": false
         },
         {
             "name": "smooth-prim",
@@ -163,7 +206,10 @@
             "zipIncludes": [
                 "*.scad",
                 "LICENSE.txt"
-            ]
+            ],
+            "description": "OpenSCAD smooth primitives library",
+            "symlinks": { "smooth_prim.scad": "smooth_prim.scad" },
+            "prefetch": true
         },
         {
             "name": "plot-function",
@@ -173,7 +219,10 @@
             "zipIncludes": [
                 "*.scad",
                 "LICENSE.txt"
-            ]
+            ],
+            "description": "OpenSCAD Function Plotting Library",
+            "symlinks": { "plot_function.scad": "plot_function.scad" },
+            "prefetch": true
         },
         {
             "name": "closepoints",
@@ -183,7 +232,10 @@
             "zipIncludes": [
                 "*.scad",
                 "LICENSE.txt"
-            ]
+            ],
+            "description": "OpenSCAD ClosePoints Library",
+            "symlinks": { "closepoints.scad": "closepoints.scad" },
+            "prefetch": true
         },
         {
             "name": "UB.scad",
@@ -194,7 +246,9 @@
                 "libraries/*.scad",
                 "LICENSE",
                 "examples/UBexamples"
-            ]
+            ],
+            "symlinks": { "ub.scad": "ub.scad" },
+            "prefetch": true
         },
         {
             "name": "openscad-tray",
@@ -204,7 +258,10 @@
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
-            ]
+            ],
+            "description": "OpenSCAD library to create rounded rectangular trays with optional subdividers",
+            "symlinks": { "tray.scad": "tray.scad" },
+            "prefetch": true
         },
         {
             "name": "lasercut",
@@ -214,7 +271,10 @@
             "zipIncludes": [
                 "*.scad",
                 "LICENSE"
-            ]
+            ],
+            "description": "Module for OpenSCAD, allowing 3D models to be created from 2D lasercut parts",
+            "symlinks": { "lasercut.scad": "lasercut.scad" },
+            "prefetch": false
         }
     ],
     "fonts": {
