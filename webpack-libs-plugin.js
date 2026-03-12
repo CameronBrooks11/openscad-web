@@ -269,22 +269,22 @@ class OpenSCADLibrariesPlugin {
         const { wasmBuild } = this.config;
         const wasmDir = wasmBuild.target;
         const wasmZip = `${wasmDir}.zip`;
-        const hashFile = `${wasmDir}.sha256`;
 
         await this.ensureDir(this.libsDir);
 
-        // R1-2: always verify SHA256 against stored sidecar; re-download on mismatch.
-        // This makes URL changes automatically trigger a fresh download.
+        // R1-2: re-verify SHA256 from the cached zip on every run so that
+        // local tampering or corruption is detected, not just config changes.
+        // The zip is preserved after extract (not deleted) specifically for this.
         let needDownload = true;
-        if (existsSync(hashFile) && existsSync(path.join(wasmDir, 'openscad.js'))) {
-            const cachedHash = (await fs.readFile(hashFile, 'utf8')).trim();
-            if (cachedHash === wasmBuild.sha256) {
-                console.log('[build-wasm] Artifact up to date, skipping download.');
+        if (existsSync(wasmZip) && existsSync(path.join(wasmDir, 'openscad.js'))) {
+            try {
+                await this.verifySha256(wasmZip, wasmBuild.sha256);
+                console.log('[build-wasm] Artifact up to date (SHA256 re-verified from cached zip), skipping download.');
                 needDownload = false;
-            } else {
-                console.log('[build-wasm] SHA256 mismatch — re-downloading artifact.');
+            } catch {
+                console.log('[build-wasm] Cached zip SHA256 mismatch — re-downloading artifact.');
                 await fs.rm(wasmDir, { recursive: true, force: true });
-                try { await fs.unlink(hashFile); } catch { /* ignore */ }
+                try { await fs.unlink(wasmZip); } catch { /* ignore */ }
             }
         }
 
@@ -299,11 +299,8 @@ class OpenSCADLibrariesPlugin {
             console.log(`Extracting WASM to ${wasmDir}`);
             const zip = new AdmZip(path.resolve(wasmZip));
             zip.extractAllTo(path.resolve(wasmDir), /*overwrite=*/true);
-            try { await fs.unlink(wasmZip); } catch { /* ignore */ }
-
-            if (wasmBuild.sha256) {
-                await fs.writeFile(hashFile, wasmBuild.sha256);
-            }
+            // Keep wasmZip — it is the canonical artifact used for SHA256 re-verification
+            // on subsequent runs (see fast path above).
         }
 
         await this.ensureDir('public');

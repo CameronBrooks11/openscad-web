@@ -163,17 +163,25 @@ export function spawnOpenSCAD(
       hardTimeoutHandle: null,
     };
 
-    // Soft timeout: reject promise, discard late response
+    // Soft timeout: reject promise, discard late response.
+    // Must also clear the hard-timeout timer — if we don't, the hard-timeout
+    // fires later and recycles the worker even though this job is already gone,
+    // interrupting any unrelated compile that started in the meantime.
     job.softTimeoutHandle = setTimeout(() => {
       if (_pending.has(id)) {
         _pending.delete(id);
+        clearTimeout(job.hardTimeoutHandle ?? undefined);
+        job.hardTimeoutHandle = null;
         _worker?.postMessage({ type: 'cancel', id } satisfies CancelRequest);
         reject(new Error(`Compile timed out after ${SOFT_TIMEOUT_MS / 1000}s`));
       }
     }, SOFT_TIMEOUT_MS);
 
-    // Hard timeout: recycle worker if it remains blocked
+    // Hard timeout: recycle worker if it remains blocked.
+    // Guard on _pending.has(id): the job may have been resolved, cancelled, or
+    // soft-timed-out already — in that case we must NOT recycle the worker.
     job.hardTimeoutHandle = setTimeout(() => {
+      if (!_pending.has(id)) return; // job already finished — nothing to do
       if (_worker) {
         console.warn('[runner] Hard timeout reached — recycling worker');
         _worker.terminate();
