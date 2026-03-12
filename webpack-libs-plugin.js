@@ -73,7 +73,7 @@ class OpenSCADLibrariesPlugin {
         }
     }
 
-    async downloadFile(url, outputPath, retries = 3, retryDelayMs = 1000) {
+    async downloadFile(url, outputPath, retries = 6, retryDelayMs = 2000) {
         console.log(`Downloading ${url} to ${outputPath}`);
 
         for (let attempt = 1; attempt <= retries; attempt++) {
