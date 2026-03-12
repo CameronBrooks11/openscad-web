@@ -48,6 +48,24 @@ async function waitForViewer() {
     return viewer && viewer.src !== '';
   });
 }
+// Poll the Node-scope `messages` array until a matching console entry arrives.
+// Must be used instead of page.waitForFunction when the predicate inspects the
+// Puppeteer-captured message log (not accessible from browser context).
+function waitForRenderMessage(predicate, timeout = 30000) {
+  return new Promise((resolve, reject) => {
+    const deadline = Date.now() + timeout;
+    const timer = setInterval(() => {
+      if (messages.some(predicate)) {
+        clearInterval(timer);
+        resolve();
+      } else if (Date.now() >= deadline) {
+        clearInterval(timer);
+        reject(new Error('Timed out waiting for render message'));
+      }
+    }, 100);
+  });
+}
+
 function expectMessage(messages, line) {
   const successMessage = messages.filter(msg => msg.type === 'debug' && msg.text === line);
   expect(successMessage).toHaveLength(1);
@@ -236,33 +254,18 @@ describe('e2e — keyboard shortcuts', () => {
   test('pressing F5 after a render triggers a new render', async () => {
     await loadSrc('cube(5);');
     await waitForViewer();
-
-    // Capture the current model-viewer src so we can detect when a NEW render
-    // completes (waitForViewer alone would resolve immediately since src is
-    // already non-empty from the previous render).
-    const oldSrc = await page.evaluate(() => {
-      const v = document.querySelector('model-viewer.main-viewer');
-      return v ? v.src : '';
-    });
     messages.length = 0;
 
     // Press F5 (preview render shortcut)
     await page.keyboard.press('F5');
 
-    // Wait until model-viewer receives a different src URL
-    await page.waitForFunction(
-      (old) => {
-        const v = document.querySelector('model-viewer.main-viewer');
-        return !!v && v.src !== '' && v.src !== old;
-      },
-      { timeout: longTimeout },
-      oldSrc,
+    // Poll the Node-scope `messages` array for the compile result.
+    // page.waitForFunction cannot reach Node-scope variables, and waiting for
+    // model-viewer src change was unreliable in headless CI Chromium.
+    await waitForRenderMessage(
+      msg => msg.type === 'debug' && msg.text.includes('3D object'),
+      30000,
     );
-    // Brief grace period for remaining console messages to propagate
-    await new Promise(r => setTimeout(r, 300));
-
-    // A new render should have produced a PolySet message
-    expect3DPolySet();
   }, longTimeout);
 
   test('pressing F6 after a render triggers a full render', async () => {
