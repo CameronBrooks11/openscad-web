@@ -13,6 +13,12 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 /*! @license DOMPurify 3.1.7 | (c) Cure53 and other contributors | Released under the Apache license 2.0 and Mozilla Public License 2.0 | github.com/cure53/DOMPurify/blob/3.1.7/LICENSE */
 
 /**
+ * @license
+ * Copyright 2010-2026 Three.js Authors
+ * SPDX-License-Identifier: MIT
+ */
+
+/**
  * @license React
  * react-dom.production.min.js
  *
