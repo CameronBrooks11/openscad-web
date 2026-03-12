@@ -1,5 +1,5 @@
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
-import { MergedOutputs } from "./openscad-worker";
+import { MergedOutputs } from "./openscad-runner";
 
 const ignoredLogs = new Set([
   'Could not initialize localization.'

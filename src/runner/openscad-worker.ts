@@ -4,15 +4,13 @@
 import OpenSCAD from "../wasm/openscad.js";
 
 import { createEditorFS, symlinkLibraries } from "../fs/filesystem.ts";
-import { OpenSCADInvocation, OpenSCADInvocationCallback, OpenSCADInvocationResults } from "./openscad-runner.ts";
+import { MergedOutputs, OpenSCADInvocation, OpenSCADInvocationCallback, OpenSCADInvocationResults } from "./openscad-runner.ts";
 import { deployedArchiveNames } from "../fs/zip-archives.ts";
 import { fetchSource } from "../utils.ts";
 
 importScripts("browserfs.min.js");
 
 declare const self: DedicatedWorkerGlobalScope;
-
-export type MergedOutputs = {stdout?: string, stderr?: string, error?: string}[];
 
 function callback(payload: OpenSCADInvocationCallback) {
   self.postMessage(payload);

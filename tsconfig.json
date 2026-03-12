@@ -35,6 +35,7 @@
   ],
   "exclude": [
     "node_modules",
-    "src/wasm/*.js"
+    "src/wasm/*.js",
+    "src/runner/openscad-worker.ts"
   ]
 }
