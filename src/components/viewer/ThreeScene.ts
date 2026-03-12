@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CameraState } from '../../state/app-state.ts';
 
-export { CameraState };
+export type { CameraState };
 
 const BACKGROUND_COLOR = new THREE.Color(0x1e1e1e);
 
