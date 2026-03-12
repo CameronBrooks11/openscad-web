@@ -3,6 +3,7 @@ import React, { useContext, useState } from 'react';
 import { ColorPicker } from 'primereact/colorpicker';
 import { Button } from 'primereact/button';
 import { InputText } from 'primereact/inputtext';
+import { Checkbox } from 'primereact/checkbox';
 import { ModelContext } from './contexts.ts';
 import { Dialog } from 'primereact/dialog';
 
@@ -36,6 +37,16 @@ export default function MultimaterialColorsDialog() {
             onHide={cancelExtruderPicker}
             footer={
                 <div>
+                    <div className="flex align-items-center gap-2" style={{ float: 'left', paddingTop: '0.5rem' }}>
+                        <Checkbox
+                            inputId="skipMultimaterialPrompt"
+                            checked={!!(state.params.skipMultimaterialPrompt)}
+                            onChange={(e) => model!.mutate(s => s.params.skipMultimaterialPrompt = e.checked ?? false)}
+                        />
+                        <label htmlFor="skipMultimaterialPrompt" style={{ cursor: 'pointer' }}>
+                            Don&apos;t ask again this session
+                        </label>
+                    </div>
                     <Button label="Cancel" icon="pi pi-times" onClick={cancelExtruderPicker} className="p-button-text" />
                     <Button 
                     label={state.view.extruderPickerVisibility == 'exporting' ? "Export" : "Save"}

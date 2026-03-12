@@ -35,6 +35,7 @@ export default function CustomizerPanel({className, style}: {className?: string,
 
   const groups = Object.entries(groupedParameters);
   const collapsedTabSet = new Set(state.view.collapsedCustomizerTabs ?? []);
+  const globalCollapse = state.view.customizerGroupsCollapsed ?? false;
   const setTabOpen = (name: string, open: boolean) => {
     if (open) {
       collapsedTabSet.delete(name);
@@ -64,7 +65,7 @@ export default function CustomizerPanel({className, style}: {className?: string,
             }}
             onCollapse={() => setTabOpen(group, false)}
             onExpand={() => setTabOpen(group, true)}
-            collapsed={collapsedTabSet.has(group)}
+            collapsed={globalCollapse || collapsedTabSet.has(group)}
             key={group}
             legend={group}
             toggleable={true}>

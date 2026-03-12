@@ -86,9 +86,10 @@ export type RenderArgs = {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function formatValue(value: any): string {
+export function formatValue(value: any): string {
   if (typeof value === 'string') {
-    return `"${value}"`;
+    const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    return `"${escaped}"`;
   } else if (value instanceof Array) {
     return `[${value.map(formatValue).join(', ')}]`;
   } else {

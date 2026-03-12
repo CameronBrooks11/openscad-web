@@ -35,6 +35,10 @@ export interface State {
     exportFormat3D: keyof typeof VALID_EXPORT_FORMATS_3D,
     extruderColors?: string[],
     backend?: 'manifold' | 'cgal',
+    /** When false, source changes do not trigger automatic render/checkSyntax. */
+    autoCompile?: boolean,
+    /** When true, the multimaterial color prompt is skipped for this session. */
+    skipMultimaterialPrompt?: boolean,
   },
 
   
@@ -54,6 +58,8 @@ export interface State {
     } & { [K in MultiLayoutComponentId]: boolean })
 
     collapsedCustomizerTabs?: string[],
+    /** When true, all customizer groups start collapsed. */
+    customizerGroupsCollapsed?: boolean,
     
     color: string,
     showAxes?: boolean,

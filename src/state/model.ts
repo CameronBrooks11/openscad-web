@@ -179,6 +179,8 @@ export class Model {
         s.params.sources = s.params.sources.map(src => src.path === s.params.activePath ? {...src, content} : src);
       });
     }
+    // When autoCompile is explicitly disabled, skip automatic syntax check and render.
+    if (this.state.params.autoCompile === false) return;
     if (this.source.trim() !== '') {
       if (this.state.params.activePath.endsWith('.scad')) {
         this.checkSyntax();
@@ -238,8 +240,10 @@ export class Model {
       }
     }
     if (!this.state.is2D && this.state.params.exportFormat3D == '3mf' && !this.state.params.extruderColors) {
-      this.mutate(_s => this.state.view.extruderPickerVisibility = 'exporting');
-      return;
+      if (!this.state.params.skipMultimaterialPrompt) {
+        this.mutate(_s => this.state.view.extruderPickerVisibility = 'exporting');
+        return;
+      }
     }
     this.mutate(s => {
       s.currentRunLogs ??= [];

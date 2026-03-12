@@ -149,7 +149,28 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
 
       console.log('Invoking OpenSCAD with: ', args);
       // callMain wraps C++ exception formatting (see openscad-runtime.ts)
-      const exitCode = rt.callMain(args);
+      let exitCode: number;
+      try {
+        exitCode = rt.callMain(args);
+      } catch (e) {
+        if (
+          e instanceof RangeError ||
+          (e instanceof Error && e.message?.includes('OOM'))
+        ) {
+          const elapsedMillis = performance.now() - start;
+          mergedOutputs.push({ error: 'Out of memory' });
+          self.postMessage({
+            type: 'error',
+            id,
+            message:
+              'Out of memory. The model is too large to compile in this browser.',
+            mergedOutputs,
+            elapsedMillis,
+          } satisfies CompileError);
+          return;
+        }
+        throw e;
+      }
       const elapsedMillis = performance.now() - start;
 
       const outputs: [string, Uint8Array][] = [];

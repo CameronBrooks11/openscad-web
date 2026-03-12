@@ -3,11 +3,14 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import {App} from './components/App.tsx';
+import { CustomizerShell } from './components/CustomizerShell.tsx';
+import { EmbedShell } from './components/EmbedShell.tsx';
 import { createEditorFS, preloadAllLibraries } from './fs/filesystem.ts';
 import { registerOpenSCADLanguage } from './language/openscad-register-language.ts';
 import { zipArchives } from './fs/zip-archives.generated.ts';
 import {readStateFromFragment} from './state/fragment-state.ts'
 import { createInitialState } from './state/initial-state.ts';
+import { parseUrlMode } from './state/url-mode.ts';
 import './index.css';
 
 import debug from 'debug';
@@ -115,13 +118,48 @@ window.addEventListener('load', async () => {
 
   const initialState = createInitialState(persistedState);
 
+  // Parse URL mode params and route to the correct shell component.
+  const urlModeResult = parseUrlMode(window.location.search);
+
+  let rootElement: React.ReactElement;
+  if ('error' in urlModeResult) {
+    rootElement = (
+      <div style={{ padding: '2rem', fontFamily: 'monospace', color: 'red' }}>
+        <h2>Invalid URL parameters</h2>
+        <pre>{urlModeResult.error}</pre>
+      </div>
+    );
+  } else if (urlModeResult.mode === 'customizer') {
+    rootElement = (
+      <CustomizerShell
+        initialState={initialState}
+        statePersister={statePersister}
+        fs={fs}
+        urlParams={urlModeResult}
+      />
+    );
+  } else if (urlModeResult.mode === 'embed') {
+    rootElement = (
+      <EmbedShell
+        initialState={initialState}
+        statePersister={statePersister}
+        fs={fs}
+        urlParams={urlModeResult}
+      />
+    );
+  } else {
+    rootElement = (
+      <App initialState={initialState} statePersister={statePersister} fs={fs} />
+    );
+  }
+
   const root = ReactDOM.createRoot(
     document.getElementById('root') as HTMLElement
   );
   root.render(
     <React.StrictMode>
       <AppErrorBoundary>
-        <App initialState={initialState} statePersister={statePersister} fs={fs} />
+        {rootElement}
       </AppErrorBoundary>
     </React.StrictMode>
   );

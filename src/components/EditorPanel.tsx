@@ -151,6 +151,14 @@ export default function EditorPanel({className, style}: {className?: string, sty
               flex: 1,
             }}/>
 
+        {state.params.autoCompile === false &&
+          <Button
+            icon="pi pi-play"
+            label="Build"
+            onClick={() => model.render({ isPreview: false, now: true })}
+            title="Build (F6)"
+          />}
+
         {state.params.activePath !== defaultSourcePath && 
           <Button icon="pi pi-chevron-left" 
           text

@@ -42,6 +42,16 @@ export default function SettingsMenu({className, style}: {className?: string, st
           command: () => model.mutate(s => s.view.lineNumbers = !s.view.lineNumbers)
         },
         {
+          label: (state.params.autoCompile ?? true) ? 'Disable auto-compile on edit' : 'Enable auto-compile on edit',
+          icon: 'pi pi-sync',
+          command: () => model.mutate(s => s.params.autoCompile = !(s.params.autoCompile ?? true)),
+        },
+        {
+          label: (state.view.customizerGroupsCollapsed ?? false) ? 'Expand customizer groups by default' : 'Collapse customizer groups by default',
+          icon: 'pi pi-minus-circle',
+          command: () => model.mutate(s => s.view.customizerGroupsCollapsed = !(s.view.customizerGroupsCollapsed ?? false)),
+        },
+        {
           separator: true
         },
         {
