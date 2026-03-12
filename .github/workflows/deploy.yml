@@ -1,0 +1,46 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Restore build-libs cache
+        id: cache-libs
+        uses: actions/cache@v4
+        with:
+          path: |
+            src/wasm/
+            public/libraries/
+          key: libs-${{ hashFiles('libs-config.json') }}
+
+      - name: Build libs
+        if: steps.cache-libs.outputs.cache-hit != 'true'
+        run: npm run build:libs
+
+      - name: Build
+        env:
+          NODE_ENV: production
+          PUBLIC_URL: /openscad-web
+        run: npm run build
+
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dist

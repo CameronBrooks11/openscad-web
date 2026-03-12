@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Cache build libs
+        id: cache-libs
+        uses: actions/cache@v4
+        with:
+          path: |
+            libs/
+            src/wasm/
+            public/libraries/
+          key: libs-${{ hashFiles('libs-config.json') }}
+
+      - name: Build libs (WASM + fonts)
+        if: steps.cache-libs.outputs.cache-hit != 'true'
+        run: npm run build:libs
+
+      - name: Build app
+        run: npm run build
+        env:
+          NODE_ENV: production
+          PUBLIC_URL: /openscad-web

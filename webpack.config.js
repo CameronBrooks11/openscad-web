@@ -61,6 +61,9 @@ const config = [
     output: {
       filename: 'index.js',
       path: path.resolve(__dirname, 'dist'),
+      // When deploying to a subpath (e.g. /openscad-web/), set PUBLIC_URL env var.
+      // 'auto' (webpack 5 default) is equivalent for local dev.
+      publicPath: process.env.PUBLIC_URL ? `${process.env.PUBLIC_URL}/` : 'auto',
     },
     devServer: {
       static: path.join(__dirname, 'dist'),
@@ -84,17 +87,27 @@ const config = [
           maximumFileSizeToCacheInBytes: 200 * 1024 * 1024,
           clientsClaim: true,
           skipWaiting: true,
-          runtimeCaching: [{
-            urlPattern: ({ request, url }) => true,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'all',
-              expiration: {
-                maxEntries: 1000,
-                purgeOnQuotaError: true,
+          runtimeCaching: [
+            {
+              // Same-origin assets: use stale-while-revalidate for fast loads
+              urlPattern: ({ url }) => url.origin === self.location.origin,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'same-origin-assets',
+                expiration: { maxEntries: 200, purgeOnQuotaError: true },
               },
             },
-          }],
+            {
+              // Large stable assets (.wasm, library zips): cache-first
+              urlPattern: ({ url }) =>
+                url.pathname.endsWith('.wasm') || url.pathname.includes('/libraries/'),
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'large-assets',
+                expiration: { maxEntries: 50, purgeOnQuotaError: true },
+              },
+            },
+          ],
         }),
       ] : []),
       new CopyPlugin({
