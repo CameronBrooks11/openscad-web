@@ -8,10 +8,7 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 
 const sourceArg = process.argv[2];
 const sourcePath = path.resolve(repoRoot, sourceArg ?? 'coverage/perf/current-perf-baseline.json');
-const baselinePath = path.resolve(
-  repoRoot,
-  process.env.PERF_BASELINE ?? 'perf-baseline.json',
-);
+const baselinePath = path.resolve(repoRoot, process.env.PERF_BASELINE ?? 'perf-baseline.json');
 
 function assertMetricSection(name, value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
