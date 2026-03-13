@@ -13,12 +13,48 @@ const require = createRequire(import.meta.url);
 const serveEntrypoint = require.resolve('serve/build/main.js');
 const captureMetaKey = '__OSC_PERF_CAPTURE_CONTEXT__';
 
-const port = Number.parseInt(process.env.PERF_PORT ?? '4173', 10);
-const outputPath = path.resolve(
-  repoRoot,
-  process.env.PERF_OUTPUT ?? 'coverage/perf/current-perf-baseline.json',
-);
-const baseUrl = new URL(process.env.PERF_BASE_PATH ?? '/', `http://127.0.0.1:${port}`).toString();
+function parseArgs(argv) {
+  let outputArg = process.env.PERF_OUTPUT ?? 'coverage/perf/current-perf-baseline.json';
+  let port = Number.parseInt(process.env.PERF_PORT ?? '4173', 10);
+  let basePath = process.env.PERF_BASE_PATH ?? '/';
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--output') {
+      outputArg = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--port') {
+      port = Number.parseInt(argv[i + 1], 10);
+      i += 1;
+      continue;
+    }
+    if (arg === '--base-path') {
+      basePath = argv[i + 1];
+      i += 1;
+    }
+  }
+
+  return {
+    port,
+    outputPath: path.resolve(repoRoot, outputArg),
+    baseUrl: new URL(basePath, `http://127.0.0.1:${port}`).toString(),
+  };
+}
+
+const chromeArgs = [
+  '--no-sandbox',
+  '--disable-setuid-sandbox',
+  '--disable-background-networking',
+  '--disable-component-extensions-with-background-pages',
+  '--disable-component-update',
+  '--disable-default-apps',
+  '--disable-renderer-backgrounding',
+  '--disable-dev-shm-usage',
+  '--no-default-browser-check',
+  '--no-first-run',
+];
 
 function round(value) {
   if (value == null || !Number.isFinite(value)) {
@@ -232,6 +268,7 @@ async function collectRun(page) {
 }
 
 async function main() {
+  const { outputPath, baseUrl, port } = parseArgs(process.argv.slice(2));
   await fs.mkdir(path.dirname(outputPath), { recursive: true });
 
   const server = spawn(process.execPath, [serveEntrypoint, '-s', 'dist', '-l', String(port)], {
@@ -253,7 +290,8 @@ async function main() {
 
     const browser = await puppeteer.launch({
       headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+      defaultViewport: { width: 1280, height: 800, deviceScaleFactor: 1 },
+      args: chromeArgs,
     });
 
     try {

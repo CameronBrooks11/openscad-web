@@ -5,10 +5,16 @@
 
 ## Normal Flow
 
-1. Generate a candidate:
+1. Generate a local candidate:
 
 ```sh
 npm run perf:capture
+```
+
+If your local machine is noisy and you want a steadier candidate, run the 3-sample median capture:
+
+```sh
+npm run perf:capture:series
 ```
 
 2. Compare it to the committed baseline:
@@ -20,7 +26,7 @@ npm run perf:compare
 This compares against the committed CI baseline.
 Locally it is advisory.
 
-CI runs the same comparison in strict mode and uploads `perf-baseline-candidate` as an artifact.
+CI runs three captures on the same runner, aggregates them with per-metric median, compares the aggregated candidate in strict mode, and uploads `perf-baseline-candidate` as an artifact.
 
 3. For local relative checks, compare against your ignored local baseline:
 
@@ -59,4 +65,5 @@ npm run perf:accept:local
 - Prefer CI artifact values over local machine values when updating `perf-baseline.json`.
 - Local compare against the CI baseline is informational.
 - Local compare against `perf-baseline.local.json` is enforcing.
+- CI perf uses median aggregation across three runs, not a single sample or best-of-N.
 - CI compare is enforcing.

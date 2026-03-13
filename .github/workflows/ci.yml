@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     steps:
       - uses: actions/checkout@v6
@@ -63,8 +63,10 @@ jobs:
           PUBLIC_URL: /openscad-web
 
   performance:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: build-and-test
+    env:
+      CI: 'true'
 
     steps:
       - uses: actions/checkout@v6
@@ -96,8 +98,8 @@ jobs:
         env:
           NODE_ENV: production
 
-      - name: Capture perf baseline candidate
-        run: npm run perf:capture
+      - name: Capture aggregated perf baseline candidate
+        run: npm run perf:capture:series
         env:
           NODE_ENV: production
 
@@ -109,4 +111,4 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: perf-baseline-candidate
-          path: coverage/perf/current-perf-baseline.json
+          path: coverage/perf/
