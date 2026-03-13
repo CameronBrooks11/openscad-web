@@ -6,13 +6,13 @@
 <img width="694" alt="image" src="https://github.com/user-attachments/assets/58305f27-7e95-4c56-9cd7-0d766e0a21ae" />
 </a>
 
-This is a limited port of [OpenSCAD](https://openscad.org) to WebAssembly, using at its core a headless WASM build of OpenSCAD ([done by @DSchroer](https://github.com/DSchroer/openscad-wasm)), wrapped in a UI made of pretty [PrimeReact](https://github.com/primefaces/primereact) components, a [React Monaco editor](https://github.com/react-monaco-editor/react-monaco-editor) (VS Codesque power!), and an interactive [model-viewer](https://modelviewer.dev/) renderer.
+This is a limited port of [OpenSCAD](https://openscad.org) to WebAssembly, using at its core a headless WASM build of OpenSCAD ([done by @DSchroer](https://github.com/DSchroer/openscad-wasm)), wrapped in a Lit-based web component UI with Monaco editor integration and a Three.js viewer.
 
 It defaults to the [Manifold backend](https://github.com/openscad/openscad/pull/4533) so it's **super** fast.
 
 Enjoy!
 
-Licenses: see [LICENSES](./LICENSE).
+Licenses: see [LICENSE.md](./LICENSE.md).
 
 ## Features
 
@@ -23,7 +23,7 @@ Licenses: see [LICENSES](./LICENSE).
 - Autocomplete of imports
 - Autocomplete of symbols / function calls (pseudo-parses file and its transitive imports)
 - Responsive layout. On small screens editor and viewer are stacked onto each other, while on larger screens they can be side-by-side
-- Installable as a PWA (then persists edits in localStorage instead of the hash fragment). On iOS just open the sharing panel and tap "Add to Home Screen". *Should not* require any internet connectivity once cached.
+- Installable as a PWA (persists edits in BrowserFS/IndexedDB instead of the hash fragment). On iOS just open the sharing panel and tap "Add to Home Screen". *Should not* require any internet connectivity once cached.
 
 ## Roadmap
 
@@ -52,7 +52,7 @@ The project uses a **webpack-based build system** that reads library metadata fr
 
 Prerequisites:
 *   wget or curl
-*   Node.js (>=18.12.0)
+*   Node.js (>=24.0.0)
 *   npm
 *   git
 *   zip
@@ -65,8 +65,8 @@ Prerequisites:
 Local dev:
 
 ```bash
-npm run build:libs  # Download WASM and build all OpenSCAD libraries
 npm install
+npm run build:libs  # Download WASM and build all OpenSCAD libraries
 npm run start
 # http://localhost:4000/
 ```
@@ -74,8 +74,8 @@ npm run start
 Local prod (test both the different inlining and serving under a prefix):
 
 ```bash
-npm run build:libs  # Download WASM and build all OpenSCAD libraries
 npm install
+npm run build:libs  # Download WASM and build all OpenSCAD libraries
 npm run start:production
 # http://localhost:3000/dist/
 ```
@@ -83,8 +83,8 @@ npm run start:production
 Deployment (edit "homepage" in `package.json` to match your deployment root!):
 
 ```bash
-npm run build:all  # Build libraries and compile the application
 npm install
+npm run build:all  # Build libraries and compile the application
 
 rm -fR ../ochafik.github.io/openscad2 && cp -R dist ../ochafik.github.io/openscad2 
 # Now commit and push changes, wait for site update and enjoy!
@@ -123,7 +123,7 @@ The build system uses a webpack plugin that reads from `libs-config.json` to man
 
 - [libs-config.json](./libs-config.json): to add the library's metadata including repository URL, branch, and files to include/exclude in the zip archive
 
-- [src/fs/zip-archives.ts](./src/fs/zip-archives.ts): to use the `.zip` archive in the UI (both for file explorer and automatic imports mounting)
+- [src/fs/zip-archives.generated.ts](./src/fs/zip-archives.generated.ts): generated zip metadata consumed by the UI and library mount code
 
 - [LICENSE.md](./LICENSE.md): most libraries require proper disclosure of their usage and of their license. If a license is unique, paste it in full, otherwise, link to one of the standard ones already there.
 
