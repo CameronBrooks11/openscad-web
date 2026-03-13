@@ -111,6 +111,16 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 
 describe('Model — render triggering', () => {
+  it('uses an immediate preview render during init', async () => {
+    model.init();
+    await nextTicks();
+
+    expect(mockRender).toHaveBeenCalledTimes(1);
+    const scheduledRender = mockRender.mock.results[0]?.value as jest.Mock | undefined;
+    expect(scheduledRender).toBeDefined();
+    expect(scheduledRender).toHaveBeenCalledWith({ now: true });
+  });
+
   it('does not re-render when only viewstate changes (showAxes, layout)', async () => {
     // Directly mutate a view-only field — processSource should NOT be triggered
     model.mutate((s) => {
@@ -125,6 +135,9 @@ describe('Model — render triggering', () => {
     model.source = 'sphere(5);';
     await nextTicks();
     expect(mockRender).toHaveBeenCalled();
+    const scheduledRender = mockRender.mock.results[0]?.value as jest.Mock | undefined;
+    expect(scheduledRender).toBeDefined();
+    expect(scheduledRender).toHaveBeenCalledWith({ now: false });
   });
 
   it('triggers syntax check when source changes', async () => {

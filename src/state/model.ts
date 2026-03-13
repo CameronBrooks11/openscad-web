@@ -45,7 +45,7 @@ export class Model extends EventTarget {
       !this.state.checkingSyntax &&
       !this.state.rendering
     ) {
-      this.processSource();
+      this.processSource({ immediatePreview: true });
     }
   }
 
@@ -210,7 +210,11 @@ export class Model extends EventTarget {
     }
   }
 
-  private async processSource() {
+  private async processSource({
+    immediatePreview = false,
+  }: {
+    immediatePreview?: boolean;
+  } = {}) {
     const src = this.state.params.sources.find((src) => src.path === this.state.params.activePath);
     if (src && src.content == null) {
       const { path } = src;
@@ -233,7 +237,7 @@ export class Model extends EventTarget {
       if (this.state.params.activePath.endsWith('.scad')) {
         this.checkSyntax();
       }
-      this.render({ isPreview: true, now: false });
+      this.render({ isPreview: true, now: immediatePreview });
     }
   }
 
