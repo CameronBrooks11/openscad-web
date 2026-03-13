@@ -104,9 +104,9 @@ jobs:
       - name: Compare perf baseline
         run: npm run perf:compare
 
-      - name: Upload perf baseline artifact
+      - name: Upload perf baseline candidate artifact
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: perf-baseline
+          name: perf-baseline-candidate
           path: coverage/perf/current-perf-baseline.json
