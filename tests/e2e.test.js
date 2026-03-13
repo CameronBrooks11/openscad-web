@@ -41,43 +41,85 @@ function loadPath(path) {
 function loadUrl(url) {
   return page.goto(`${baseUrl}#url=${encodeURIComponent(url)}`);
 }
+function getAppShellState() {
+  return page.evaluate(() => {
+    const shell = document.querySelector('osc-app-shell');
+    return shell && shell._st ? {
+      rendering: !!shell._st.rendering,
+      previewing: !!shell._st.previewing,
+      hasOutput: !!shell._st.output,
+      isPreview: !!shell._st.output?.isPreview,
+      outFileURL: shell._st.output?.outFileURL ?? null,
+      markerCount: shell._st.lastCheckerRun?.markers?.length ?? 0,
+      error: shell._st.error ?? null,
+    } : null;
+  });
+}
+function getOutputOffSummary() {
+  return page.evaluate(async () => {
+    const shell = document.querySelector('osc-app-shell');
+    const st = shell && shell._st;
+    if (!st?.output?.outFileURL) return null;
+
+    const text = await fetch(st.output.outFileURL).then(r => r.text());
+    const lines = text
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(l => l.length > 0 && !l.startsWith('#'));
+
+    const header = lines[0] ?? '';
+    const countLine = header === 'OFF'
+      ? (lines[1] ?? '')
+      : (header.startsWith('OFF') ? header.slice(3).trim() : '');
+    const counts = countLine
+      .split(/\s+/)
+      .map(v => Number(v))
+      .filter(v => Number.isFinite(v));
+
+    return {
+      header,
+      outFileURL: st.output.outFileURL,
+      isPreview: !!st.output.isPreview,
+      vertexCount: counts[0] ?? 0,
+      faceCount: counts[1] ?? 0,
+      edgeCount: counts[2] ?? 0,
+    };
+  });
+}
+async function expectValidOffOutput() {
+  const summary = await getOutputOffSummary();
+  expect(summary).not.toBeNull();
+  expect(summary.header.startsWith('OFF')).toBe(true);
+  expect(summary.vertexCount).toBeGreaterThan(0);
+  expect(summary.faceCount).toBeGreaterThan(0);
+}
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+async function waitForRenderState() {
+  await page.waitForFunction(() => {
+    const shell = document.querySelector('osc-app-shell');
+    const st = shell && shell._st;
+    return !!st && !st.rendering && !st.previewing && !!st.output;
+  }, { timeout: 60000 });
+}
 async function waitForViewer() {
   await page.waitForSelector('[data-testid="viewer-canvas"] canvas');
   await page.waitForFunction(() => {
     const container = document.querySelector('[data-testid="viewer-canvas"]');
     return container && container.dataset.geometryLoaded === 'true';
   }, { timeout: 60000 });
-}
-// Poll the Node-scope `messages` array until a matching console entry arrives.
-// Must be used instead of page.waitForFunction when the predicate inspects the
-// Puppeteer-captured message log (not accessible from browser context).
-function waitForRenderMessage(predicate, timeout = 30000) {
-  return new Promise((resolve, reject) => {
-    const deadline = Date.now() + timeout;
-    const timer = setInterval(() => {
-      if (messages.some(predicate)) {
-        clearInterval(timer);
-        resolve();
-      } else if (Date.now() >= deadline) {
-        clearInterval(timer);
-        reject(new Error('Timed out waiting for render message'));
-      }
-    }, 100);
-  });
+  await waitForRenderState();
 }
 
-function expectMessage(messages, line) {
-  const successMessage = messages.filter(msg => msg.type === 'debug' && msg.text === line);
-  expect(successMessage).toHaveLength(1);
+async function expectObjectList() {
+  await expectValidOffOutput();
 }
-function expectObjectList() {
-  expectMessage(messages, 'stderr: Top level object is a list of objects:');
+async function expect3DPolySet() {
+  await expectValidOffOutput();
 }
-function expect3DPolySet() {
-  expectMessage(messages, 'stderr: Top level object is a 3D object (PolySet):');
-}
-function expect3DManifold() {
-  expectMessage(messages, 'stderr:    Top level object is a 3D object (manifold):');
+async function expect3DManifold() {
+  await expectValidOffOutput();
 }
 function waitForCustomizeButton() {
   return page.waitForFunction(() => {
@@ -115,13 +157,13 @@ describe('e2e', () => {
   test('load the default page', async () => {
     await page.goto(baseUrl);
     await waitForViewer();
-    expectObjectList();
+    await expectObjectList();
   }, longTimeout);
 
   test('can render cube', async () => {
     await loadSrc('cube([10, 10, 10]);');
     await waitForViewer();
-    expect3DPolySet();
+    await expect3DPolySet();
   }, longTimeout);
 
   test('use BOSL2', async () => {
@@ -130,7 +172,7 @@ describe('e2e', () => {
       prismoid([40,40], [0,0], h=20);
     `);
     await waitForViewer();
-    expect3DPolySet();
+    await expect3DPolySet();
   }, longTimeout);
 
   test('use NopSCADlib', async () => {
@@ -139,13 +181,13 @@ describe('e2e', () => {
       meter(led_meter);
     `);
     await waitForViewer();
-    expect3DManifold();
+    await expect3DManifold();
   }, longTimeout);
 
   test('load a demo by path', async () => {
     await loadPath('/libraries/closepoints/demo_3D_art.scad');
     await waitForViewer();
-    expect3DPolySet();
+    await expect3DPolySet();
   }, longTimeout);
 
   test('load a demo by url', async () => {
@@ -154,7 +196,7 @@ describe('e2e', () => {
     // both the dev server (port 4000) and the production server.
     await loadUrl(`${baseUrl}test-fixture.scad`);
     await waitForViewer();
-    expect3DPolySet();
+    await expect3DPolySet();
   }, longTimeout);
 
   test('customizer & windows line endings work', async () => {
@@ -163,7 +205,7 @@ describe('e2e', () => {
       'cube(myVar);',
     ].join('\r\n'));
     await waitForViewer();
-    expect3DPolySet();
+    await expect3DPolySet();
 
     // Wait for syntax checking to complete and parameters to be detected
     await page.waitForFunction(() => {
@@ -182,17 +224,21 @@ describe('worker integration', () => {
   test('compiles a trivial model successfully (exit code 0)', async () => {
     await loadSrc('cube(10);');
     await waitForViewer();
-    // A successful compile surfaces the geometry summary on stderr
-    expect3DPolySet();
+    await expect3DPolySet();
+    const state = await getAppShellState();
+    expect(state?.error ?? null).toBeNull();
+    expect(state?.markerCount ?? 1).toBe(0);
   }, longTimeout);
 
-  test('single render emits one geometry summary line', async () => {
+  test('single render produces one stable output artifact', async () => {
     await loadSrc('cube(5);');
     await waitForViewer();
-    const geometrySummaryLogs = messages.filter(
-      msg => msg.type === 'debug' && msg.text === 'stderr: Top level object is a 3D object (PolySet):'
-    );
-    expect(geometrySummaryLogs).toHaveLength(1);
+    const first = await getOutputOffSummary();
+    expect(first).not.toBeNull();
+    await delay(1000);
+    const second = await getOutputOffSummary();
+    expect(second).not.toBeNull();
+    expect(second.outFileURL).toBe(first.outFileURL);
   }, longTimeout);
 });
 
@@ -210,19 +256,19 @@ describe('conformance — geometry primitives', () => {
   test('cube(10) produces a PolySet', async () => {
     await loadSrc('cube(10);');
     await waitForViewer();
-    expect3DPolySet();
+    await expect3DPolySet();
   }, longTimeout);
 
   test('sphere(5, $fn=20) produces a PolySet', async () => {
     await loadSrc('sphere(5, $fn=20);');
     await waitForViewer();
-    expect3DPolySet();
+    await expect3DPolySet();
   }, longTimeout);
 
   test('cylinder(h=10, r=5) produces a PolySet', async () => {
     await loadSrc('cylinder(h=10, r=5);');
     await waitForViewer();
-    expect3DPolySet();
+    await expect3DPolySet();
   }, longTimeout);
 
   test('difference of cube and sphere produces a manifold', async () => {
@@ -230,7 +276,7 @@ describe('conformance — geometry primitives', () => {
     // so the compiler reports a manifold result, not a plain PolySet.
     await loadSrc('difference() { cube(10); sphere(5, $fn=20); }');
     await waitForViewer();
-    expect3DManifold();
+    await expect3DManifold();
   }, longTimeout);
 
   test('viewer canvas is populated after compile', async () => {
@@ -253,30 +299,44 @@ describe('e2e — keyboard shortcuts', () => {
   test('pressing F5 after a render triggers a new render', async () => {
     await loadSrc('cube(5);');
     await waitForViewer();
-    messages.length = 0;
+    const before = await getAppShellState();
+    expect(before).not.toBeNull();
+    const beforeOutFileURL = before.outFileURL;
 
     // Press F5 (preview render shortcut)
     await page.keyboard.press('F5');
-
-    // Poll the Node-scope `messages` array for the compile result.
-    // page.waitForFunction cannot reach Node-scope variables, and waiting for
-    // model-viewer src change was unreliable in headless CI Chromium.
-    await waitForRenderMessage(
-      msg => msg.type === 'debug' && msg.text.includes('3D object'),
-      30000,
-    );
+    await page.waitForFunction((prevUrl) => {
+      const shell = document.querySelector('osc-app-shell');
+      const st = shell && shell._st;
+      return !!st
+        && !st.rendering
+        && !st.previewing
+        && !!st.output
+        && st.output.outFileURL !== prevUrl;
+    }, { timeout: 30000 }, beforeOutFileURL);
+    await expect3DPolySet();
   }, longTimeout);
 
   test('pressing F6 after a render triggers a full render', async () => {
     await loadSrc('cube(5);');
     await waitForViewer();
-    messages.length = 0;
+    const before = await getAppShellState();
+    expect(before).not.toBeNull();
+    const beforeOutFileURL = before.outFileURL;
 
     // Press F6 (full render shortcut)
     await page.keyboard.press('F6');
+    await page.waitForFunction((prevUrl) => {
+      const shell = document.querySelector('osc-app-shell');
+      const st = shell && shell._st;
+      return !!st
+        && !st.rendering
+        && !st.previewing
+        && !!st.output
+        && st.output.isPreview === false
+        && st.output.outFileURL !== prevUrl;
+    }, { timeout: 45000 }, beforeOutFileURL);
     await waitForViewer();
-
-    expect3DPolySet();
+    await expect3DPolySet();
   }, longTimeout);
 });
-

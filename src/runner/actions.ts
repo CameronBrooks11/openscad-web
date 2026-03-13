@@ -44,8 +44,8 @@ export const checkSyntax =
             } catch (e) {
               console.error(`Error while parsing parameter set: ${e}\n${decoded}`);
             }
-          } else {
-            console.error('No output from runner!');
+          } else if (result.outputs && result.outputs.length > 1) {
+            console.warn(`[syntax] Expected one parameter output file, got ${result.outputs.length}; ignoring.`);
           }
 
           res({
