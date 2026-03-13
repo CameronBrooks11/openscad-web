@@ -11,6 +11,7 @@ import { setFS } from './state/fs-context.ts';
 import { Model } from './state/model.ts';
 import { isInStandaloneMode, registerCustomAppHeightCSSProperty } from './utils.ts';
 import { State, StatePersister } from './state/app-state.ts';
+import { markPerf, measurePerf } from './perf/runtime-performance.ts';
 import './index.css';
 import 'monaco-editor/min/vs/editor/editor.main.css';
 
@@ -33,6 +34,8 @@ if (process.env.NODE_ENV !== 'production') {
 declare let BrowserFS: BrowserFSInterface;
 
 window.addEventListener('load', async () => {
+  markPerf('osc:app-bootstrap-start', { standalone: isInStandaloneMode() });
+
   if (process.env.NODE_ENV === 'production') {
     if ('serviceWorker' in navigator) {
       try {
@@ -56,11 +59,29 @@ window.addEventListener('load', async () => {
 
   registerCustomAppHeightCSSProperty();
 
+  markPerf('osc:main-fs-init-start');
   const fs = await createEditorFS({ allowPersistence: isInStandaloneMode() });
+  markPerf('osc:main-fs-init-end');
+  measurePerf('osc:main-fs-init', 'osc:main-fs-init-start', 'osc:main-fs-init-end');
   setFS(fs);
 
+  markPerf('osc:libraries-preload-start');
   await preloadAllLibraries();
+  markPerf('osc:libraries-preload-end');
+  measurePerf(
+    'osc:libraries-preload',
+    'osc:libraries-preload-start',
+    'osc:libraries-preload-end',
+  );
+
+  markPerf('osc:language-register-start');
   await registerOpenSCADLanguage(fs, '/libraries', zipArchives);
+  markPerf('osc:language-register-end');
+  measurePerf(
+    'osc:language-register',
+    'osc:language-register-start',
+    'osc:language-register-end',
+  );
 
   let statePersister: StatePersister;
   let persistedState: State | null = null;
@@ -92,6 +113,7 @@ window.addEventListener('load', async () => {
   const rootEl = document.getElementById('root')!;
 
   if ('error' in urlModeResult) {
+    markPerf('osc:app-bootstrap-error');
     rootEl.innerHTML = `
       <div style="padding:2rem;font-family:monospace;color:red;">
         <h2>Invalid URL parameters</h2>
@@ -125,4 +147,7 @@ window.addEventListener('load', async () => {
     // Normal app mode: call init after mounting
     model.init();
   }
+
+  markPerf('osc:app-shell-mounted');
+  measurePerf('osc:app-bootstrap', 'osc:app-bootstrap-start', 'osc:app-shell-mounted');
 });

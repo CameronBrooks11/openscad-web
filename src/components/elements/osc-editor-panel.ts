@@ -9,6 +9,7 @@ import { getFS } from '../../state/fs-context.ts';
 import { getParentDir, join } from '../../fs/filesystem.ts';
 import { defaultSourcePath, getBlankProjectState } from '../../state/initial-state.ts';
 import { buildUrlForStateParams } from '../../state/fragment-state.ts';
+import { markPerf, measurePerf } from '../../perf/runtime-performance.ts';
 import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
 
@@ -101,6 +102,7 @@ export class OscEditorPanel extends LitElement {
     const container = this.querySelector('.osc-editor-monaco') as HTMLDivElement;
     if (!container) return;
 
+    markPerf('osc:editor-mount-start');
     const monaco = (await loader.init()) as typeof monacoTypes;
     this._monaco = monaco;
 
@@ -170,6 +172,9 @@ export class OscEditorPanel extends LitElement {
       });
     });
     this._ro.observe(container);
+
+    markPerf('osc:editor-mount-end');
+    measurePerf('osc:editor-mount', 'osc:editor-mount-start', 'osc:editor-mount-end');
   }
 
   private _buildFileOptions(): Array<{ path: string; label: string; group: string }> {

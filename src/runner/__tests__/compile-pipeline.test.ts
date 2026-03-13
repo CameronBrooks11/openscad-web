@@ -1,4 +1,4 @@
-﻿// T4 — Compile-pipeline tests
+// T4 — Compile-pipeline tests
 //
 // Covers:
 //   1. Feature-flag safety: getDefaultCompileArgs() must not include --enable=lazy-union
@@ -15,6 +15,7 @@
 // and ESM exports that cannot load in jest CJS environment.
 
 import { getDefaultCompileArgs } from '../actions.ts';
+import { clearPerfSnapshot, getPerfSnapshot } from '../../perf/runtime-performance.ts';
 
 // ---------------------------------------------------------------------------
 // Mock filesystem.ts — used by compileWithFallback for on-demand library mount
@@ -41,8 +42,16 @@ const mockMount = mountDemandLibraries as jest.Mock;
 // Fake Worker that drives the runner message loop
 // ---------------------------------------------------------------------------
 type FakeWorkerSpec = {
-  exitCode: number;
+  responseType?: 'result' | 'error';
+  exitCode?: number;
+  message?: string;
   stderrLines?: string[];
+  perf?: {
+    workerFsInitMillis?: number;
+    workerLibraryMountMillis?: number;
+    workerWasmInitMillis?: number;
+    workerJobMillis?: number;
+  };
 };
 
 let _workerSpecs: FakeWorkerSpec[] = [];
@@ -56,14 +65,25 @@ class FakeWorker {
     const spec = _workerSpecs.shift();
     if (!spec) throw new Error('FakeWorker: no spec queued for this compile call');
     const mergedOutputs = (spec.stderrLines ?? []).map((text) => ({ stderr: text }));
-    const response = {
-      type: 'result' as const,
-      id: msg.id,
-      exitCode: spec.exitCode,
-      outputs: [] as [string, Uint8Array][],
-      mergedOutputs,
-      elapsedMillis: 0,
-    };
+    const response =
+      spec.responseType === 'error'
+        ? {
+            type: 'error' as const,
+            id: msg.id,
+            message: spec.message ?? 'Worker error',
+            mergedOutputs,
+            elapsedMillis: 0,
+            perf: spec.perf,
+          }
+        : {
+            type: 'result' as const,
+            id: msg.id,
+            exitCode: spec.exitCode ?? 0,
+            outputs: [] as [string, Uint8Array][],
+            mergedOutputs,
+            elapsedMillis: 0,
+            perf: spec.perf,
+          };
     // Deliver asynchronously (mirrors real Worker MessageEvent timing)
     setTimeout(() => this.onmessage?.({ data: response } as MessageEvent), 0);
   }
@@ -79,6 +99,7 @@ beforeAll(() => {
 beforeEach(() => {
   jest.clearAllMocks();
   _workerSpecs = [];
+  clearPerfSnapshot();
 });
 
 // ---------------------------------------------------------------------------
@@ -127,6 +148,55 @@ describe('compile pipeline — compileWithFallback success', () => {
 
     expect(result.exitCode).toBe(1);
     expect(mockMount).not.toHaveBeenCalled();
+  });
+
+  it('records worker perf timings from a successful compile response', async () => {
+    _workerSpecs.push({
+      exitCode: 0,
+      perf: {
+        workerFsInitMillis: 12,
+        workerLibraryMountMillis: 8,
+        workerWasmInitMillis: 44,
+        workerJobMillis: 65,
+      },
+    });
+
+    const result = await compileWithFallback(
+      { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
+      jest.fn(),
+    );
+
+    expect(result.perf?.workerWasmInitMillis).toBe(44);
+    const snapshot = getPerfSnapshot();
+    expect(snapshot.metrics).toContainEqual(
+      expect.objectContaining({ name: 'osc:worker-fs-init', duration: 12 }),
+    );
+    expect(snapshot.metrics).toContainEqual(
+      expect.objectContaining({ name: 'osc:worker-library-mount', duration: 8 }),
+    );
+    expect(snapshot.metrics).toContainEqual(
+      expect.objectContaining({ name: 'osc:worker-wasm-init', duration: 44 }),
+    );
+  });
+
+  it('handles explicit worker error responses and preserves the message', async () => {
+    _workerSpecs.push({
+      responseType: 'error',
+      message: 'boom',
+      stderrLines: ['runtime exploded'],
+      perf: { workerJobMillis: 33 },
+    });
+
+    const result = await compileWithFallback(
+      { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
+      jest.fn(),
+    );
+
+    expect(result.error).toBe('boom');
+    expect(result.exitCode).toBeUndefined();
+    expect(getPerfSnapshot().metrics).toContainEqual(
+      expect.objectContaining({ name: 'osc:worker-job-total', duration: 33 }),
+    );
   });
 });
 

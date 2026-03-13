@@ -19,6 +19,12 @@ export type WorkerRequest = CompileRequest | CancelRequest;
 export type CompileStarted = { type: 'started'; id: string };
 export type CompileStdout = { type: 'stdout'; id: string; text: string };
 export type CompileStderr = { type: 'stderr'; id: string; text: string };
+export type CompilePerfStats = {
+  workerFsInitMillis?: number;
+  workerLibraryMountMillis?: number;
+  workerWasmInitMillis?: number;
+  workerJobMillis?: number;
+};
 export type CompileResult = {
   type: 'result';
   id: string;
@@ -26,6 +32,7 @@ export type CompileResult = {
   outputs: [string, Uint8Array][];
   mergedOutputs: MergedOutput[];
   elapsedMillis: number;
+  perf?: CompilePerfStats;
 };
 export type CompileError = {
   type: 'error';
@@ -33,6 +40,7 @@ export type CompileError = {
   message: string;
   mergedOutputs: MergedOutput[];
   elapsedMillis: number;
+  perf?: CompilePerfStats;
 };
 
 export type MergedOutput = { stdout?: string; stderr?: string; error?: string };

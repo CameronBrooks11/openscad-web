@@ -3,12 +3,14 @@
 import { AbortablePromise } from '../utils.ts';
 import { Source } from '../state/app-state.ts';
 import { mountDemandLibraries } from '../fs/filesystem.ts';
+import { markPerf, measurePerf, recordPerfDuration } from '../perf/runtime-performance.ts';
 import {
   CompileRequest,
   CancelRequest,
   WorkerResponse,
   CompileResult,
   CompileError,
+  CompilePerfStats,
   CompileStdout,
   CompileStderr,
   MergedOutput,
@@ -30,6 +32,7 @@ export type OpenSCADInvocationResults = {
   outputs?: [string, Uint8Array][];
   mergedOutputs: MergedOutputs;
   elapsedMillis: number;
+  perf?: CompilePerfStats;
 };
 
 export type ProcessStreams = { stderr: string } | { stdout: string };
@@ -62,6 +65,8 @@ type PendingJob = {
 const _pending = new Map<string, PendingJob>();
 let _nextId = 0;
 let _worker: Worker | null = null;
+let _firstCompileRequested = false;
+let _firstCompileCompleted = false;
 
 // Timeout thresholds
 const SOFT_TIMEOUT_MS = 30_000;
@@ -83,6 +88,7 @@ function handleWorkerMessage(e: MessageEvent<WorkerResponse>): void {
 
   if (msg.type === 'result') {
     const r = msg as CompileResult;
+    recordCompilePerf(job, r.perf);
     clearJobTimers(job);
     _pending.delete(r.id);
     job.resolve({
@@ -90,9 +96,11 @@ function handleWorkerMessage(e: MessageEvent<WorkerResponse>): void {
       outputs: r.outputs,
       mergedOutputs: r.mergedOutputs,
       elapsedMillis: r.elapsedMillis,
+      perf: r.perf,
     });
   } else if (msg.type === 'error') {
     const r = msg as CompileError;
+    recordCompilePerf(job, r.perf);
     clearJobTimers(job);
     _pending.delete(r.id);
     job.resolve({
@@ -100,6 +108,7 @@ function handleWorkerMessage(e: MessageEvent<WorkerResponse>): void {
       error: r.message,
       mergedOutputs: r.mergedOutputs,
       elapsedMillis: r.elapsedMillis,
+      perf: r.perf,
     });
   } else if (msg.type === 'stdout') {
     const r = msg as CompileStdout;
@@ -126,6 +135,36 @@ function clearJobTimers(job: PendingJob): void {
   if (job.hardTimeoutHandle != null) clearTimeout(job.hardTimeoutHandle);
 }
 
+function recordCompilePerf(job: PendingJob, perf?: CompilePerfStats): void {
+  recordPerfDuration('osc:compile-roundtrip', performance.now() - job.startTime);
+  if (perf?.workerFsInitMillis != null) {
+    recordPerfDuration('osc:worker-fs-init', perf.workerFsInitMillis);
+  }
+  if (perf?.workerLibraryMountMillis != null) {
+    recordPerfDuration('osc:worker-library-mount', perf.workerLibraryMountMillis);
+  }
+  if (perf?.workerWasmInitMillis != null) {
+    recordPerfDuration('osc:worker-wasm-init', perf.workerWasmInitMillis);
+  }
+  if (perf?.workerJobMillis != null) {
+    recordPerfDuration('osc:worker-job-total', perf.workerJobMillis);
+  }
+  if (!_firstCompileCompleted) {
+    _firstCompileCompleted = true;
+    markPerf('osc:first-compile-complete');
+    measurePerf(
+      'osc:first-compile-from-bootstrap',
+      'osc:app-bootstrap-start',
+      'osc:first-compile-complete',
+    );
+    measurePerf(
+      'osc:first-compile-roundtrip',
+      'osc:first-compile-request',
+      'osc:first-compile-complete',
+    );
+  }
+}
+
 // Discard a job without terminating the worker (R6 cancel path)
 function cancelJobById(id: string, reason = 'Cancelled'): void {
   const job = _pending.get(id);
@@ -143,6 +182,10 @@ export function spawnOpenSCAD(
 ): AbortablePromise<OpenSCADInvocationResults> {
   const id = String(++_nextId);
   const worker = getWorker();
+  if (!_firstCompileRequested) {
+    _firstCompileRequested = true;
+    markPerf('osc:first-compile-request');
+  }
 
   // R6 — cancel all lower-priority pending jobs when a higher-priority job arrives
   const incomingPriority = PRIORITY[priority];

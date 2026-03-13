@@ -3,11 +3,13 @@
 /// <reference lib="webworker" />
 
 import { createEditorFS, mountDemandLibraries, symlinkLibraries } from '../fs/filesystem.ts';
+import { markPerf, measurePerf } from '../perf/runtime-performance.ts';
 import { createRuntime, OpenSCADRuntime } from './openscad-runtime.ts';
 import {
   CompileRequest,
   CompileResult,
   CompileError,
+  CompilePerfStats,
   CompileStdout,
   CompileStderr,
   MergedOutput,
@@ -98,13 +100,19 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
     const mergedOutputs: MergedOutput[] = [];
     currentMergedOutputs = mergedOutputs;
     const start = performance.now();
+    const perf: CompilePerfStats = {};
 
     try {
       // F3: Demand-load only the libraries referenced in the source texts
       let libraryNames: string[] = [];
       if (mountArchives) {
         if (!editorFSInitialized) {
+          markPerf('osc:worker-fs-init-start');
+          const fsStart = performance.now();
           await createEditorFS({ allowPersistence: false });
+          markPerf('osc:worker-fs-init-end');
+          perf.workerFsInitMillis = performance.now() - fsStart;
+          measurePerf('osc:worker-fs-init', 'osc:worker-fs-init-start', 'osc:worker-fs-init-end');
           editorFSInitialized = true;
         }
         const sourceTexts = sources.map((s) => s.content).filter((c): c is string => c != null);
@@ -114,10 +122,17 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
           .filter((p) => p.startsWith('/libraries/'))
           .map((p) => p.split('/')[2])
           .filter(Boolean);
+        const libraryMountStart = performance.now();
         libraryNames = await mountDemandLibraries(sourceTexts, extraNames);
+        perf.workerLibraryMountMillis = performance.now() - libraryMountStart;
       }
 
+      markPerf('osc:wasm-init-start');
+      const wasmInitStart = performance.now();
       const rt = await createJobRuntime();
+      markPerf('osc:wasm-init-end');
+      perf.workerWasmInitMillis = performance.now() - wasmInitStart;
+      measurePerf('osc:wasm-init', 'osc:wasm-init-start', 'osc:wasm-init-end');
 
       if (mountArchives) {
         await ensureArchivesMounted(rt, libraryNames);
@@ -158,6 +173,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
       } catch (e) {
         if (e instanceof RangeError || (e instanceof Error && e.message?.includes('OOM'))) {
           const elapsedMillis = performance.now() - start;
+          perf.workerJobMillis = elapsedMillis;
           mergedOutputs.push({ error: 'Out of memory' });
           self.postMessage({
             type: 'error',
@@ -165,12 +181,14 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
             message: 'Out of memory. The model is too large to compile in this browser.',
             mergedOutputs,
             elapsedMillis,
+            perf,
           } satisfies CompileError);
           return;
         }
         throw e;
       }
       const elapsedMillis = performance.now() - start;
+      perf.workerJobMillis = elapsedMillis;
 
       const outputs: [string, Uint8Array][] = [];
       for (const outPath of outputPaths ?? []) {
@@ -189,9 +207,11 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
         outputs,
         mergedOutputs,
         elapsedMillis,
+        perf,
       } satisfies CompileResult);
     } catch (err) {
       const elapsedMillis = performance.now() - start;
+      perf.workerJobMillis = elapsedMillis;
       console.trace(err);
       const errorMsg = `${err}`;
       mergedOutputs.push({ error: errorMsg });
@@ -201,6 +221,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
         message: errorMsg,
         mergedOutputs,
         elapsedMillis,
+        perf,
       } satisfies CompileError);
     } finally {
       currentJobId = null;
