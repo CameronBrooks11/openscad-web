@@ -15,7 +15,7 @@ const budgetPct = Number.parseFloat(process.env.PERF_BUDGET_PCT ?? '20');
 const budgetMultiplier = 1 + budgetPct / 100;
 
 function isConfiguredMetric(value) {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
 function collectMetrics(prefix, section) {
