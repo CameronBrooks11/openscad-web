@@ -41,7 +41,9 @@
     "format:check": "prettier --check .",
     "perf:capture": "node scripts/perf/capture-baseline.mjs",
     "perf:compare": "node scripts/perf/compare-baseline.mjs",
+    "perf:compare:local": "node scripts/perf/compare-baseline.mjs --baseline perf-baseline.local.json --strict",
     "perf:accept": "node scripts/perf/accept-baseline.mjs",
+    "perf:accept:local": "node scripts/perf/accept-baseline.mjs --baseline perf-baseline.local.json",
     "perf:ci": "npm run perf:capture && npm run perf:compare",
     "verify": "npm run lint && npm run typecheck && npm run test:unit && npm run build"
   },

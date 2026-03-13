@@ -19,6 +19,7 @@ public/libraries/*
 
 # Test coverage
 coverage/
+perf-baseline.local.json
 
 # OS artifacts
 .DS_Store

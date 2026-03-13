@@ -6,15 +6,39 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..');
 
-const baselinePath = path.resolve(repoRoot, process.env.PERF_BASELINE ?? 'perf-baseline.json');
-const currentPath = path.resolve(
-  repoRoot,
-  process.env.PERF_OUTPUT ?? 'coverage/perf/current-perf-baseline.json',
-);
+function parseArgs(argv) {
+  let baselineArg = process.env.PERF_BASELINE ?? 'perf-baseline.json';
+  let currentArg = process.env.PERF_OUTPUT ?? 'coverage/perf/current-perf-baseline.json';
+  let strict = process.env.CI === 'true' || process.env.PERF_STRICT === 'true';
+
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i];
+    if (arg === '--baseline') {
+      baselineArg = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--current') {
+      currentArg = argv[i + 1];
+      i += 1;
+      continue;
+    }
+    if (arg === '--strict') {
+      strict = true;
+      continue;
+    }
+  }
+
+  return {
+    baselinePath: path.resolve(repoRoot, baselineArg),
+    currentPath: path.resolve(repoRoot, currentArg),
+    strict,
+  };
+}
+
 const budgetPct = Number.parseFloat(process.env.PERF_BUDGET_PCT ?? '20');
 const budgetMultiplier = 1 + budgetPct / 100;
 const minimumBudgetMs = Number.parseFloat(process.env.PERF_MIN_BUDGET_MS ?? '5');
-const isStrict = process.env.CI === 'true' || process.env.PERF_STRICT === 'true';
 
 function isConfiguredMetric(value) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -40,7 +64,28 @@ async function readJson(filePath) {
 }
 
 async function main() {
-  const [baseline, current] = await Promise.all([readJson(baselinePath), readJson(currentPath)]);
+  const { baselinePath, currentPath, strict } = parseArgs(process.argv.slice(2));
+  let baseline;
+  let current;
+  try {
+    [baseline, current] = await Promise.all([readJson(baselinePath), readJson(currentPath)]);
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+      if (String(error.path ?? '') === baselinePath) {
+        throw new Error(
+          `Baseline file not found: ${baselinePath}\nCreate it with npm run perf:accept${
+            baselinePath.endsWith('perf-baseline.local.json') ? ':local' : ''
+          }.`,
+        );
+      }
+      if (String(error.path ?? '') === currentPath) {
+        throw new Error(
+          `Current perf candidate not found: ${currentPath}\nGenerate it with npm run perf:capture.`,
+        );
+      }
+    }
+    throw error;
+  }
 
   const baselineMetrics = [
     ...collectMetrics('metrics', baseline.metrics),
@@ -90,12 +135,12 @@ async function main() {
 
   if (failures.length > 0) {
     const message = `Performance regression detected:\n${failures.join('\n')}`;
-    if (isStrict) {
+    if (strict) {
       throw new Error(message);
     }
 
     console.warn(
-      `${message}\nLocal compare is advisory against the committed CI baseline. Set PERF_STRICT=true to enforce locally.`,
+      `${message}\nLocal compare against the committed CI baseline is advisory. Use --strict or perf:compare:local for enforcement.`,
     );
   }
 }

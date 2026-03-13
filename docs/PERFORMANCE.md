@@ -1,6 +1,7 @@
 # Performance Baseline
 
-`perf-baseline.json` is the committed regression baseline.
+`perf-baseline.json` is the committed CI regression baseline.
+`perf-baseline.local.json` is an ignored local-only baseline for relative workstation comparisons.
 
 ## Normal Flow
 
@@ -16,13 +17,20 @@ npm run perf:capture
 npm run perf:compare
 ```
 
-Locally this is advisory because the committed baseline is CI-sourced.
+This compares against the committed CI baseline.
+Locally it is advisory.
 
 CI runs the same comparison in strict mode and uploads `perf-baseline-candidate` as an artifact.
 
+3. For local relative checks, compare against your ignored local baseline:
+
+```sh
+npm run perf:compare:local
+```
+
 ## Accepting a New Baseline
 
-Only accept a new baseline after intentional perf-impacting changes or after the first stable CI capture.
+Only accept a new CI baseline after intentional perf-impacting changes or after a stable CI capture.
 
 ```sh
 npm run perf:accept
@@ -36,10 +44,19 @@ If you want to accept a downloaded CI artifact instead, pass the file path:
 npm run perf:accept -- path/to/current-perf-baseline.json
 ```
 
+To create or refresh your ignored local baseline from the current local capture:
+
+```sh
+npm run perf:accept:local
+```
+
 ## Rules
 
 - Compare is automatic.
 - Baseline updates are manual.
-- Prefer CI artifact values over local machine values when re-baselining.
-- Local compare is informational by default.
+- `perf-baseline.json` is CI-owned and tracked.
+- `perf-baseline.local.json` is developer-owned and ignored.
+- Prefer CI artifact values over local machine values when updating `perf-baseline.json`.
+- Local compare against the CI baseline is informational.
+- Local compare against `perf-baseline.local.json` is enforcing.
 - CI compare is enforcing.
