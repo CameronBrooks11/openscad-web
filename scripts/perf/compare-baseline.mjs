@@ -6,10 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..', '..');
 
-const baselinePath = path.resolve(
-  repoRoot,
-  process.env.PERF_BASELINE ?? 'perf-baseline.json',
-);
+const baselinePath = path.resolve(repoRoot, process.env.PERF_BASELINE ?? 'perf-baseline.json');
 const currentPath = path.resolve(
   repoRoot,
   process.env.PERF_OUTPUT ?? 'coverage/perf/current-perf-baseline.json',
@@ -44,12 +41,15 @@ async function main() {
     ...collectMetrics('warmMetrics', baseline.warmMetrics),
   ];
   const currentMetrics = new Map(
-    [...collectMetrics('metrics', current.metrics), ...collectMetrics('warmMetrics', current.warmMetrics)].map(
-      (entry) => [entry.key, entry.value],
-    ),
+    [
+      ...collectMetrics('metrics', current.metrics),
+      ...collectMetrics('warmMetrics', current.warmMetrics),
+    ].map((entry) => [entry.key, entry.value]),
   );
 
-  const configuredBaselineMetrics = baselineMetrics.filter((entry) => isConfiguredMetric(entry.value));
+  const configuredBaselineMetrics = baselineMetrics.filter((entry) =>
+    isConfiguredMetric(entry.value),
+  );
   if (configuredBaselineMetrics.length === 0) {
     console.log(`No populated baseline metrics found in ${baselinePath}; skipping perf gate.`);
     return;

@@ -69,11 +69,7 @@ export function markPerf(name: string, detail?: OscPerfDetail): number {
   return time;
 }
 
-export function recordPerfDuration(
-  name: string,
-  duration: number,
-  detail?: OscPerfDetail,
-): number {
+export function recordPerfDuration(name: string, duration: number, detail?: OscPerfDetail): number {
   const time = now();
   pushMetric({
     name,

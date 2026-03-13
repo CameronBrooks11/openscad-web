@@ -68,20 +68,12 @@ window.addEventListener('load', async () => {
   markPerf('osc:libraries-preload-start');
   await preloadAllLibraries();
   markPerf('osc:libraries-preload-end');
-  measurePerf(
-    'osc:libraries-preload',
-    'osc:libraries-preload-start',
-    'osc:libraries-preload-end',
-  );
+  measurePerf('osc:libraries-preload', 'osc:libraries-preload-start', 'osc:libraries-preload-end');
 
   markPerf('osc:language-register-start');
   await registerOpenSCADLanguage(fs, '/libraries', zipArchives);
   markPerf('osc:language-register-end');
-  measurePerf(
-    'osc:language-register',
-    'osc:language-register-start',
-    'osc:language-register-end',
-  );
+  measurePerf('osc:language-register', 'osc:language-register-start', 'osc:language-register-end');
 
   let statePersister: StatePersister;
   let persistedState: State | null = null;
