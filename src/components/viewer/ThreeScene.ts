@@ -1,5 +1,5 @@
 // ThreeScene.ts — pure TypeScript wrapper around a Three.js scene.
-// No React lifecycle; ViewerPanel.tsx holds an instance in a useRef.
+// Lifecycle is owned by osc-viewer-panel (custom element host).
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
