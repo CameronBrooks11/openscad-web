@@ -547,7 +547,7 @@ export class Model extends EventTarget {
     };
     try {
       const output = await render(renderArgs)({ now });
-      let displayFile = output.outFile;
+      const displayFile = output.outFile;
       if (output.outFile.name.endsWith('.svg') || output.outFile.name.endsWith('.dxf')) {
         is2D = true;
       } else {
