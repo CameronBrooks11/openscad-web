@@ -15,14 +15,16 @@ export interface NamedPosition {
   target: [number, number, number];
 }
 
+// Named positions follow OpenSCAD's Z-up convention (camera.up = Z):
+//   X = right, Y = depth (camera sits at -Y to view the "front"), Z = up
 export const NAMED_POSITIONS: NamedPosition[] = [
-  { name: 'Diagonal', position: [50, 50, 100], target: [0, 0, 0] },
-  { name: 'Front',    position: [0,   0, 100], target: [0, 0, 0] },
-  { name: 'Right',    position: [100, 0,   0], target: [0, 0, 0] },
-  { name: 'Back',     position: [0,   0,-100], target: [0, 0, 0] },
-  { name: 'Left',     position: [-100,0,   0], target: [0, 0, 0] },
-  { name: 'Top',      position: [0, 100,   0], target: [0, 0, 0] },
-  { name: 'Bottom',   position: [0,-100,   0], target: [0, 0, 0] },
+  { name: 'Diagonal', position: [100, -100, 100], target: [0, 0, 0] },
+  { name: 'Front',    position: [0,   -100,   0], target: [0, 0, 0] },
+  { name: 'Right',    position: [100,    0,   0], target: [0, 0, 0] },
+  { name: 'Back',     position: [0,    100,   0], target: [0, 0, 0] },
+  { name: 'Left',     position: [-100,   0,   0], target: [0, 0, 0] },
+  { name: 'Top',      position: [0,     0, 100],  target: [0, 0, 0] },
+  { name: 'Bottom',   position: [0,     0,-100],  target: [0, 0, 0] },
 ];
 
 export class ThreeScene {
@@ -51,6 +53,8 @@ export class ThreeScene {
     );
     const diag = NAMED_POSITIONS[0];
     this.camera.position.set(...diag.position);
+    // OpenSCAD uses Z-up; tell Three.js so OrbitControls orbits correctly.
+    this.camera.up.set(0, 0, 1);
 
     this.scene = new THREE.Scene();
     this.scene.background = BACKGROUND_COLOR;
@@ -126,8 +130,11 @@ export class ThreeScene {
       this.modelMesh = null;
     }
 
+    // Use per-vertex colors when the OFF loader generated them (multi-material model).
+    const hasVertexColors = geometry.hasAttribute('color');
     const material = new THREE.MeshPhongMaterial({
-      color,
+      color: hasVertexColors ? 0xffffff : color,
+      vertexColors: hasVertexColors,
       side: THREE.DoubleSide,
       shininess: 40,
       specular: new THREE.Color(0x222222),
@@ -230,7 +237,9 @@ export class ThreeScene {
 
   setModelColor(color: THREE.ColorRepresentation): void {
     if (this.modelMesh) {
-      (this.modelMesh.material as THREE.MeshPhongMaterial).color.set(color);
+      const mat = this.modelMesh.material as THREE.MeshPhongMaterial;
+      // Don't override per-vertex colors from a multi-material model.
+      if (!mat.vertexColors) mat.color.set(color);
     }
   }
 }

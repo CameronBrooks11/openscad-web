@@ -16,9 +16,10 @@ import chroma from "chroma-js";
 
 const githubRx = /^https:\/\/github.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/;
 
-export class Model {
+export class Model extends EventTarget {
   constructor(private fs: FS, public state: State, private setStateCallback?: (state: State) => void, 
     private statePersister?: StatePersister) {
+    super();
   }
   
   init() {
@@ -31,6 +32,7 @@ export class Model {
     this.state = state;
     this.statePersister?.set(state);
     this.setStateCallback?.(state);
+    this.dispatchEvent(new CustomEvent<State>('state', { detail: state }));
   }
 
   mutate(f: (state: State) => void) {

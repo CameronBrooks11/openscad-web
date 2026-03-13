@@ -14,7 +14,7 @@ const isDev = process.env.NODE_ENV !== 'production';
 /** @type {import('webpack').Configuration[]} */
 const config = [
   {
-    entry: './src/index.tsx',
+    entry: './src/index.ts',
     devtool: isDev ? 'source-map' : 'nosources-source-map',
     mode: isDev ? 'development' : 'production',
     target: 'web',
@@ -114,11 +114,6 @@ const config = [
         patterns: [
           {
             from: path.resolve(__dirname, 'public'),
-            toType: 'dir',
-          },
-          {
-            from: path.resolve(__dirname, 'node_modules/primeicons/fonts'),
-            to: path.resolve(__dirname, 'dist/fonts'),
             toType: 'dir',
           },
           {
