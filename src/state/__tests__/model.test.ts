@@ -153,6 +153,23 @@ describe('Model — render triggering', () => {
     await nextTicks();
     expect(mockRender).toHaveBeenCalled();
   });
+
+  it('uses svg render format for non-scad 2D resources', async () => {
+    model.mutate(s => {
+      s.params.sources = [
+        ...s.params.sources,
+        { path: '/home/image.svg', content: '<svg xmlns="http://www.w3.org/2000/svg"></svg>' },
+      ];
+    });
+    jest.clearAllMocks();
+
+    model.openFile('/home/image.svg');
+    await nextTicks();
+
+    expect(mockRender).toHaveBeenCalled();
+    const firstRenderArgs = mockRender.mock.calls[0]?.[0];
+    expect(firstRenderArgs.renderFormat).toBe('svg');
+  });
 });
 
 // ---------------------------------------------------------------------------

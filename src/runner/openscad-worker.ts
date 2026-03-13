@@ -27,14 +27,12 @@ let currentMergedOutputs: MergedOutput[] | null = null;
 function createJobRuntime(): Promise<OpenSCADRuntime> {
   return createRuntime({
     print: (text: string) => {
-      console.debug('stdout: ' + text);
       if (currentJobId != null) {
         self.postMessage({ type: 'stdout', id: currentJobId, text } satisfies CompileStdout);
         currentMergedOutputs?.push({ stdout: text });
       }
     },
     printErr: (text: string) => {
-      console.debug('stderr: ' + text);
       if (currentJobId != null) {
         self.postMessage({ type: 'stderr', id: currentJobId, text } satisfies CompileStderr);
         currentMergedOutputs?.push({ stderr: text });
@@ -128,7 +126,6 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
           // Files under /libraries/ are already accessible via the read-only ZipFS demand mount.
           // Writing to them would fail (ZipFS is read-only), so we only verify existence.
           const isReadOnlyMount = source.path.startsWith('/libraries/') || source.path.startsWith('/fonts/');
-          console.log(`Writing ${source.path}`);
           if (isReadOnlyMount) {
             // File is accessible via the demand-loaded ZipFS; no write needed.
             // If somehow it's missing (unmounted lib), compilation will error naturally.
@@ -147,7 +144,6 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
         }
       }
 
-      console.log('Invoking OpenSCAD with: ', args);
       // callMain wraps C++ exception formatting (see openscad-runtime.ts)
       let exitCode: number;
       try {

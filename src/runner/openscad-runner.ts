@@ -69,7 +69,6 @@ const HARD_TIMEOUT_MS = 60_000;
 
 function getWorker(): Worker {
   if (!_worker) {
-    console.log('[runner] Worker created');
     _worker = new Worker('./openscad-worker.js');
     _worker.onmessage = handleWorkerMessage;
     _worker.onerror = handleWorkerError;

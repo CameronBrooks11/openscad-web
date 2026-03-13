@@ -149,7 +149,6 @@ export class Model extends EventTarget {
         s.currentRunLogs = undefined;
         s.error = undefined;
         s.is2D = undefined;
-        console.log('Opened file:', path);
       }
     })) {
       this.processSource();
@@ -288,7 +287,7 @@ export class Model extends EventTarget {
           extraArgs: [], isPreview: false,
           features,
           renderFormat: exportFormat,
-          streamsCallback: ps => console.log('Export', JSON.stringify(ps)),
+          streamsCallback: this.rawStreamsCallback.bind(this),
         })({now: true});
       }
       
@@ -458,7 +457,7 @@ export class Model extends EventTarget {
       vars,
       features,
       isPreview,
-      renderFormat: this.state.is2D ? 'svg' : 'off',
+      renderFormat: is2D ? 'svg' : 'off',
       streamsCallback: this.rawStreamsCallback.bind(this),
       backend: this.state.params.backend,
     };
