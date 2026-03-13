@@ -6,6 +6,7 @@ import { blurHashToImage, imageToThumbhash, thumbHashToImage } from '../../io/im
 import { ThreeScene, NAMED_POSITIONS } from '../viewer/ThreeScene.ts';
 import { offToBufferGeometry } from '../viewer/off-loader.ts';
 import { parseOff } from '../../io/import_off.ts';
+import { getViewerOutputMode } from './viewer-output-mode.ts';
 import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
 
@@ -44,9 +45,10 @@ export class OscViewerPanel extends LitElement {
     // Output change
     if (st.output?.outFile !== this._lastOutFile) {
       this._lastOutFile = st.output?.outFile;
-      if (st.output?.outFile?.name.endsWith('.off')) {
+      const outputMode = getViewerOutputMode(st.output?.outFile?.name);
+      if (outputMode === 'three' && st.output?.outFile) {
         this._loadGeometry(st.output.outFile);
-      } else if (st.output?.outFile?.name.endsWith('.svg') && st.output.outFileURL) {
+      } else if (outputMode === 'svg' && st.output?.outFileURL) {
         this._loadSvgPreview(st.output.outFileURL);
       }
     }
@@ -71,7 +73,10 @@ export class OscViewerPanel extends LitElement {
       '[data-testid="viewer-canvas"]',
     ) as HTMLDivElement | null;
     if (!nextContainer) {
-      if (this._st?.output?.outFile?.name.endsWith('.svg') && this._st.output.outFileURL) {
+      if (
+        getViewerOutputMode(this._st?.output?.outFile?.name) === 'svg' &&
+        this._st?.output?.outFileURL
+      ) {
         this._loadSvgPreview(this._st.output.outFileURL);
       }
       this._teardownScene();
@@ -107,7 +112,7 @@ export class OscViewerPanel extends LitElement {
     this._ro.observe(this._container);
 
     // Load any geometry that was already output when this panel mounted
-    if (st.output?.outFile?.name.endsWith('.off')) {
+    if (getViewerOutputMode(st.output?.outFile?.name) === 'three' && st.output?.outFile) {
       this._lastOutFile = st.output.outFile;
       this._loadGeometry(st.output.outFile);
     }
@@ -167,10 +172,8 @@ export class OscViewerPanel extends LitElement {
   override render() {
     const st = this._st;
     const isCompiling = !!(st?.rendering || st?.previewing);
-    const outName = st?.output?.outFile?.name ?? '';
-    const isSvgOutput = outName.endsWith('.svg');
-    const isDxfOutput = outName.endsWith('.dxf');
-    const shows3DViewer = !isSvgOutput && !isDxfOutput;
+    const outputMode = getViewerOutputMode(st?.output?.outFile?.name);
+    const shows3DViewer = outputMode === 'three';
     const placeholderUri = (() => {
       if (st?.preview?.blurhash) return blurHashToImage(st.preview.blurhash, 100, 100);
       if (st?.preview?.thumbhash) return thumbHashToImage(st.preview.thumbhash);
@@ -248,7 +251,7 @@ export class OscViewerPanel extends LitElement {
               style="flex:1;position:relative;width:100%;height:100%;"
             ></div>
           `
-        : isSvgOutput
+        : outputMode === 'svg'
           ? html`
               <img
                 class="svg-preview"
