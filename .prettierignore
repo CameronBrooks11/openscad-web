@@ -1,0 +1,16 @@
+node_modules
+dist
+coverage
+libs
+src/wasm
+public/libraries
+public/*.min.js
+public/*.min.css
+public/*.png
+public/*.ico
+public/*.svg
+package-lock.json
+src/fs/zip-archives.generated.ts
+working
+reference
+output.log
