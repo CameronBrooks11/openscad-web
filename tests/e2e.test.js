@@ -121,36 +121,12 @@ async function expect3DPolySet() {
 async function expect3DManifold() {
   await expectValidOffOutput();
 }
-function waitForCustomizeButton() {
-  return page.waitForFunction(() => {
-    // Scan generic interactive elements and match by visible text.
-    const selectors = [
-      'input[role=switch]',
-      'button',
-      '[role=tab]',
-      '.p-togglebutton',
-      '.p-tabmenu-nav a'
-    ];
-
-    for (const selector of selectors) {
-      const elements = document.querySelectorAll(selector);
-      for (const element of elements) {
-        const text = element.textContent || element.innerText || '';
-        const parentText = element.parentElement?.textContent || element.parentElement?.innerText || '';
-        if (text.includes('Customize') || parentText.includes('Customize')) {
-          return element;
-        }
-      }
-    }
-    return null;
-  }, { timeout: 45000 }); // Increase timeout to 45 seconds
-}
-function waitForLabel(text) {
-  return page.waitForFunction(
-    (expected) => Array.from(document.querySelectorAll('label')).find(el => el.textContent === expected),
-    undefined,
-    text,
-  );
+async function waitForParameter(name, timeout = 45000) {
+  await page.waitForFunction((expectedName) => {
+    const shell = document.querySelector('osc-app-shell');
+    const params = shell?._st?.parameterSet?.parameters;
+    return Array.isArray(params) && params.some((p) => p?.name === expectedName);
+  }, { timeout }, name);
 }
 
 describe('e2e', () => {
@@ -206,17 +182,14 @@ describe('e2e', () => {
     ].join('\r\n'));
     await waitForViewer();
     await expect3DPolySet();
-
-    // Wait for syntax checking to complete and parameters to be detected
-    await page.waitForFunction(() => {
-      // Look for any indication that parameters have been processed
-      const messages = Array.from(document.querySelectorAll('*')).map(el => el.textContent || '').join(' ');
-      return messages.includes('myVar') || messages.includes('Customize');
-    }, { timeout: 30000 });
-
-    await (await waitForCustomizeButton()).click();
-    await page.waitForSelector('fieldset');
-    await waitForLabel('myVar');
+    await waitForParameter('myVar');
+    const param = await page.evaluate(() => {
+      const shell = document.querySelector('osc-app-shell');
+      const params = shell?._st?.parameterSet?.parameters;
+      return (params ?? []).find((p) => p?.name === 'myVar') ?? null;
+    });
+    expect(param).not.toBeNull();
+    expect(param.initial).toBe(10);
   }, longTimeout);
 });
 
