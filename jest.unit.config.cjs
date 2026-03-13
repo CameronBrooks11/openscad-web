@@ -5,10 +5,13 @@ module.exports = {
   testEnvironmentOptions: { url: 'http://localhost/' },
   testMatch: ['<rootDir>/src/**/*.test.ts', '<rootDir>/src/**/*.test.tsx'],
   transform: {
-    '^.+\\.tsx?$': ['ts-jest', {
-      tsconfig: './tsconfig.test.json',
-      diagnostics: false,
-    }],
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        tsconfig: './tsconfig.test.json',
+        diagnostics: false,
+      },
+    ],
   },
   moduleNameMapper: {
     '^monaco-editor/esm/vs/editor/editor\\.api$': '<rootDir>/__mocks__/monaco-editor.cjs',

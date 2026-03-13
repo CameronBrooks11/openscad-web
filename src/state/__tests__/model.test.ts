@@ -14,9 +14,7 @@ import { defaultSourcePath, defaultModelColor } from '../initial-state.ts';
 // checkSyntax and render are "turnable" factory functions: f(args) => g({now}) => Promise
 jest.mock('../../runner/actions.ts', () => {
   const makeDelayable = (resolvedValue: unknown) =>
-    jest.fn().mockReturnValue(
-      jest.fn().mockResolvedValue(resolvedValue)
-    );
+    jest.fn().mockReturnValue(jest.fn().mockResolvedValue(resolvedValue));
   return {
     checkSyntax: makeDelayable({ logText: '', markers: [], parameterSet: undefined }),
     render: makeDelayable({
@@ -56,7 +54,12 @@ function createTestState(content = 'cube(10);'): State {
       exportFormat3D: 'stl',
     },
     view: {
-      layout: { mode: 'multi', editor: true, viewer: true, customizer: false } as State['view']['layout'],
+      layout: {
+        mode: 'multi',
+        editor: true,
+        viewer: true,
+        customizer: false,
+      } as State['view']['layout'],
       color: defaultModelColor,
       showAxes: true,
       lineNumbers: false,
@@ -74,7 +77,7 @@ const makeMockFs = () => ({
 /** Flush microtasks + one macrotask tick so async methods (processSource, checkSyntax…) resolve. */
 async function nextTicks(n = 3) {
   for (let i = 0; i < n; i++) {
-    await new Promise<void>(resolve => setTimeout(resolve, 0));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
 }
 
@@ -100,12 +103,7 @@ beforeEach(() => {
   stateHistory = [];
 
   const state = createTestState();
-  model = new Model(
-    mockFs as unknown as FS,
-    state,
-    (s) => stateHistory.push(s),
-    undefined,
-  );
+  model = new Model(mockFs as unknown as FS, state, (s) => stateHistory.push(s), undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -115,7 +113,9 @@ beforeEach(() => {
 describe('Model — render triggering', () => {
   it('does not re-render when only viewstate changes (showAxes, layout)', async () => {
     // Directly mutate a view-only field — processSource should NOT be triggered
-    model.mutate(s => { s.view.showAxes = false; });
+    model.mutate((s) => {
+      s.view.showAxes = false;
+    });
     await nextTicks();
     expect(mockRender).not.toHaveBeenCalled();
     expect(mockCheckSyntax).not.toHaveBeenCalled();
@@ -141,7 +141,7 @@ describe('Model — render triggering', () => {
 
   it('triggers render when activePath changes via openFile', async () => {
     // Pre-populate the second source so openFile can switch to it
-    model.mutate(s => {
+    model.mutate((s) => {
       s.params.sources = [
         ...s.params.sources,
         { path: '/home/other.scad', content: 'cylinder(5,3);' },
@@ -155,7 +155,7 @@ describe('Model — render triggering', () => {
   });
 
   it('uses svg render format for non-scad 2D resources', async () => {
-    model.mutate(s => {
+    model.mutate((s) => {
       s.params.sources = [
         ...s.params.sources,
         { path: '/home/image.svg', content: '<svg xmlns="http://www.w3.org/2000/svg"></svg>' },

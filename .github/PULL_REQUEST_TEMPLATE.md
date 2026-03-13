@@ -25,8 +25,8 @@ Please check the relevant options:
 
 Please describe the steps to test the changes, including any special or new setup required.
 
-1. 
-2. 
-3. 
+1.
+2.
+3.
 
 ---

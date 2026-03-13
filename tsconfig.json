@@ -1,12 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "DOM",
-      "DOM.Iterable",
-      "ES2022",
-      "WebWorker"
-    ],
+    "lib": ["DOM", "DOM.Iterable", "ES2022", "WebWorker"],
     "rootDir": "src",
     "allowJs": true,
     "skipLibCheck": true,
@@ -29,13 +24,6 @@
       "*": ["*"]
     }
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.js"
-  ],
-  "exclude": [
-    "node_modules",
-    "src/wasm/*.js",
-    "src/runner/openscad-worker.ts"
-  ]
+  "include": ["src/**/*.ts", "src/**/*.js"],
+  "exclude": ["node_modules", "src/wasm/*.js", "src/runner/openscad-worker.ts"]
 }

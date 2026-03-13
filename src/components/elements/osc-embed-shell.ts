@@ -14,8 +14,8 @@ import './osc-customizer-panel.ts';
 // postMessage protocol (host → iframe)
 // ---------------------------------------------------------------------------
 type SetModelMsg = { type: 'setModel'; source: string };
-type SetVarMsg   = { type: 'setVar'; name: string; value: unknown };
-type InboundMsg  = SetModelMsg | SetVarMsg;
+type SetVarMsg = { type: 'setVar'; name: string; value: unknown };
+type InboundMsg = SetModelMsg | SetVarMsg;
 
 function notifyHost(type: string, payload?: Record<string, unknown>) {
   if (window.parent !== window) {
@@ -28,7 +28,10 @@ function coerceUrlVars(vars: Record<string, string>): Record<string, unknown> {
   for (const [k, v] of Object.entries(vars)) {
     if (v === 'true') result[k] = true;
     else if (v === 'false') result[k] = false;
-    else { const n = Number(v); result[k] = v.trim() !== '' && !isNaN(n) ? n : v; }
+    else {
+      const n = Number(v);
+      result[k] = v.trim() !== '' && !isNaN(n) ? n : v;
+    }
   }
   return result;
 }
@@ -37,14 +40,34 @@ function coerceUrlVars(vars: Record<string, string>): Record<string, unknown> {
 export class OscEmbedShell extends LitElement {
   static override styles = css`
     :host {
-      display: flex; flex-direction: column; flex: 1;
-      width: 100%; height: 100%;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      width: 100%;
+      height: 100%;
     }
-    .viewer-wrap { flex: 1; position: relative; }
-    osc-viewer-panel { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
-    .download-bar { padding: 4px 8px; }
-    .download-bar button { cursor: pointer; padding: 4px 12px; }
-    .error { padding: 2rem; color: red; }
+    .viewer-wrap {
+      flex: 1;
+      position: relative;
+    }
+    osc-viewer-panel {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+    .download-bar {
+      padding: 4px 8px;
+    }
+    .download-bar button {
+      cursor: pointer;
+      padding: 4px 12px;
+    }
+    .error {
+      padding: 2rem;
+      color: red;
+    }
   `;
 
   @property({ attribute: false }) urlParams!: UrlModeParams;
@@ -97,7 +120,7 @@ export class OscEmbedShell extends LitElement {
     // Apply view overrides
     const overrides = params.viewOverrides;
     if (Object.keys(overrides).length > 0) {
-      this._model.mutate(s => {
+      this._model.mutate((s) => {
         if (overrides.showAxes !== undefined) s.view.showAxes = overrides.showAxes;
         if (overrides.color !== undefined) s.view.color = overrides.color!;
         if (overrides.lineNumbers !== undefined) s.view.lineNumbers = overrides.lineNumbers;
@@ -119,7 +142,9 @@ export class OscEmbedShell extends LitElement {
       }
       const preVars = params.prePopulatedVars;
       if (Object.keys(preVars).length > 0) {
-        this._model.mutate(s => { s.params.vars = { ...(s.params.vars ?? {}), ...coerceUrlVars(preVars) }; });
+        this._model.mutate((s) => {
+          s.params.vars = { ...(s.params.vars ?? {}), ...coerceUrlVars(preVars) };
+        });
       }
       this._model.source = result;
     })();
@@ -134,12 +159,16 @@ export class OscEmbedShell extends LitElement {
       <div class="viewer-wrap">
         <osc-viewer-panel></osc-viewer-panel>
       </div>
-      ${params?.embedControls ? html`<osc-customizer-panel style="max-height:40vh;"></osc-customizer-panel>` : ''}
-      ${params?.embedDownload ? html`
-        <div class="download-bar">
-          <button @click=${() => this._model.export()}>Download STL</button>
-        </div>
-      ` : ''}
+      ${params?.embedControls
+        ? html`<osc-customizer-panel style="max-height:40vh;"></osc-customizer-panel>`
+        : ''}
+      ${params?.embedDownload
+        ? html`
+            <div class="download-bar">
+              <button @click=${() => this._model.export()}>Download STL</button>
+            </div>
+          `
+        : ''}
     `;
   }
 }

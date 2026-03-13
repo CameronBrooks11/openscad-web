@@ -22,7 +22,9 @@ const isMonacoSupported = (() => {
 // Uses light DOM so Monaco CSS applies correctly
 @customElement('osc-editor-panel')
 export class OscEditorPanel extends LitElement {
-  protected override createRenderRoot() { return this; }
+  protected override createRenderRoot() {
+    return this;
+  }
 
   @state() private _st: State | null = null;
   @state() private _menuOpen = false;
@@ -99,7 +101,7 @@ export class OscEditorPanel extends LitElement {
     const container = this.querySelector('.osc-editor-monaco') as HTMLDivElement;
     if (!container) return;
 
-    const monaco = await loader.init() as typeof monacoTypes;
+    const monaco = (await loader.init()) as typeof monacoTypes;
     this._monaco = monaco;
 
     const st = this._st ?? this._model.state;
@@ -188,12 +190,18 @@ export class OscEditorPanel extends LitElement {
       for (const f of libFiles) {
         items.push({ path: f.path, label: f.label, group: 'Libraries' });
       }
-    } catch { /* FS not ready */ }
+    } catch {
+      /* FS not ready */
+    }
 
     return items;
   }
 
-  private _listScadFiles(fs: FS, dir: string, depth: number): Array<{ path: string; label: string }> {
+  private _listScadFiles(
+    fs: FS,
+    dir: string,
+    depth: number,
+  ): Array<{ path: string; label: string }> {
     if (depth <= 0) return [];
     const results: Array<{ path: string; label: string }> = [];
     try {
@@ -202,15 +210,19 @@ export class OscEditorPanel extends LitElement {
         const childPath = join(dir, name);
         const stat = fs.lstatSync(childPath);
         if (stat.isDirectory()) {
-          results.push(...this._listScadFiles(fs, childPath, depth - 1).map(f => ({
-            ...f,
-            label: name + '/' + f.label,
-          })));
+          results.push(
+            ...this._listScadFiles(fs, childPath, depth - 1).map((f) => ({
+              ...f,
+              label: name + '/' + f.label,
+            })),
+          );
         } else if (name.endsWith('.scad')) {
           results.push({ path: childPath, label: name });
         }
       }
-    } catch { /* skip */ }
+    } catch {
+      /* skip */
+    }
     return results;
   }
 
@@ -230,15 +242,21 @@ export class OscEditorPanel extends LitElement {
     return html`
       <style>
         osc-editor-panel {
-          display: flex; flex-direction: column; flex: 1 1 auto;
-          min-width: 0; min-height: 0;
-          width: 100%; height: 100%;
+          display: flex;
+          flex-direction: column;
+          flex: 1 1 auto;
+          min-width: 0;
+          min-height: 0;
+          width: 100%;
+          height: 100%;
           overflow: hidden;
           background: #f7f9fc;
           border-right: 1px solid #d6deec;
         }
         osc-editor-panel .osc-editor-toolbar {
-          display: flex; flex-direction: row; gap: 8px;
+          display: flex;
+          flex-direction: row;
+          gap: 8px;
           align-items: center;
           padding: 8px 10px;
           border-bottom: 1px solid #d6deec;
@@ -299,100 +317,174 @@ export class OscEditorPanel extends LitElement {
           margin-bottom: 0;
         }
         osc-editor-panel .osc-editor-textarea {
-          flex: 1; box-sizing: border-box; width: 100%;
-          min-height: 100px; font-family: monospace; resize: none;
-          padding: 8px; background: #1e1e1e; color: #d4d4d4;
-          border: none; font-size: 14px;
+          flex: 1;
+          box-sizing: border-box;
+          width: 100%;
+          min-height: 100px;
+          font-family: monospace;
+          resize: none;
+          padding: 8px;
+          background: #1e1e1e;
+          color: #d4d4d4;
+          border: none;
+          font-size: 14px;
         }
         osc-editor-panel button.toolbar-btn {
-          cursor: pointer; height: 30px; padding: 4px 10px;
+          cursor: pointer;
+          height: 30px;
+          padding: 4px 10px;
           border: 1px solid #b7c2d8;
-          background: #fff; border-radius: 6px; font-size: 0.85rem; color: #243246;
+          background: #fff;
+          border-radius: 6px;
+          font-size: 0.85rem;
+          color: #243246;
           white-space: nowrap;
         }
-        osc-editor-panel button.toolbar-btn:hover { background: #f0f5ff; }
+        osc-editor-panel button.toolbar-btn:hover {
+          background: #f0f5ff;
+        }
         osc-editor-panel .osc-editor-menu {
-          position: absolute; left: 0; top: calc(100% + 6px); z-index: 1000;
-          background: #fff; border: 1px solid #d3dbe9; border-radius: 6px;
-          padding: 4px 0; min-width: 200px;
+          position: absolute;
+          left: 0;
+          top: calc(100% + 6px);
+          z-index: 1000;
+          background: #fff;
+          border: 1px solid #d3dbe9;
+          border-radius: 6px;
+          padding: 4px 0;
+          min-width: 200px;
           box-shadow: 0 10px 24px rgba(32, 45, 66, 0.18);
         }
         osc-editor-panel .osc-editor-menu button,
         osc-editor-panel .osc-editor-menu a {
-          display: block; width: 100%; padding: 8px 16px;
-          border: none; background: none; cursor: pointer;
-          text-align: left; font-size: 0.875rem; color: #333;
+          display: block;
+          width: 100%;
+          padding: 8px 16px;
+          border: none;
+          background: none;
+          cursor: pointer;
+          text-align: left;
+          font-size: 0.875rem;
+          color: #333;
           text-decoration: none;
         }
         osc-editor-panel .osc-editor-menu button:hover,
-        osc-editor-panel .osc-editor-menu a:hover { background: #f0f5ff; }
-        osc-editor-panel .osc-editor-menu button:disabled { opacity: 0.5; cursor: default; }
-        osc-editor-panel .osc-editor-menu hr { margin: 4px 0; border: none; border-top: 1px solid #e7edf8; }
+        osc-editor-panel .osc-editor-menu a:hover {
+          background: #f0f5ff;
+        }
+        osc-editor-panel .osc-editor-menu button:disabled {
+          opacity: 0.5;
+          cursor: default;
+        }
+        osc-editor-panel .osc-editor-menu hr {
+          margin: 4px 0;
+          border: none;
+          border-top: 1px solid #e7edf8;
+        }
       </style>
 
       <div class="osc-editor-toolbar">
         <div class="osc-editor-toolbar-item">
           <button class="toolbar-btn" @click=${this._toggleMenu} title="Editor menu">⋯</button>
-          ${this._menuOpen ? html`
-            <div class="osc-editor-menu">
-              <a href="#new-project"
-                @click=${async (e: Event) => {
-                  e.preventDefault();
-                  window.open(await buildUrlForStateParams(getBlankProjectState()), '_blank');
-                  this._menuOpen = false;
-                }}>New project</a>
-              <hr />
-              <button disabled>Share project</button>
-              <hr />
-              <button disabled>New file</button>
-              <button disabled>Copy to new file</button>
-              <button disabled>Upload file(s)</button>
-              <button disabled>Download sources</button>
-              <hr />
-              <button @click=${() => { this._editor?.trigger(activePath, 'editor.action.selectAll', null); this._menuOpen = false; }}>Select All</button>
-              <hr />
-              <button @click=${() => { this._editor?.trigger(activePath, 'actions.find', null); this._menuOpen = false; }}>Find</button>
-            </div>
-          ` : ''}
+          ${this._menuOpen
+            ? html`
+                <div class="osc-editor-menu">
+                  <a
+                    href="#new-project"
+                    @click=${async (e: Event) => {
+                      e.preventDefault();
+                      window.open(await buildUrlForStateParams(getBlankProjectState()), '_blank');
+                      this._menuOpen = false;
+                    }}
+                    >New project</a
+                  >
+                  <hr />
+                  <button disabled>Share project</button>
+                  <hr />
+                  <button disabled>New file</button>
+                  <button disabled>Copy to new file</button>
+                  <button disabled>Upload file(s)</button>
+                  <button disabled>Download sources</button>
+                  <hr />
+                  <button
+                    @click=${() => {
+                      this._editor?.trigger(activePath, 'editor.action.selectAll', null);
+                      this._menuOpen = false;
+                    }}
+                  >
+                    Select All
+                  </button>
+                  <hr />
+                  <button
+                    @click=${() => {
+                      this._editor?.trigger(activePath, 'actions.find', null);
+                      this._menuOpen = false;
+                    }}
+                  >
+                    Find
+                  </button>
+                </div>
+              `
+            : ''}
         </div>
 
-        <select class="osc-editor-file-select" title="Open file"
+        <select
+          class="osc-editor-file-select"
+          title="Open file"
           .value=${activePath}
           @change=${(e: Event) => {
             const key = (e.target as HTMLSelectElement).value;
             if (key.startsWith('https://')) window.open(key, '_blank');
             else this._model.openFile(key);
-          }}>
-          ${Array.from(groupedFileOptions.entries()).map(([group, options]) => html`
-            <optgroup label=${group}>
-              ${options.map(f => html`
-                <option .value=${f.path} ?selected=${f.path === activePath}>${f.label}</option>
-              `)}
-            </optgroup>
-          `)}
+          }}
+        >
+          ${Array.from(groupedFileOptions.entries()).map(
+            ([group, options]) => html`
+              <optgroup label=${group}>
+                ${options.map(
+                  (f) => html`
+                    <option .value=${f.path} ?selected=${f.path === activePath}>${f.label}</option>
+                  `,
+                )}
+              </optgroup>
+            `,
+          )}
         </select>
 
-        ${st.params.autoCompile === false ? html`
-          <button class="toolbar-btn" @click=${() => this._model.render({ isPreview: false, now: true })} title="Build (F6)">
-            ▶ Build
-          </button>
-        ` : ''}
-
-        ${activePath !== defaultSourcePath ? html`
-          <button class="toolbar-btn" @click=${() => this._model.openFile(defaultSourcePath)} title="Go back to ${defaultSourcePath}">
-            ← Back
-          </button>
-        ` : ''}
+        ${st.params.autoCompile === false
+          ? html`
+              <button
+                class="toolbar-btn"
+                @click=${() => this._model.render({ isPreview: false, now: true })}
+                title="Build (F6)"
+              >
+                ▶ Build
+              </button>
+            `
+          : ''}
+        ${activePath !== defaultSourcePath
+          ? html`
+              <button
+                class="toolbar-btn"
+                @click=${() => this._model.openFile(defaultSourcePath)}
+                title="Go back to ${defaultSourcePath}"
+              >
+                ← Back
+              </button>
+            `
+          : ''}
       </div>
 
       <div class="osc-editor-body">
         ${isMonacoSupported
           ? html`<div class="osc-editor-monaco"></div>`
-          : html`<textarea class="osc-editor-textarea"
+          : html`<textarea
+              class="osc-editor-textarea"
               .value=${this._model?.source ?? ''}
-              @input=${(e: Event) => { this._model.source = (e.target as HTMLTextAreaElement).value; }}
-            ></textarea>`
-        }
+              @input=${(e: Event) => {
+                this._model.source = (e.target as HTMLTextAreaElement).value;
+              }}
+            ></textarea>`}
       </div>
 
       <div class="osc-editor-logs" style="display:${st.view.logs ? '' : 'none'};">

@@ -17,7 +17,7 @@ describe('turnIntoDelayableExecution – kill cancels pending timeout (BUG-7)', 
         executed = true;
         res();
         return () => {};
-      })
+      }),
     );
 
     const delayable = turnIntoDelayableExecution(1000, job);

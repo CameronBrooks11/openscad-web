@@ -11,10 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node: [
-          {"name": "supported", "version": "24"},
-          {"name": "latest", "version": "latest"}
-        ]
+        node: [{ 'name': 'supported', 'version': '24' }, { 'name': 'latest', 'version': 'latest' }]
     name: Node ${{ matrix.node.name }}
     env:
       CI: true

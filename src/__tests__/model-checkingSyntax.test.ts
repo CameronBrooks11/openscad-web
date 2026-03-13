@@ -8,8 +8,7 @@ describe('checkingSyntax is cleared in finally (BUG-8)', () => {
     // Minimal reproduction: mirror the pattern in Model.checkSyntax()
     let checkingSyntax = true;
 
-    const fakeRunner = () =>
-      Promise.reject(new Error('mock runner failure'));
+    const fakeRunner = () => Promise.reject(new Error('mock runner failure'));
 
     try {
       await fakeRunner();
@@ -26,8 +25,7 @@ describe('checkingSyntax is cleared in finally (BUG-8)', () => {
   it('flag is reset when finally block is used', async () => {
     let checkingSyntax = true;
 
-    const fakeRunner = () =>
-      Promise.reject(new Error('mock runner failure'));
+    const fakeRunner = () => Promise.reject(new Error('mock runner failure'));
 
     try {
       await fakeRunner();

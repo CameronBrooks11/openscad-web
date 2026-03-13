@@ -107,7 +107,11 @@ describe('zip-archives registry parity', () => {
 describe('clearHomeDirectory', () => {
   it('removes all files and subdirectories under /home recursively', () => {
     const dirs = new Set(['/home', '/home/project', '/home/project/nested']);
-    const files = new Set(['/home/main.scad', '/home/project/a.scad', '/home/project/nested/b.txt']);
+    const files = new Set([
+      '/home/main.scad',
+      '/home/project/a.scad',
+      '/home/project/nested/b.txt',
+    ]);
 
     const readdirSync = jest.fn((path: string) => {
       switch (path) {

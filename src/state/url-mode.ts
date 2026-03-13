@@ -20,20 +20,22 @@ const ABSOLUTE_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 /** Query-param keys that are reserved by the router and must NOT be treated
  *  as pre-populated customizer variables. */
 const KNOWN_PARAMS = new Set([
-  'mode', 'model', 'controls', 'download',
-  'showAxes', 'color', 'lineNumbers',
-  'skipMultimaterialPrompt', 'autoCompile',
+  'mode',
+  'model',
+  'controls',
+  'download',
+  'showAxes',
+  'color',
+  'lineNumbers',
+  'skipMultimaterialPrompt',
+  'autoCompile',
 ]);
 
 /** Returns true for same-origin relative paths (./  ../  /) and https:// URLs.
  *  Rejects non-HTTPS absolute URLs and all other schemes (javascript:, data:, etc.). */
 export function isAllowedModelUrl(modelUrl: string): boolean {
   const value = modelUrl.trim();
-  if (
-    value.startsWith('./') ||
-    value.startsWith('../') ||
-    value.startsWith('/')
-  ) {
+  if (value.startsWith('./') || value.startsWith('../') || value.startsWith('/')) {
     return true;
   }
   if (!ABSOLUTE_SCHEME_RE.test(value)) return false;
@@ -91,8 +93,7 @@ const MODEL_MAX_BYTES = 2 * 1024 * 1024; // 2 MB hard cap
 
 /** Convert a github.com blob URL to the equivalent raw.githubusercontent.com URL. */
 export function normalizeGitHubUrl(url: string): string {
-  const ghBlobRe =
-    /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/;
+  const ghBlobRe = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/;
   const match = url.match(ghBlobRe);
   if (match) {
     const [, user, repo, branch, path] = match;
@@ -126,9 +127,7 @@ function checkTrustNotice(origin: string): boolean {
 
 /** Fetch an external model file.
  *  Returns the text content or `{ error: string }`. */
-export async function fetchExternalModel(
-  modelUrl: string,
-): Promise<string | { error: string }> {
+export async function fetchExternalModel(modelUrl: string): Promise<string | { error: string }> {
   if (!isAllowedModelUrl(modelUrl)) {
     return { error: `model URL must be https:// or same-origin relative.` };
   }

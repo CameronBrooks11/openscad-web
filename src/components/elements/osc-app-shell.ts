@@ -13,11 +13,15 @@ import './osc-footer.ts';
 @customElement('osc-app-shell')
 export class OscAppShell extends LitElement {
   // Monaco/editor internals rely on global CSS; using light DOM keeps those styles effective.
-  protected override createRenderRoot() { return this; }
+  protected override createRenderRoot() {
+    return this;
+  }
 
   @state() private _st: State | null = null;
   private _model!: Model;
-  private _onState = (e: Event) => { this._st = (e as CustomEvent<State>).detail; };
+  private _onState = (e: Event) => {
+    this._st = (e as CustomEvent<State>).detail;
+  };
 
   override connectedCallback() {
     super.connectedCallback();
@@ -36,10 +40,19 @@ export class OscAppShell extends LitElement {
   }
 
   private _handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'F5') { e.preventDefault(); this._model.render({ isPreview: true, now: true }); }
-    else if (e.key === 'F6') { e.preventDefault(); this._model.render({ isPreview: false, now: true }); }
-    else if (e.key === 'F7') { e.preventDefault(); this._model.export(); }
-    else if (e.key === 's' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); this._model.saveProject(); }
+    if (e.key === 'F5') {
+      e.preventDefault();
+      this._model.render({ isPreview: true, now: true });
+    } else if (e.key === 'F6') {
+      e.preventDefault();
+      this._model.render({ isPreview: false, now: true });
+    } else if (e.key === 'F7') {
+      e.preventDefault();
+      this._model.export();
+    } else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      this._model.saveProject();
+    }
   };
 
   override render() {
@@ -51,21 +64,33 @@ export class OscAppShell extends LitElement {
     const shellStyles = html`
       <style>
         osc-app-shell {
-          display: flex; flex-direction: column; flex: 1;
-          width: 100%; height: 100%; overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
           background: #eef3fc;
         }
         osc-app-shell .panels-multi {
-          display: flex; flex-direction: row; flex: 1; overflow: hidden;
-          min-height: 0; min-width: 0;
+          display: flex;
+          flex-direction: row;
+          flex: 1;
+          overflow: hidden;
+          min-height: 0;
+          min-width: 0;
           border-top: 1px solid #d6deec;
           border-bottom: 1px solid #d6deec;
           background: #d6deec;
         }
         osc-app-shell .panels-single {
-          display: flex; flex-direction: column; flex: 1;
-          position: relative; overflow: hidden;
-          min-height: 0; min-width: 0;
+          display: flex;
+          flex-direction: column;
+          flex: 1;
+          position: relative;
+          overflow: hidden;
+          min-height: 0;
+          min-width: 0;
           border-top: 1px solid #d6deec;
           border-bottom: 1px solid #d6deec;
           background: #d6deec;
@@ -73,41 +98,65 @@ export class OscAppShell extends LitElement {
         osc-app-shell osc-editor-panel,
         osc-app-shell osc-viewer-panel,
         osc-app-shell osc-customizer-panel {
-          display: flex; flex-direction: column;
-          min-width: 0; min-height: 0;
+          display: flex;
+          flex-direction: column;
+          min-width: 0;
+          min-height: 0;
         }
         osc-app-shell .absolute-fill {
-          position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
         }
-        osc-app-shell .opacity-animated { transition: opacity 0.25s ease; }
-        osc-app-shell .opacity-0 { opacity: 0; pointer-events: none; }
+        osc-app-shell .opacity-animated {
+          transition: opacity 0.25s ease;
+        }
+        osc-app-shell .opacity-0 {
+          opacity: 0;
+          pointer-events: none;
+        }
       </style>
     `;
 
     if (mode === 'multi') {
-      const itemCount = (layout.editor ? 1 : 0) + (layout.viewer ? 1 : 0) + (layout.customizer ? 1 : 0);
+      const itemCount =
+        (layout.editor ? 1 : 0) + (layout.viewer ? 1 : 0) + (layout.customizer ? 1 : 0);
       const pct = itemCount > 0 ? Math.floor(100 / itemCount) + '%' : '100%';
 
       return html`
         ${shellStyles}
         <osc-panel-switcher></osc-panel-switcher>
         <div class="panels-multi">
-          ${layout.editor ? html`
-            <osc-editor-panel style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow:hidden;"></osc-editor-panel>
-          ` : ''}
-          ${layout.viewer ? html`
-            <osc-viewer-panel style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow:hidden;"></osc-viewer-panel>
-          ` : ''}
-          ${layout.customizer ? html`
-            <osc-customizer-panel style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow-y:auto;"></osc-customizer-panel>
-          ` : ''}
+          ${layout.editor
+            ? html`
+                <osc-editor-panel
+                  style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow:hidden;"
+                ></osc-editor-panel>
+              `
+            : ''}
+          ${layout.viewer
+            ? html`
+                <osc-viewer-panel
+                  style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow:hidden;"
+                ></osc-viewer-panel>
+              `
+            : ''}
+          ${layout.customizer
+            ? html`
+                <osc-customizer-panel
+                  style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow-y:auto;"
+                ></osc-customizer-panel>
+              `
+            : ''}
         </div>
         <osc-footer></osc-footer>
       `;
     } else {
       // Single panel mode — stack all, use z-index to show focused
       const focus = layout.focus;
-      const zOf = (id: string) => focus === id ? 3 : (id === 'viewer' ? 1 : 0);
+      const zOf = (id: string) => (focus === id ? 3 : id === 'viewer' ? 1 : 0);
 
       return html`
         ${shellStyles}
@@ -115,13 +164,16 @@ export class OscAppShell extends LitElement {
         <div class="panels-single">
           <osc-editor-panel
             class="absolute-fill opacity-animated ${focus !== 'editor' ? 'opacity-0' : ''}"
-            style="z-index:${zOf('editor')};"></osc-editor-panel>
+            style="z-index:${zOf('editor')};"
+          ></osc-editor-panel>
           <osc-viewer-panel
             class="absolute-fill"
-            style="z-index:${zOf('viewer')};"></osc-viewer-panel>
+            style="z-index:${zOf('viewer')};"
+          ></osc-viewer-panel>
           <osc-customizer-panel
             class="absolute-fill opacity-animated ${focus !== 'customizer' ? 'opacity-0' : ''}"
-            style="z-index:${zOf('customizer')};overflow-y:auto;"></osc-customizer-panel>
+            style="z-index:${zOf('customizer')};overflow-y:auto;"
+          ></osc-customizer-panel>
         </div>
         <osc-footer></osc-footer>
       `;

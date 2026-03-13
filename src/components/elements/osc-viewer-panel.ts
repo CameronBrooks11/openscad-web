@@ -14,7 +14,9 @@ import type { Model } from '../../state/model.ts';
 @customElement('osc-viewer-panel')
 export class OscViewerPanel extends LitElement {
   // Light DOM — no shadow root
-  protected override createRenderRoot() { return this; }
+  protected override createRenderRoot() {
+    return this;
+  }
 
   @state() private _st: State | null = null;
   @state() private _toastMessage: string | null = null;
@@ -72,11 +74,15 @@ export class OscViewerPanel extends LitElement {
 
     const st = this._st ?? this._model.state;
     if (st.view.camera) scene.applyCameraState(st.view.camera);
-    scene.onCameraChange = (cam) => { this._model.mutate(s => { s.view.camera = cam; }); };
+    scene.onCameraChange = (cam) => {
+      this._model.mutate((s) => {
+        s.view.camera = cam;
+      });
+    };
     scene.setAxesVisible(!!st.view.showAxes);
     scene.start();
 
-    this._ro = new ResizeObserver(entries => {
+    this._ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
         scene.resize(width, height);
@@ -105,7 +111,9 @@ export class OscViewerPanel extends LitElement {
 
       const dataUrl = scene.renderer.domElement.toDataURL('image/png', 0.5);
       const hash = await imageToThumbhash(dataUrl);
-      this._model.mutate(s => { s.preview = { thumbhash: hash }; });
+      this._model.mutate((s) => {
+        s.preview = { thumbhash: hash };
+      });
     } catch (err) {
       console.error('Error loading OFF geometry:', err);
     }
@@ -114,7 +122,9 @@ export class OscViewerPanel extends LitElement {
   private _showToast(msg: string) {
     this._toastMessage = msg;
     if (this._toastTimer) clearTimeout(this._toastTimer);
-    this._toastTimer = setTimeout(() => { this._toastMessage = null; }, 1500);
+    this._toastTimer = setTimeout(() => {
+      this._toastMessage = null;
+    }, 1500);
   }
 
   override render() {
@@ -129,39 +139,69 @@ export class OscViewerPanel extends LitElement {
     return html`
       <style>
         osc-viewer-panel {
-          display: flex; flex-direction: column; position: relative; flex: 1;
-          width: 100%; height: 100%;
+          display: flex;
+          flex-direction: column;
+          position: relative;
+          flex: 1;
+          width: 100%;
+          height: 100%;
         }
         @keyframes osc-pulse {
-          0%   { opacity: 0.4; }
-          50%  { opacity: 0.7; }
-          100% { opacity: 0.4; }
+          0% {
+            opacity: 0.4;
+          }
+          50% {
+            opacity: 0.7;
+          }
+          100% {
+            opacity: 0.4;
+          }
         }
         .osc-toast {
-          position: absolute; top: 8px; right: 8px;
-          background: rgba(0,0,0,0.65); color: #fff;
-          padding: 4px 12px; border-radius: 4px; font-size: 0.8rem;
-          pointer-events: none; z-index: 10;
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          background: rgba(0, 0, 0, 0.65);
+          color: #fff;
+          padding: 4px 12px;
+          border-radius: 4px;
+          font-size: 0.8rem;
+          pointer-events: none;
+          z-index: 10;
           transition: opacity 0.3s;
         }
       </style>
-      ${isCompiling && placeholderUri ? html`
-        <img src=${placeholderUri} alt=""
-          style="animation:osc-pulse 1.5s ease-in-out infinite;position:absolute;pointer-events:none;width:100%;height:100%;z-index:1;" />
-      ` : ''}
-      <div data-testid="viewer-canvas"
-        style="flex:1;position:relative;width:100%;height:100%;">
-      </div>
+      ${isCompiling && placeholderUri
+        ? html`
+            <img
+              src=${placeholderUri}
+              alt=""
+              style="animation:osc-pulse 1.5s ease-in-out infinite;position:absolute;pointer-events:none;width:100%;height:100%;z-index:1;"
+            />
+          `
+        : ''}
+      <div
+        data-testid="viewer-canvas"
+        style="flex:1;position:relative;width:100%;height:100%;"
+      ></div>
       ${this._toastMessage ? html`<div class="osc-toast">${this._toastMessage}</div>` : ''}
-      <div style="position:absolute;bottom:8px;right:8px;display:flex;flex-direction:column;gap:2px;z-index:2;">
-        ${NAMED_POSITIONS.map(({ name }) => html`
-          <button
-            title="${name} view"
-            @click=${() => { this._scene?.setCameraPosition(name); this._showToast(`${name} view`); }}
-            style="font-size:0.65rem;padding:2px 6px;cursor:pointer;opacity:0.75;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:3px;">
-            ${name}
-          </button>
-        `)}
+      <div
+        style="position:absolute;bottom:8px;right:8px;display:flex;flex-direction:column;gap:2px;z-index:2;"
+      >
+        ${NAMED_POSITIONS.map(
+          ({ name }) => html`
+            <button
+              title="${name} view"
+              @click=${() => {
+                this._scene?.setCameraPosition(name);
+                this._showToast(`${name} view`);
+              }}
+              style="font-size:0.65rem;padding:2px 6px;cursor:pointer;opacity:0.75;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:3px;"
+            >
+              ${name}
+            </button>
+          `,
+        )}
       </div>
     `;
   }

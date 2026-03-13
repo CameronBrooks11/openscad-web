@@ -1,16 +1,15 @@
-
 export const VALID_RENDER_FORMATS = {
-  'off': true,
-  'svg': true,
+  off: true,
+  svg: true,
 };
 export const VALID_EXPORT_FORMATS_2D = {
-  'svg': true,
-  'dxf': true,
+  svg: true,
+  dxf: true,
 };
 export const VALID_EXPORT_FORMATS_3D = {
-  'stl': true,
-  'off': true,
-  'glb': true,
+  stl: true,
+  off: true,
+  glb: true,
   '3mf': true,
 };
 

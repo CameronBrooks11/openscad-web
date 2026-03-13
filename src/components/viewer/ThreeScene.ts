@@ -19,12 +19,12 @@ export interface NamedPosition {
 //   X = right, Y = depth (camera sits at -Y to view the "front"), Z = up
 export const NAMED_POSITIONS: NamedPosition[] = [
   { name: 'Diagonal', position: [100, -100, 100], target: [0, 0, 0] },
-  { name: 'Front',    position: [0,   -100,   0], target: [0, 0, 0] },
-  { name: 'Right',    position: [100,    0,   0], target: [0, 0, 0] },
-  { name: 'Back',     position: [0,    100,   0], target: [0, 0, 0] },
-  { name: 'Left',     position: [-100,   0,   0], target: [0, 0, 0] },
-  { name: 'Top',      position: [0,     0, 100],  target: [0, 0, 0] },
-  { name: 'Bottom',   position: [0,     0,-100],  target: [0, 0, 0] },
+  { name: 'Front', position: [0, -100, 0], target: [0, 0, 0] },
+  { name: 'Right', position: [100, 0, 0], target: [0, 0, 0] },
+  { name: 'Back', position: [0, 100, 0], target: [0, 0, 0] },
+  { name: 'Left', position: [-100, 0, 0], target: [0, 0, 0] },
+  { name: 'Top', position: [0, 0, 100], target: [0, 0, 0] },
+  { name: 'Bottom', position: [0, 0, -100], target: [0, 0, 0] },
 ];
 
 export class ThreeScene {
@@ -152,7 +152,7 @@ export class ThreeScene {
     if (maxDim === 0) return;
 
     const fov = this.camera.fov * (Math.PI / 180);
-    const dist = (maxDim / 2) / Math.tan(fov / 2) * 2;
+    const dist = (maxDim / 2 / Math.tan(fov / 2)) * 2;
 
     const dir = this.camera.position.clone().sub(this.controls.target).normalize();
     this.controls.target.copy(center);
@@ -181,11 +181,9 @@ export class ThreeScene {
   }
 
   setCameraPosition(name: string): void {
-    const entry = NAMED_POSITIONS.find(p => p.name === name) ?? NAMED_POSITIONS[0];
+    const entry = NAMED_POSITIONS.find((p) => p.name === name) ?? NAMED_POSITIONS[0];
     // Scale the stored unit-sphere position to current fit distance.
-    const box = this.modelMesh
-      ? new THREE.Box3().setFromObject(this.modelMesh)
-      : null;
+    const box = this.modelMesh ? new THREE.Box3().setFromObject(this.modelMesh) : null;
     const center = box?.getCenter(new THREE.Vector3()) ?? new THREE.Vector3();
     const rad = box ? box.getSize(new THREE.Vector3()).length() / 2 : 100;
 
@@ -203,14 +201,32 @@ export class ThreeScene {
 
   private buildAxes(length = 50): THREE.LineSegments {
     const points = [
-      new THREE.Vector3(0, 0, 0), new THREE.Vector3(length, 0, 0),
-      new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, length, 0),
-      new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, length),
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(length, 0, 0),
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, length, 0),
+      new THREE.Vector3(0, 0, 0),
+      new THREE.Vector3(0, 0, length),
     ];
     const colors = [
-      1, 0, 0,  1, 0, 0,   // X red
-      0, 1, 0,  0, 1, 0,   // Y green
-      0, 0, 1,  0, 0, 1,   // Z blue
+      1,
+      0,
+      0,
+      1,
+      0,
+      0, // X red
+      0,
+      1,
+      0,
+      0,
+      1,
+      0, // Y green
+      0,
+      0,
+      1,
+      0,
+      0,
+      1, // Z blue
     ];
     const geometry = new THREE.BufferGeometry().setFromPoints(points);
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));

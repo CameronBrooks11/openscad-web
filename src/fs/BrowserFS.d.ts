@@ -7,7 +7,7 @@ declare interface FS {
   readdirSync(path: string): string[];
   symlink(target: string, source: string): void;
   readFileSync(path: string): BufferSource;
-  lstatSync(path: string): {isDirectory(): boolean};
+  lstatSync(path: string): { isDirectory(): boolean };
 }
 
 declare interface EmscriptenFS extends FS {}
@@ -37,4 +37,3 @@ declare let BrowserFS: BrowserFSInterface;
 declare module 'browserfs' {
   export = BrowserFS;
 }
-

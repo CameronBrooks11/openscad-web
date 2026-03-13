@@ -7,19 +7,25 @@ import openscadLanguage from './openscad-language';
 
 // https://microsoft.github.io/monaco-editor/playground.html#extending-language-services-custom-languages
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function registerOpenSCADLanguage(fs: any, workingDir: string, zipArchives: ZipArchive[]) {
+export async function registerOpenSCADLanguage(
+  fs: any,
+  workingDir: string,
+  zipArchives: ZipArchive[],
+) {
   const monaco = await loader.init();
-  
+
   monaco.languages.register({
     id: 'openscad',
     extensions: ['.scad'],
-    mimetypes: ["text/openscad"],
+    mimetypes: ['text/openscad'],
   });
 
   const { conf, language } = openscadLanguage;
   monaco.languages.setLanguageConfiguration('openscad', conf);
   monaco.languages.setMonarchTokensProvider('openscad', language);
 
-  monaco.languages.registerCompletionItemProvider('openscad',
-      await buildOpenSCADCompletionItemProvider(fs, workingDir, zipArchives));
+  monaco.languages.registerCompletionItemProvider(
+    'openscad',
+    await buildOpenSCADCompletionItemProvider(fs, workingDir, zipArchives),
+  );
 }

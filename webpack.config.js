@@ -10,7 +10,6 @@ const __dirname = dirname(__filename);
 
 const isDev = process.env.NODE_ENV !== 'production';
 
-
 /** @type {import('webpack').Configuration[]} */
 const config = [
   {
@@ -33,9 +32,9 @@ const config = [
                 target: 'ES2022',
                 lib: ['WebWorker', 'ES2022'],
                 sourceMap: isDev,
-                inlineSources: isDev
-              }
-            }
+                inlineSources: isDev,
+              },
+            },
           },
           exclude: /node_modules/,
         },
@@ -46,8 +45,8 @@ const config = [
             {
               loader: 'css-loader',
               options: { url: false },
-            }
-          ]
+            },
+          ],
         },
         // {
         //   test: /\.(png|gif|woff|woff2|eot|ttf|svg)$/,
@@ -74,42 +73,40 @@ const config = [
       new webpack.EnvironmentPlugin({
         'process.env.NODE_ENV': 'development',
       }),
-      ...(process.env.NODE_ENV === 'production' ? [
-        new WorkboxPlugin.GenerateSW({
-          exclude: [
-            /(^|\/)\./,
-            /\.map$/,
-            /^manifest.*\.js$/,
-          ],
-          // these options encourage the ServiceWorkers to get in there fast
-          // and not allow any straggling 'old' SWs to hang around
-          swDest: path.join(__dirname, 'dist', 'sw.js'),
-          maximumFileSizeToCacheInBytes: 200 * 1024 * 1024,
-          clientsClaim: true,
-          skipWaiting: true,
-          runtimeCaching: [
-            {
-              // Same-origin assets: use stale-while-revalidate for fast loads
-              urlPattern: ({ url }) => url.origin === self.location.origin,
-              handler: 'StaleWhileRevalidate',
-              options: {
-                cacheName: 'same-origin-assets',
-                expiration: { maxEntries: 200, purgeOnQuotaError: true },
-              },
-            },
-            {
-              // Large stable assets (.wasm, library zips): cache-first
-              urlPattern: ({ url }) =>
-                url.pathname.endsWith('.wasm') || url.pathname.includes('/libraries/'),
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'large-assets',
-                expiration: { maxEntries: 50, purgeOnQuotaError: true },
-              },
-            },
-          ],
-        }),
-      ] : []),
+      ...(process.env.NODE_ENV === 'production'
+        ? [
+            new WorkboxPlugin.GenerateSW({
+              exclude: [/(^|\/)\./, /\.map$/, /^manifest.*\.js$/],
+              // these options encourage the ServiceWorkers to get in there fast
+              // and not allow any straggling 'old' SWs to hang around
+              swDest: path.join(__dirname, 'dist', 'sw.js'),
+              maximumFileSizeToCacheInBytes: 200 * 1024 * 1024,
+              clientsClaim: true,
+              skipWaiting: true,
+              runtimeCaching: [
+                {
+                  // Same-origin assets: use stale-while-revalidate for fast loads
+                  urlPattern: ({ url }) => url.origin === self.location.origin,
+                  handler: 'StaleWhileRevalidate',
+                  options: {
+                    cacheName: 'same-origin-assets',
+                    expiration: { maxEntries: 200, purgeOnQuotaError: true },
+                  },
+                },
+                {
+                  // Large stable assets (.wasm, library zips): cache-first
+                  urlPattern: ({ url }) =>
+                    url.pathname.endsWith('.wasm') || url.pathname.includes('/libraries/'),
+                  handler: 'CacheFirst',
+                  options: {
+                    cacheName: 'large-assets',
+                    expiration: { maxEntries: 50, purgeOnQuotaError: true },
+                  },
+                },
+              ],
+            }),
+          ]
+        : []),
       new CopyPlugin({
         patterns: [
           {
@@ -159,32 +156,29 @@ const config = [
                 target: 'ES2022',
                 lib: ['WebWorker', 'ES2022'],
                 sourceMap: isDev,
-                inlineSources: isDev
-              }
-            }
+                inlineSources: isDev,
+              },
+            },
           },
           exclude: /node_modules/,
         },
         {
           test: /\.wasm$/,
-          type: 'asset/resource'
-        }
-      ]
+          type: 'asset/resource',
+        },
+      ],
     },
     resolve: {
       extensions: ['.tsx', '.ts', '.js', '.mjs', '.wasm'],
-      modules: [
-        path.resolve(__dirname, 'src'),
-        'node_modules'
-      ],
+      modules: [path.resolve(__dirname, 'src'), 'node_modules'],
       fallback: {
         fs: false,
         path: false,
-        module: false
-      }
+        module: false,
+      },
     },
     externals: {
-      'browserfs': 'BrowserFS'
+      browserfs: 'BrowserFS',
     },
     plugins: [
       new webpack.EnvironmentPlugin({

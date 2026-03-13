@@ -23,7 +23,7 @@ Licenses: see [LICENSE.md](./LICENSE.md).
 - Autocomplete of imports
 - Autocomplete of symbols / function calls (pseudo-parses file and its transitive imports)
 - Responsive layout. On small screens editor and viewer are stacked onto each other, while on larger screens they can be side-by-side
-- Installable as a PWA (persists edits in BrowserFS/IndexedDB instead of the hash fragment). On iOS just open the sharing panel and tap "Add to Home Screen". *Should not* require any internet connectivity once cached.
+- Installable as a PWA (persists edits in BrowserFS/IndexedDB instead of the hash fragment). On iOS just open the sharing panel and tap "Add to Home Screen". _Should not_ require any internet connectivity once cached.
 
 ## Roadmap
 
@@ -40,7 +40,7 @@ Licenses: see [LICENSE.md](./LICENSE.md).
 - [ ] Merge modifiers rendering code to openscad
 - Model /home fs in shared state. have two clear paths: /libraries for builtins, and /home for user data. State pointing to /libraries paths needs not store the data except if there's overrides (flagged as modifications in the file picker)
 - Drag and drop of files (SCAD, STL, etc) and Zip archives. For assets, auto insert the corresponding import.
-- Fuller PWA support w/ link Sharing, File opening / association to *.scad files... 
+- Fuller PWA support w/ link Sharing, File opening / association to \*.scad files...
 - Look into accessibility
 - Setup [OPENSCADPATH](https://en.wikibooks.org/wiki/OpenSCAD_User_Manual/Libraries#Setting_OPENSCADPATH) env var w/ Emscripten to ensure examples that include assets / import local files will run fine.
 - Detect which bundled libraries are included / used in the sources and only download these rather than wait for all of the zips. Means the file explorer would need to be more lazy or have some prebuilt hierarchy.
@@ -51,16 +51,17 @@ Licenses: see [LICENSE.md](./LICENSE.md).
 The project uses a **webpack-based build system** that reads library metadata from `libs-config.json` to automatically download, clone, and package OpenSCAD libraries and dependencies. This replaces the previous Makefile approach with a more standard, maintainable solution.
 
 Prerequisites:
-*   wget or curl
-*   Node.js (>=24.0.0)
-*   npm
-*   git
-*   zip
-*   Docker able to run amd64 containers (only needed if building WASM from source). If running on a different platform (including Silicon Mac), you can add support for amd64 images through QEMU with:
 
-  ```bash
-  docker run --privileged --rm tonistiigi/binfmt --install all
-  ```
+- wget or curl
+- Node.js (>=24.0.0)
+- npm
+- git
+- zip
+- Docker able to run amd64 containers (only needed if building WASM from source). If running on a different platform (including Silicon Mac), you can add support for amd64 images through QEMU with:
+
+```bash
+docker run --privileged --rm tonistiigi/binfmt --install all
+```
 
 Local dev:
 
@@ -86,7 +87,7 @@ Deployment (edit "homepage" in `package.json` to match your deployment root!):
 npm install
 npm run build:all  # Build libraries and compile the application
 
-rm -fR ../ochafik.github.io/openscad2 && cp -R dist ../ochafik.github.io/openscad2 
+rm -fR ../ochafik.github.io/openscad2 && cp -R dist ../ochafik.github.io/openscad2
 # Now commit and push changes, wait for site update and enjoy!
 ```
 
@@ -99,7 +100,7 @@ The build system fetches a prebuilt OpenSCAD web WASM binary, but you can build 
   ```bash
   rm -fR libs/openscad
   ln -s $PWD/../absolute/path/to/your/openscad libs/openscad
-  
+
   # If you had a native build directory, delete it.
   rm -fR libs/openscad/build
   ```
@@ -134,7 +135,7 @@ In `libs-config.json`, add an entry like this:
 ```json
 {
   "name": "LibraryName",
-  "repo": "https://github.com/user/repo.git", 
+  "repo": "https://github.com/user/repo.git",
   "branch": "main",
   "zipIncludes": ["*.scad", "LICENSE", "examples"],
   "zipExcludes": ["**/tests/**"],
@@ -143,6 +144,7 @@ In `libs-config.json`, add an entry like this:
 ```
 
 Available build commands:
+
 - `npm run build:libs` - Build all libraries
 - `npm run build:libs:clean` - Clean all build artifacts
 - `npm run build:libs:wasm` - Download/build just the WASM binary

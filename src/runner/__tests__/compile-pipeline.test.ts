@@ -55,7 +55,7 @@ class FakeWorker {
     if (msg.type !== 'compile') return;
     const spec = _workerSpecs.shift();
     if (!spec) throw new Error('FakeWorker: no spec queued for this compile call');
-    const mergedOutputs = (spec.stderrLines ?? []).map(text => ({ stderr: text }));
+    const mergedOutputs = (spec.stderrLines ?? []).map((text) => ({ stderr: text }));
     const response = {
       type: 'result' as const,
       id: msg.id,
@@ -95,9 +95,7 @@ describe('compile pipeline — feature flags', () => {
   });
 
   it('does not enable lazy-union', () => {
-    const enableFlags = getDefaultCompileArgs().filter(
-      (a: string) => a.startsWith('--enable='),
-    );
+    const enableFlags = getDefaultCompileArgs().filter((a: string) => a.startsWith('--enable='));
     expect(enableFlags).not.toContain('--enable=lazy-union');
   });
 });

@@ -58,7 +58,9 @@ describe('Model EventTarget state emission', () => {
       receivedStates.push((e as CustomEvent<State>).detail);
     });
 
-    const changed = model.mutate(s => { s.view.color = '#ff0000'; });
+    const changed = model.mutate((s) => {
+      s.view.color = '#ff0000';
+    });
     expect(changed).toBe(true);
     expect(receivedStates).toHaveLength(1);
     expect(receivedStates[0].view.color).toBe('#ff0000');
@@ -72,7 +74,9 @@ describe('Model EventTarget state emission', () => {
     });
 
     // Mutation that sets the same value — should not dispatch
-    const changed = model.mutate(s => { s.view.color = minimalState.view.color; });
+    const changed = model.mutate((s) => {
+      s.view.color = minimalState.view.color;
+    });
     expect(changed).toBe(false);
     expect(receivedStates).toHaveLength(0);
   });
@@ -84,7 +88,9 @@ describe('Model EventTarget state emission', () => {
       capturedState = (e as CustomEvent<State>).detail;
     });
 
-    model.mutate(s => { s.view.showAxes = true; });
+    model.mutate((s) => {
+      s.view.showAxes = true;
+    });
     expect(capturedState).not.toBeNull();
     expect(capturedState!.view.showAxes).toBe(true);
     // event detail IS the new model.state

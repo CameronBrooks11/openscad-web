@@ -55,7 +55,9 @@ describe('parseUrlMode — mode routing', () => {
   });
 
   it('parses mode=embed with embedControls and embedDownload', () => {
-    const result = parseUrlMode('?mode=embed&model=https://example.com/m.scad&controls=true&download=true');
+    const result = parseUrlMode(
+      '?mode=embed&model=https://example.com/m.scad&controls=true&download=true',
+    );
     expect('error' in result).toBe(false);
     if ('error' in result) return;
     expect(result.mode).toBe('embed');

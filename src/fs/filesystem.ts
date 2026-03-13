@@ -1,8 +1,8 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import { zipArchives, ZipArchive } from "./zip-archives.generated.ts";
+import { zipArchives, ZipArchive } from './zip-archives.generated.ts';
 
-declare let BrowserFS: BrowserFSInterface
+declare let BrowserFS: BrowserFSInterface;
 
 // Re-export for consumers that need the type
 export type { ZipArchive };
@@ -10,7 +10,7 @@ export type { ZipArchive };
 export const getParentDir = (path: string) => {
   const d = path.split('/').slice(0, -1).join('/');
   return d === '' ? (path.startsWith('/') ? '/' : '.') : d;
-}
+};
 
 export function join(a: string, b: string): string {
   if (a === '.') return b;
@@ -33,7 +33,8 @@ function createBFSBackend(fsName: string, options?: Record<string, unknown>): Pr
     }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     FSCtor.Create(options ?? {}, (err: any, instance: any) => {
-      if (err) reject(err); else resolve(instance);
+      if (err) reject(err);
+      else resolve(instance);
     });
   });
 }
@@ -55,9 +56,13 @@ let _rootMFS: any = null;
  *
  * Returns the Node-compat FS API (`BFSRequire('fs')`).
  */
-export async function createEditorFS({ allowPersistence }: { allowPersistence: boolean }): Promise<FS> {
+export async function createEditorFS({
+  allowPersistence,
+}: {
+  allowPersistence: boolean;
+}): Promise<FS> {
   // Fonts are always pre-loaded — needed for any text() call in OpenSCAD
-  const fontsBuf = await fetch('./libraries/fonts.zip').then(r => r.arrayBuffer());
+  const fontsBuf = await fetch('./libraries/fonts.zip').then((r) => r.arrayBuffer());
   const fontsFS = await createBFSBackend('ZipFS', {
     zipData: BrowserFS.BFSRequire('buffer').Buffer.from(fontsBuf),
   });
@@ -68,14 +73,14 @@ export async function createEditorFS({ allowPersistence }: { allowPersistence: b
     allowPersistence ? { storeName: 'openscad-home' } : {},
   );
   const libsFS = await createBFSBackend('InMemory');
-  const tmpFS  = await createBFSBackend('InMemory');
+  const tmpFS = await createBFSBackend('InMemory');
 
   _rootMFS = await createBFSBackend('MountableFileSystem', {
-    '/':          rootFS,
-    '/home':      homeFS,
+    '/': rootFS,
+    '/home': homeFS,
     '/libraries': libsFS,
-    '/tmp':       tmpFS,
-    '/fonts':     fontsFS,
+    '/tmp': tmpFS,
+    '/fonts': fontsFS,
   });
 
   const ctx = typeof window === 'object' ? window : self;
@@ -86,7 +91,7 @@ export async function createEditorFS({ allowPersistence }: { allowPersistence: b
   if (allowPersistence && 'storage' in navigator) {
     const { usage, quota } = await navigator.storage.estimate();
     if (usage && quota && usage / quota > 0.8) {
-      console.warn(`[openscad-web] Storage at ${Math.round(usage / quota * 100)}% of quota`);
+      console.warn(`[openscad-web] Storage at ${Math.round((usage / quota) * 100)}% of quota`);
     }
   }
 
@@ -118,10 +123,11 @@ const mountedLibraryZips = new Set<string>();
  */
 async function fetchAndMountLibrary(name: string): Promise<void> {
   if (mountedLibraryZips.has(name)) return;
-  const archive = zipArchives.find(a => a.name === name);
+  const archive = zipArchives.find((a) => a.name === name);
   if (!archive) return; // unknown library — skip silently
-  if (!_rootMFS) throw new Error('[filesystem] createEditorFS() must be called before mountDemandLibraries()');
-  const buf = await fetch(archive.zipPath).then(r => r.arrayBuffer());
+  if (!_rootMFS)
+    throw new Error('[filesystem] createEditorFS() must be called before mountDemandLibraries()');
+  const buf = await fetch(archive.zipPath).then((r) => r.arrayBuffer());
   const zipFS = await createBFSBackend('ZipFS', {
     zipData: BrowserFS.BFSRequire('buffer').Buffer.from(buf),
   });
@@ -135,10 +141,13 @@ async function fetchAndMountLibrary(name: string): Promise<void> {
  * (e.g. when the active source path itself lives inside a library directory).
  * Returns the resolved set of mounted library names.
  */
-export async function mountDemandLibraries(sourceTexts: string[], extraNames: string[] = []): Promise<string[]> {
+export async function mountDemandLibraries(
+  sourceTexts: string[],
+  extraNames: string[] = [],
+): Promise<string[]> {
   const needed = [...new Set([...sourceTexts.flatMap(extractLibraryNames), ...extraNames])];
   await Promise.all(needed.map(fetchAndMountLibrary));
-  return needed.filter(n => mountedLibraryZips.has(n));
+  return needed.filter((n) => mountedLibraryZips.has(n));
 }
 
 /**
@@ -146,7 +155,7 @@ export async function mountDemandLibraries(sourceTexts: string[], extraNames: st
  * Uses the same session cache as demand loading, so per-job compile calls are free.
  */
 export async function preloadAllLibraries(): Promise<void> {
-  await Promise.all(zipArchives.map(a => fetchAndMountLibrary(a.name)));
+  await Promise.all(zipArchives.map((a) => fetchAndMountLibrary(a.name)));
 }
 
 // ---------------------------------------------------------------------------
@@ -168,20 +177,24 @@ export async function symlinkLibraries(
     }
   };
 
-  await Promise.all(archiveNames.map(n => (async () => {
-    const archive = zipArchives.find(a => a.name === n);
-    if (!archive) throw new Error(`Archive named ${n} not found in registry`);
-    const { symlinks } = archive;
-    if (symlinks) {
-      for (const [from, to] of Object.entries(symlinks)) {
-        const target = to === '.' ? `${prefix}/${n}` : `${prefix}/${n}/${to}`;
-        const source = from.startsWith('/') ? from : `${cwd === '/' ? '' : cwd}/${from}`;
-        await createSymlink(target, source);
-      }
-    } else {
-      await createSymlink(`${prefix}/${n}`, `${cwd === '/' ? '' : cwd}/${n}`);
-    }
-  })()));
+  await Promise.all(
+    archiveNames.map((n) =>
+      (async () => {
+        const archive = zipArchives.find((a) => a.name === n);
+        if (!archive) throw new Error(`Archive named ${n} not found in registry`);
+        const { symlinks } = archive;
+        if (symlinks) {
+          for (const [from, to] of Object.entries(symlinks)) {
+            const target = to === '.' ? `${prefix}/${n}` : `${prefix}/${n}/${to}`;
+            const source = from.startsWith('/') ? from : `${cwd === '/' ? '' : cwd}/${from}`;
+            await createSymlink(target, source);
+          }
+        } else {
+          await createSymlink(`${prefix}/${n}`, `${cwd === '/' ? '' : cwd}/${n}`);
+        }
+      })(),
+    ),
+  );
 }
 
 // ---------------------------------------------------------------------------

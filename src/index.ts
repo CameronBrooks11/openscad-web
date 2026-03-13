@@ -68,7 +68,9 @@ window.addEventListener('load', async () => {
   if (isInStandaloneMode()) {
     const bfs: FS = BrowserFS.BFSRequire('fs');
     try {
-      const data = JSON.parse(new TextDecoder('utf-8').decode(bfs.readFileSync('/home/state.json')));
+      const data = JSON.parse(
+        new TextDecoder('utf-8').decode(bfs.readFileSync('/home/state.json')),
+      );
       const { view, params } = data;
       persistedState = { view, params };
     } catch (e) {
@@ -103,12 +105,16 @@ window.addEventListener('load', async () => {
   setModel(model);
 
   if (urlModeResult.mode === 'customizer') {
-    const shell = document.createElement('osc-customizer-shell') as HTMLElement & { urlParams: typeof urlModeResult };
+    const shell = document.createElement('osc-customizer-shell') as HTMLElement & {
+      urlParams: typeof urlModeResult;
+    };
     shell.style.cssText = 'display:flex;flex:1;width:100%;height:100%;';
     shell.urlParams = urlModeResult;
     rootEl.appendChild(shell);
   } else if (urlModeResult.mode === 'embed') {
-    const shell = document.createElement('osc-embed-shell') as HTMLElement & { urlParams: typeof urlModeResult };
+    const shell = document.createElement('osc-embed-shell') as HTMLElement & {
+      urlParams: typeof urlModeResult;
+    };
     shell.style.cssText = 'display:flex;flex:1;width:100%;height:100%;';
     shell.urlParams = urlModeResult;
     rootEl.appendChild(shell);

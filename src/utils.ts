@@ -1,9 +1,13 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import { Source } from "./state/app-state.ts";
+import { Source } from './state/app-state.ts';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function mapObject(o: any, f: (key: string, value: any) => any, ifPred: (key: string) => boolean) {
+export function mapObject(
+  o: any,
+  f: (key: string, value: any) => any,
+  ifPred: (key: string) => boolean,
+) {
   const ret = [];
   for (const key of Object.keys(o)) {
     if (ifPred && !ifPred(key)) {
@@ -15,70 +19,84 @@ export function mapObject(o: any, f: (key: string, value: any) => any, ifPred: (
 }
 
 type Killer = () => void;
-export type AbortablePromise<T> = Promise<T> & {kill: Killer}
+export type AbortablePromise<T> = Promise<T> & { kill: Killer };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function AbortablePromise<T>(f: (resolve: (result: T) => void, reject: (error: any) => void) => Killer): AbortablePromise<T>
-{
+export function AbortablePromise<T>(
+  f: (resolve: (result: T) => void, reject: (error: any) => void) => Killer,
+): AbortablePromise<T> {
   let kill: Killer;
   const promise = new Promise<T>((res, rej) => {
     kill = f(res, rej);
   });
-  return Object.assign(promise, {kill: kill!});
+  return Object.assign(promise, { kill: kill! });
 }
 
 // <T extends any[]>(...args: T)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function turnIntoDelayableExecution<T extends any[], R>(
-    delay: number,
-    job: (...args: T) => AbortablePromise<R>) {
+  delay: number,
+  job: (...args: T) => AbortablePromise<R>,
+) {
   let pendingId: number | null;
   let runningJobKillSignal: (() => void) | null;
-  return (...args: T) => ({now}: {now: boolean}) => AbortablePromise<R>((resolve, reject) => {
-    let abortablePromise: AbortablePromise<R> | undefined = undefined;
-    (async () => {
-      const doExecute = async () => {
-        if (runningJobKillSignal) {
-          runningJobKillSignal();
-          runningJobKillSignal = null;
-        }
-        abortablePromise = job(...args);
-        runningJobKillSignal = abortablePromise.kill;
-        try {
-          resolve(await abortablePromise);
-        } catch (e) {
-          reject(e);
-        } finally {
-          runningJobKillSignal = null;
-        }
-      }
-      if (pendingId) {
-        clearTimeout(pendingId);
-        pendingId = null;
-      }
-      if (now) {
-        doExecute();
-      } else {
-        pendingId = window.setTimeout(doExecute, delay);
-      }
-    })();
-    return () => {
-      if (pendingId) {
-        clearTimeout(pendingId);
-        pendingId = null;
-      }
-      abortablePromise?.kill();
-    };
-  });
+  return (...args: T) =>
+    ({ now }: { now: boolean }) =>
+      AbortablePromise<R>((resolve, reject) => {
+        let abortablePromise: AbortablePromise<R> | undefined = undefined;
+        (async () => {
+          const doExecute = async () => {
+            if (runningJobKillSignal) {
+              runningJobKillSignal();
+              runningJobKillSignal = null;
+            }
+            abortablePromise = job(...args);
+            runningJobKillSignal = abortablePromise.kill;
+            try {
+              resolve(await abortablePromise);
+            } catch (e) {
+              reject(e);
+            } finally {
+              runningJobKillSignal = null;
+            }
+          };
+          if (pendingId) {
+            clearTimeout(pendingId);
+            pendingId = null;
+          }
+          if (now) {
+            doExecute();
+          } else {
+            pendingId = window.setTimeout(doExecute, delay);
+          }
+        })();
+        return () => {
+          if (pendingId) {
+            clearTimeout(pendingId);
+            pendingId = null;
+          }
+          abortablePromise?.kill();
+        };
+      });
 }
 
 export function validateStringEnum<T extends string>(
-    s: T, values: T[],
-    orElse: (s: string) => T = s => { throw new Error(`Unexpected value: ${s} (valid values: ${values.join(', ')})`); }): T {
+  s: T,
+  values: T[],
+  orElse: (s: string) => T = (s) => {
+    throw new Error(`Unexpected value: ${s} (valid values: ${values.join(', ')})`);
+  },
+): T {
   return values.indexOf(s) < 0 ? orElse(s) : s;
 }
-export const validateBoolean = (s: boolean, orElse: () => boolean = () => false) => typeof s === 'boolean' ? s : orElse(); 
-export const validateString = (s: string, orElse: () => string = () => '') => s != null && typeof s === 'string' ? s : orElse();
-export const validateArray = <T>(a: Array<T>, validateElement: (e: T) => T, orElse: () => T[] = () => []) => {
+export const validateBoolean = (s: boolean, orElse: () => boolean = () => false) =>
+  typeof s === 'boolean' ? s : orElse();
+export const validateString = (s: string, orElse: () => string = () => '') =>
+  s != null && typeof s === 'string' ? s : orElse();
+export const validateArray = <T>(
+  a: Array<T>,
+  validateElement: (e: T) => T,
+  orElse: () => T[] = () => [],
+) => {
   if (!(a instanceof Array)) return orElse();
   return a.map(validateElement);
 };
@@ -96,8 +114,7 @@ export function formatBytes(n: number) {
 }
 
 export function formatMillis(n: number) {
-  if (n < 1000)
-    return `${Math.floor(n)}ms`;
+  if (n < 1000) return `${Math.floor(n)}ms`;
 
   return `${Math.floor(n / 100) / 10}sec`;
 }
@@ -105,28 +122,33 @@ export function formatMillis(n: number) {
 // https://medium.com/quick-code/100vh-problem-with-ios-safari-92ab23c852a8
 export function registerCustomAppHeightCSSProperty() {
   const updateAppHeight = () => {
-    document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`)
-  }
-  window.addEventListener('resize', updateAppHeight)
+    document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+  };
+  window.addEventListener('resize', updateAppHeight);
   updateAppHeight();
 }
 
 // In PWA mode, persist files in LocalStorage instead of the hash fragment.
 export function isInStandaloneMode() {
-  return window.matchMedia('(display-mode: standalone)').matches ||
-    Boolean(('standalone' in window.navigator) && (window.navigator as Navigator & {standalone?: boolean}).standalone);
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    Boolean(
+      'standalone' in window.navigator &&
+      (window.navigator as Navigator & { standalone?: boolean }).standalone,
+    )
+  );
 }
 
 export function downloadUrl(url: string, filename: string) {
   const link = document.createElement('a');
   link.href = url;
-  link.setAttribute('download', filename)
+  link.setAttribute('download', filename);
   document.body.appendChild(link);
   link.click();
   link.parentNode?.removeChild(link);
 }
 
-export async function fetchSource(fs: FS, {content, path, url}: Source): Promise<Uint8Array> {
+export async function fetchSource(fs: FS, { content, path, url }: Source): Promise<Uint8Array> {
   const isText = path.endsWith('.scad') || path.endsWith('.json');
   if (content) {
     return new TextEncoder().encode(content);
@@ -145,7 +167,7 @@ export async function fetchSource(fs: FS, {content, path, url}: Source): Promise
     const data = fs.readFileSync(path);
     return new Uint8Array('buffer' in data ? data.buffer : data);
   } else {
-    throw new Error('Invalid source: ' + JSON.stringify({path, content, url}));
+    throw new Error('Invalid source: ' + JSON.stringify({ path, content, url }));
   }
 }
 
@@ -155,7 +177,7 @@ export function readFileAsDataURL(file: File) {
     const reader = new FileReader();
     reader.onloadend = () => {
       res(reader.result as string);
-    }
+    };
     reader.onerror = rej;
     reader.readAsDataURL(file);
   });

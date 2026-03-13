@@ -29,39 +29,84 @@ const FORMAT_OPTIONS: FormatOption[] = [
 @customElement('osc-export-button')
 export class OscExportButton extends LitElement {
   static override styles = css`
-    :host { display: inline-flex; align-items: center; gap: 2px; }
-    .split { display: inline-flex; }
+    :host {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .split {
+      display: inline-flex;
+    }
     button {
-      cursor: pointer; padding: 4px 10px;
-      border: 1px solid #bbb; background: #f5f5f5; font-size: 0.85rem;
+      cursor: pointer;
+      padding: 4px 10px;
+      border: 1px solid #bbb;
+      background: #f5f5f5;
+      font-size: 0.85rem;
       color: #333;
     }
-    button:hover:not(:disabled) { background: #e8e8e8; }
-    button:disabled { opacity: 0.5; cursor: not-allowed; }
-    button.main { border-radius: 4px 0 0 4px; border-right: none; }
-    button.arrow { border-radius: 0 4px 4px 0; padding: 4px 6px; }
-    details { display: inline-block; position: relative; }
-    details summary { display: none; }
+    button:hover:not(:disabled) {
+      background: #e8e8e8;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    button.main {
+      border-radius: 4px 0 0 4px;
+      border-right: none;
+    }
+    button.arrow {
+      border-radius: 0 4px 4px 0;
+      padding: 4px 6px;
+    }
+    details {
+      display: inline-block;
+      position: relative;
+    }
+    details summary {
+      display: none;
+    }
     .menu {
-      position: absolute; left: 0; top: 100%;
-      background: #fff; border: 1px solid #ddd;
-      border-radius: 4px; padding: 4px 0;
-      z-index: 1000; min-width: 220px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+      position: absolute;
+      left: 0;
+      top: 100%;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 4px 0;
+      z-index: 1000;
+      min-width: 220px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
     }
     .menu-item {
-      display: block; width: 100%; padding: 8px 16px;
-      border: none; background: none; cursor: pointer;
-      text-align: left; white-space: nowrap; font-size: 0.9rem; color: #333;
+      display: block;
+      width: 100%;
+      padding: 8px 16px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      text-align: left;
+      white-space: nowrap;
+      font-size: 0.9rem;
+      color: #333;
     }
-    .menu-item:hover { background: #f0f0f0; }
-    hr { margin: 4px 0; border: none; border-top: 1px solid #eee; }
+    .menu-item:hover {
+      background: #f0f0f0;
+    }
+    hr {
+      margin: 4px 0;
+      border: none;
+      border-top: 1px solid #eee;
+    }
   `;
 
   @state() private _st: State | null = null;
   @state() private _open = false;
   private _model!: Model;
-  private _onState = (e: Event) => { this._st = (e as CustomEvent<State>).detail; };
+  private _onState = (e: Event) => {
+    this._st = (e as CustomEvent<State>).detail;
+  };
 
   private _closeOnOutsideClick = (e: MouseEvent) => {
     if (!e.composedPath().includes(this)) this._open = false;
@@ -86,9 +131,9 @@ export class OscExportButton extends LitElement {
     if (!st) return html``;
 
     const is2D = !!st.is2D;
-    const options = FORMAT_OPTIONS.filter(f => f.is2D === is2D);
+    const options = FORMAT_OPTIONS.filter((f) => f.is2D === is2D);
     const currentKey = is2D ? st.params.exportFormat2D : st.params.exportFormat3D;
-    const selected = options.find(f => f.key === currentKey) ?? options[0];
+    const selected = options.find((f) => f.key === currentKey) ?? options[0];
     const disabled = !st.output || !!st.output.isPreview || !!st.rendering || !!st.exporting;
 
     return html`
@@ -96,23 +141,47 @@ export class OscExportButton extends LitElement {
         <button class="main" ?disabled=${disabled} @click=${() => this._model.export()}>
           ⬇ ${selected?.buttonLabel ?? 'Export'}
         </button>
-        <button class="arrow" ?disabled=${disabled} @click=${this._toggleMenu} title="Choose format">▾</button>
+        <button
+          class="arrow"
+          ?disabled=${disabled}
+          @click=${this._toggleMenu}
+          title="Choose format"
+        >
+          ▾
+        </button>
       </div>
-      ${this._open ? html`
-        <div class="menu" style="position:absolute; z-index:1000; margin-top:30px;">
-          ${options.map(f => html`
-            <button class="menu-item" @click=${() => this._selectFormat(f.key, is2D)}>
-              ${f.label}
-            </button>
-          `)}
-          ${!is2D ? html`
-            <hr />
-            <button class="menu-item" @click=${() => { this._open = false; this._model.mutate(s => { s.view.extruderPickerVisibility = 'editing'; }); }}>
-              Edit materials${(st.params.extruderColors ?? []).length > 0 ? ` (${(st.params.extruderColors ?? []).length})` : ''}
-            </button>
-          ` : ''}
-        </div>
-      ` : ''}
+      ${this._open
+        ? html`
+            <div class="menu" style="position:absolute; z-index:1000; margin-top:30px;">
+              ${options.map(
+                (f) => html`
+                  <button class="menu-item" @click=${() => this._selectFormat(f.key, is2D)}>
+                    ${f.label}
+                  </button>
+                `,
+              )}
+              ${!is2D
+                ? html`
+                    <hr />
+                    <button
+                      class="menu-item"
+                      @click=${() => {
+                        this._open = false;
+                        this._model.mutate((s) => {
+                          s.view.extruderPickerVisibility = 'editing';
+                        });
+                      }}
+                    >
+                      Edit
+                      materials${(st.params.extruderColors ?? []).length > 0
+                        ? ` (${(st.params.extruderColors ?? []).length})`
+                        : ''}
+                    </button>
+                  `
+                : ''}
+            </div>
+          `
+        : ''}
     `;
   }
 

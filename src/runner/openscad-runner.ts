@@ -1,8 +1,8 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import { AbortablePromise } from "../utils.ts";
-import { Source } from "../state/app-state.ts";
-import { mountDemandLibraries } from "../fs/filesystem.ts";
+import { AbortablePromise } from '../utils.ts';
+import { Source } from '../state/app-state.ts';
+import { mountDemandLibraries } from '../fs/filesystem.ts';
 import {
   CompileRequest,
   CancelRequest,
@@ -12,24 +12,24 @@ import {
   CompileStdout,
   CompileStderr,
   MergedOutput,
-} from "./worker-protocol.ts";
+} from './worker-protocol.ts';
 
 export type MergedOutputs = MergedOutput[];
 
 // Kept for consumers (actions.ts, output-parser.ts) that reference these types
 export type OpenSCADInvocation = {
-  mountArchives: boolean,
-  inputs?: Source[],
-  args: string[],
-  outputPaths?: string[],
-}
+  mountArchives: boolean;
+  inputs?: Source[];
+  args: string[];
+  outputPaths?: string[];
+};
 
 export type OpenSCADInvocationResults = {
-  exitCode?: number,
-  error?: string,
-  outputs?: [string, Uint8Array][],
-  mergedOutputs: MergedOutputs,
-  elapsedMillis: number,
+  exitCode?: number;
+  error?: string;
+  outputs?: [string, Uint8Array][];
+  mergedOutputs: MergedOutputs;
+  elapsedMillis: number;
 };
 
 export type ProcessStreams = { stderr: string } | { stdout: string };
@@ -200,7 +200,7 @@ export function spawnOpenSCAD(
     const request: CompileRequest = {
       type: 'compile',
       id,
-      sources: (invocation.inputs ?? []).map(s => ({
+      sources: (invocation.inputs ?? []).map((s) => ({
         path: s.path,
         content: s.content,
         url: s.url,
@@ -242,8 +242,8 @@ export async function compileWithFallback(
   if (result.exitCode !== 0) {
     // Inspect stderr lines for a missing-library error
     const stderrText = result.mergedOutputs
-      .filter(o => 'stderr' in o)
-      .map(o => (o as { stderr: string }).stderr)
+      .filter((o) => 'stderr' in o)
+      .map((o) => (o as { stderr: string }).stderr)
       .join('\n');
     const match = stderrText.match(MISSING_LIBRARY_RE);
     if (match) {

@@ -1,7 +1,11 @@
 // Tests for fragment-state.ts — BUG-5 (showAxes key nesting), BUG-6 (async buildUrl),
 // and T2 (Phase 3 round-trip coverage)
 
-import { readStateFromFragment, buildUrlForStateParams, encodeStateParamsAsFragment } from '../state/fragment-state.ts';
+import {
+  readStateFromFragment,
+  buildUrlForStateParams,
+  encodeStateParamsAsFragment,
+} from '../state/fragment-state.ts';
 
 // ---------------------------------------------------------------------------
 // BUG-5 — readStateFromFragment reads view?.layout?.showAxis instead of view?.showAxes

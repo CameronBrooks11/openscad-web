@@ -63,15 +63,27 @@ export async function createRuntime(opts: RuntimeOptions): Promise<OpenSCADRunti
         const entries: string[] = instance.FS.readdir('/tmp');
         for (const entry of entries) {
           if (entry === '.' || entry === '..') continue;
-          try { instance.FS.unlink(`/tmp/${entry}`); } catch { /* ignore */ }
+          try {
+            instance.FS.unlink(`/tmp/${entry}`);
+          } catch {
+            /* ignore */
+          }
         }
       } catch {
-        try { instance.FS.mkdir('/tmp'); } catch { /* ignore */ }
+        try {
+          instance.FS.mkdir('/tmp');
+        } catch {
+          /* ignore */
+        }
       }
     },
 
     mkdir(path: string): void {
-      try { instance.FS.mkdir(path); } catch { /* ignore */ }
+      try {
+        instance.FS.mkdir(path);
+      } catch {
+        /* ignore */
+      }
     },
   };
 }

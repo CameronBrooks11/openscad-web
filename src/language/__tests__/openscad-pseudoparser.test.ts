@@ -83,7 +83,7 @@ describe('openscad-pseudoparser — module extraction', () => {
     const src = 'module box(w=10, h=5) { cube([w,h,h]); }';
     const result = parseOpenSCAD('/test.scad', src, false);
     const params = result.modules['box']?.params ?? [];
-    const paramNames = params.map(p => p.name);
+    const paramNames = params.map((p) => p.name);
     expect(paramNames).toContain('w');
     expect(paramNames).toContain('h');
   });

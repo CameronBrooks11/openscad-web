@@ -14,7 +14,10 @@ function coerceUrlVars(vars: Record<string, string>): Record<string, unknown> {
   for (const [k, v] of Object.entries(vars)) {
     if (v === 'true') result[k] = true;
     else if (v === 'false') result[k] = false;
-    else { const n = Number(v); result[k] = v.trim() !== '' && !isNaN(n) ? n : v; }
+    else {
+      const n = Number(v);
+      result[k] = v.trim() !== '' && !isNaN(n) ? n : v;
+    }
   }
   return result;
 }
@@ -29,25 +32,52 @@ function buildEditorUrl(): string {
 export class OscCustomizerShell extends LitElement {
   static override styles = css`
     :host {
-      display: flex; flex-direction: column; flex: 1;
-      width: 100%; height: 100%;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      width: 100%;
+      height: 100%;
     }
-    .main-row { display: flex; flex-direction: row; flex: 1; overflow: hidden; }
-    .viewer-wrap { flex: 1; position: relative; }
-    osc-viewer-panel { position: absolute; top: 0; left: 0; right: 0; bottom: 0; }
-    osc-customizer-panel { width: 280px; min-width: 220px; overflow-y: auto; }
+    .main-row {
+      display: flex;
+      flex-direction: row;
+      flex: 1;
+      overflow: hidden;
+    }
+    .viewer-wrap {
+      flex: 1;
+      position: relative;
+    }
+    osc-viewer-panel {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+    osc-customizer-panel {
+      width: 280px;
+      min-width: 220px;
+      overflow-y: auto;
+    }
     .back-bar {
-      padding: 4px 8px; font-size: 0.8em;
-      background: rgba(0,0,0,0.05);
+      padding: 4px 8px;
+      font-size: 0.8em;
+      background: rgba(0, 0, 0, 0.05);
     }
-    .error { padding: 2rem; color: red; }
+    .error {
+      padding: 2rem;
+      color: red;
+    }
   `;
 
   @property({ attribute: false }) urlParams!: UrlModeParams;
   @state() private _st: State | null = null;
   @state() private _loadError: string | null = null;
   private _model!: Model;
-  private _onState = (e: Event) => { this._st = (e as CustomEvent<State>).detail; };
+  private _onState = (e: Event) => {
+    this._st = (e as CustomEvent<State>).detail;
+  };
 
   override connectedCallback() {
     super.connectedCallback();
@@ -68,7 +98,7 @@ export class OscCustomizerShell extends LitElement {
 
     const overrides = params.viewOverrides;
     if (Object.keys(overrides).length > 0) {
-      this._model.mutate(s => {
+      this._model.mutate((s) => {
         if (overrides.showAxes !== undefined) s.view.showAxes = overrides.showAxes;
         if (overrides.color !== undefined) s.view.color = overrides.color!;
         if (overrides.lineNumbers !== undefined) s.view.lineNumbers = overrides.lineNumbers;
@@ -88,7 +118,9 @@ export class OscCustomizerShell extends LitElement {
       }
       const preVars = params.prePopulatedVars;
       if (Object.keys(preVars).length > 0) {
-        this._model.mutate(s => { s.params.vars = { ...(s.params.vars ?? {}), ...coerceUrlVars(preVars) }; });
+        this._model.mutate((s) => {
+          s.params.vars = { ...(s.params.vars ?? {}), ...coerceUrlVars(preVars) };
+        });
       }
       this._model.source = result;
     })();

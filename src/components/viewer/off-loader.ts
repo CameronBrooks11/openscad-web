@@ -17,7 +17,7 @@ export function offToBufferGeometry(data: IndexedPolyhedron): THREE.BufferGeomet
   const hasMultiColor = colors.length > 1;
 
   const positions: number[] = [];
-  const normals:   number[] = [];
+  const normals: number[] = [];
   const vertColors: number[] = [];
 
   for (const face of faces) {
@@ -43,7 +43,7 @@ export function offToBufferGeometry(data: IndexedPolyhedron): THREE.BufferGeomet
 
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute('normal',   new THREE.Float32BufferAttribute(normals,   3));
+  geometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
   if (hasMultiColor) {
     geometry.setAttribute('color', new THREE.Float32BufferAttribute(vertColors, 3));
   }

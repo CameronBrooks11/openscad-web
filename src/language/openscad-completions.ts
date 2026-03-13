@@ -2,8 +2,13 @@
 
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import { join } from '../fs/filesystem';
-import { ParsedFile, ParsedFunctionoidDef, parseOpenSCAD, stripComments } from './openscad-pseudoparser';
-import builtinSignatures from './openscad-builtins'
+import {
+  ParsedFile,
+  ParsedFunctionoidDef,
+  parseOpenSCAD,
+  stripComments,
+} from './openscad-pseudoparser';
+import builtinSignatures from './openscad-builtins';
 import { mapObject } from '../utils';
 import { ZipArchive } from '../fs/zip-archives.generated';
 import openscadLanguage from './openscad-language';
@@ -19,46 +24,48 @@ function makeFunctionoidSuggestion(name: string, mod: ParsedFunctionoidDef) {
         collectingPosArgs = false;
       } else {
         //argSnippets.push(`${param.name}=${'${' + (i + 1) + ':' + param.name + '}'}`);
-        argSnippets.push(`${param.name.replaceAll('$', '\\$')}=${'${' + (++i) + ':' + param.name + '}'}`);
+        argSnippets.push(
+          `${param.name.replaceAll('$', '\\$')}=${'${' + ++i + ':' + param.name + '}'}`,
+        );
         continue;
       }
     }
     namedArgs.push(param.name);
   }
   if (namedArgs.length) {
-    argSnippets.push(`${'${' + (++i) + ':' + namedArgs.join('|') + '=}'}`);
+    argSnippets.push(`${'${' + ++i + ':' + namedArgs.join('|') + '=}'}`);
   }
   let insertText = `${name.replaceAll('$', '\\$')}(${argSnippets.join(', ')})`;
   if (mod.referencesChildren !== null) {
-    insertText += mod.referencesChildren ? ' ${' + (++i) + ':children}' : ';';
+    insertText += mod.referencesChildren ? ' ${' + ++i + ':children}' : ';';
   }
   return {
-    label: mod.signature,//`${name}(${(mod.params ?? []).join(', ')})`,
+    label: mod.signature, //`${name}(${(mod.params ?? []).join(', ')})`,
     kind: monaco.languages.CompletionItemKind.Function,
     insertText,
-    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
   };
 }
 
 const builtinCompletions = [
-  ...[true, false].map(v => ({
+  ...[true, false].map((v) => ({
     label: `${v}`,
     kind: monaco.languages.CompletionItemKind.Value,
     insertText: `${v}`,
-    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
   })),
   ...openscadLanguage.language.keywords.map((v: string) => ({
     label: v,
     kind: monaco.languages.CompletionItemKind.Function,
     insertText: v,
-    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
-  }))
+    insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+  })),
 ];
 
 const keywordSnippets = [
   'for(${1:variable}=[${2:start}:${3:end}) ${4:body}',
   'for(${1:variable}=[${2:start}:${3:increment}:${4:end}) ${5:body}',
-  'if (${1:condition}) {\n\t$0\n} else {\n\t\n}'
+  'if (${1:condition}) {\n\t$0\n} else {\n\t\n}',
 ];
 
 function cleanupVariables(snippet: string) {
@@ -70,10 +77,13 @@ function cleanupVariables(snippet: string) {
 }
 
 // https://microsoft.github.io/monaco-editor/playground.html#extending-language-services-custom-languages
-export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: string, zipArchives: ZipArchive[]) {
-
-  const parsedFiles: {[path: string]: Promise<ParsedFile>} = {};
-  const toAbsolutePath = (path: string) => path.startsWith('/') ? path : `${workingDir}/${path}`;
+export async function buildOpenSCADCompletionItemProvider(
+  fs: FS,
+  workingDir: string,
+  zipArchives: ZipArchive[],
+) {
+  const parsedFiles: { [path: string]: Promise<ParsedFile> } = {};
+  const toAbsolutePath = (path: string) => (path.startsWith('/') ? path : `${workingDir}/${path}`);
 
   // Build a symlink map from the archive registry (for path resolution in completions)
   const allSymlinks: Record<string, string> = {};
@@ -90,7 +100,7 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
     try {
       const bytes = await fs.readFileSync(path);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const src = new TextDecoder("utf-8").decode(bytes as any);
+      const src = new TextDecoder('utf-8').decode(bytes as any);
       return src;
     } catch (e) {
       throw e;
@@ -98,8 +108,12 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
   }
   const builtinsPath = '<builtins>';
 
-  function getParsed(path: string, src: string, {skipPrivates, addBuiltins}: {skipPrivates: boolean, addBuiltins: boolean}) {
-    return parsedFiles[path] ??= new Promise(async (res, _rej) => {
+  function getParsed(
+    path: string,
+    src: string,
+    { skipPrivates, addBuiltins }: { skipPrivates: boolean; addBuiltins: boolean },
+  ) {
+    return (parsedFiles[path] ??= new Promise(async (res, _rej) => {
       if (src == null) {
         src = await readFile(path);
       }
@@ -109,13 +123,13 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
         vars: [],
         includes: [],
         uses: [],
-      }
+      };
 
       const mergeDefinitions = (isUse: boolean, defs: ParsedFile) => {
-        result.functions = {...result.functions, ...defs.functions }
-        result.modules = {...result.modules, ...defs.modules }
+        result.functions = { ...result.functions, ...defs.functions };
+        result.modules = { ...result.modules, ...defs.modules };
         if (!isUse) {
-          result.vars = [...result.vars, ...defs.vars]
+          result.vars = [...result.vars, ...defs.vars];
         }
       };
       const dir = (path.split('/').slice(0, -1).join('/') || '.') + '/';
@@ -125,12 +139,18 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
         for (const option of [`/libraries/${otherPath}`, `${dir}/${otherPath}`, otherPath]) {
           try {
             const otherSrc = await readFile(option);
-            const sub = await getParsed(otherPath, otherSrc, {skipPrivates: true, addBuiltins: false});
+            const sub = await getParsed(otherPath, otherSrc, {
+              skipPrivates: true,
+              addBuiltins: false,
+            });
             mergeDefinitions(isUse, sub);
             found = true;
             break;
           } catch (e) {
-            console.warn(`Failed to read file option ${option} for ${otherPath} ${isUse ? 'used' : 'included'} by ${path}`, e);
+            console.warn(
+              `Failed to read file option ${option} for ${otherPath} ${isUse ? 'used' : 'included'} by ${path}`,
+              e,
+            );
           }
         }
         if (!found) {
@@ -143,27 +163,36 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
       }
 
       const ownDefs = parseOpenSCAD(path, src, skipPrivates);
-      
+
       await Promise.all(
         [
-          ...(ownDefs.uses ?? []).map(p => [p, true] as [string, boolean]),
-          ...(ownDefs.includes ?? []).map(p => [p, false] as [string, boolean])
-        ].map(([otherPath, isUse]) => handleInclude(isUse, otherPath)));
+          ...(ownDefs.uses ?? []).map((p) => [p, true] as [string, boolean]),
+          ...(ownDefs.includes ?? []).map((p) => [p, false] as [string, boolean]),
+        ].map(([otherPath, isUse]) => handleInclude(isUse, otherPath)),
+      );
 
       mergeDefinitions(false, ownDefs);
 
       res(result);
-    });
+    }));
   }
 
-  const builtinsDefs: ParsedFile = await getParsed(builtinsPath, builtinSignatures, {skipPrivates: false, addBuiltins: false});
+  const builtinsDefs: ParsedFile = await getParsed(builtinsPath, builtinSignatures, {
+    skipPrivates: false,
+    addBuiltins: false,
+  });
 
   return {
-    triggerCharacters: ["<", "/"], //, "\n"],
+    triggerCharacters: ['<', '/'], //, "\n"],
     //provideCompletionItems: (async (model, position, context, token) => {
-    provideCompletionItems: ((async (model: monaco.editor.ITextModel, position: monaco.Position, _context: monaco.languages.CompletionContext, _token: monaco.CancellationToken) => {
+    provideCompletionItems: (async (
+      model: monaco.editor.ITextModel,
+      position: monaco.Position,
+      _context: monaco.languages.CompletionContext,
+      _token: monaco.CancellationToken,
+    ) => {
       try {
-        const {word} = model.getWordUntilPosition(position);
+        const { word } = model.getWordUntilPosition(position);
         const offset = model.getOffsetAt(position);
         const text = model.getValue();
         let previous = text.substring(0, offset);
@@ -182,8 +211,8 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
             folderPrefix = prefix.substring(0, i);
             filePrefix = prefix.substring(i + 1);
           }
-          const folderName = (folderPrefix == '' ? '' : '/' + folderPrefix);
-          let files: string[] | null = null
+          const folderName = folderPrefix == '' ? '' : '/' + folderPrefix;
+          let files: string[] | null = null;
           for (const folder of [join('/libraries', folderName), join(workingDir, folderName)]) {
             files = folderPrefix == '' ? [...Object.keys(allSymlinks)] : [];
             try {
@@ -206,7 +235,7 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
               if (/^(LICENSE.*|fonts)$/.test(file)) {
                 continue;
               }
-              if (folderPrefix == '' && zipArchives.find(a => a.name === file)?.symlinks) {
+              if (folderPrefix == '' && zipArchives.find((a) => a.name === file)?.symlinks) {
                 continue;
               }
               const isFolder = !file.endsWith('.scad');
@@ -224,8 +253,10 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
 
               suggestions.push({
                 label: file,
-                kind: isFolder ? monaco.languages.CompletionItemKind.Folder : monaco.languages.CompletionItemKind.File,
-                insertText: completion
+                kind: isFolder
+                  ? monaco.languages.CompletionItemKind.Folder
+                  : monaco.languages.CompletionItemKind.File,
+                insertText: completion,
               });
             }
           }
@@ -236,12 +267,12 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
 
         const inputFile = join(workingDir, 'foo.scad');
         delete parsedFiles[inputFile];
-        const parsed = await getParsed(inputFile, text, {skipPrivates: false, addBuiltins: true});
-        
+        const parsed = await getParsed(inputFile, text, { skipPrivates: false, addBuiltins: true });
+
         type CompletionItem = monaco.languages.CompletionItem & {
-          range?: monaco.IRange
-        }
-        
+          range?: monaco.IRange;
+        };
+
         const previousWithoutComments = stripComments(previous);
         // console.log('previousWithoutComments', previousWithoutComments);
         const statementMatch = /(^|.*?[{});]|>\s*\n)\s*([$\w]*)$/m.exec(previousWithoutComments);
@@ -252,18 +283,21 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
             ...mapObject(
               parsed.modules ?? {},
               (name, mod) => makeFunctionoidSuggestion(name, mod),
-              name => name.indexOf(word) >= 0),
-            ...((parsed.vars ?? []).filter(name => name.indexOf(word) >= 0).map(name => ({
-              label: name,
-              kind: monaco.languages.CompletionItemKind.Variable,
-              insertText: name.replaceAll('$', '\\$'),
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
-            }))),
-            ...keywordSnippets.map(snippet => ({
+              (name) => name.indexOf(word) >= 0,
+            ),
+            ...(parsed.vars ?? [])
+              .filter((name) => name.indexOf(word) >= 0)
+              .map((name) => ({
+                label: name,
+                kind: monaco.languages.CompletionItemKind.Variable,
+                insertText: name.replaceAll('$', '\\$'),
+                insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              })),
+            ...keywordSnippets.map((snippet) => ({
               label: cleanupVariables(snippet).replaceAll(/ body/g, ''),
               kind: monaco.languages.CompletionItemKind.Keyword,
               insertText: snippet,
-              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet
+              insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
             })),
             // ...getStatementSuggestions().filter(s => start == '' || s.insertText.indexOf(start) >= 0)
           ];
@@ -272,9 +306,11 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
         }
 
         const named: [string, CompletionItem][] = [
-          ...mapObject(parsed.functions ?? {},
+          ...mapObject(
+            parsed.functions ?? {},
             (name, mod) => [name, makeFunctionoidSuggestion(name, mod)],
-            name => name.indexOf(word) >= 0)
+            (name) => name.indexOf(word) >= 0,
+          ),
         ];
         named.sort(([a], [b]) => a.indexOf(word) - b.indexOf(word));
         // const suggestions = names.map(name => ({
@@ -286,12 +322,11 @@ export async function buildOpenSCADCompletionItemProvider(fs: FS, workingDir: st
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const suggestions = named.map(([_n, s]) => s as any as monaco.languages.CompletionItem);
         return { suggestions };
-        
       } catch (e) {
-        console.error(e);//, (e as any).stackTrace);
+        console.error(e); //, (e as any).stackTrace);
         return { suggestions: [] };
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    }) as any),
+    }) as any,
   } as monaco.languages.CompletionItemProvider;
 }

@@ -10,12 +10,8 @@ describe('export3MF', () => {
       { x: 1, y: 0, z: 0 },
       { x: 0, y: 1, z: 0 },
     ],
-    faces: [
-      { vertices: [0, 1, 2], colorIndex: 0 },
-    ],
-    colors: [
-      [1, 0, 0, 1] as [number, number, number, number],
-    ],
+    faces: [{ vertices: [0, 1, 2], colorIndex: 0 }],
+    colors: [[1, 0, 0, 1] as [number, number, number, number]],
   };
 
   const readBlobAsArrayBuffer = (blob: Blob): Promise<ArrayBuffer> =>

@@ -51,7 +51,9 @@ const enumParamSet: ParameterSet = {
 describe('BUG-4b — enum parameter options survive the model update path', () => {
   it('options are intact after first store via model.mutate', () => {
     const model = new Model({} as unknown as FS, minimalState, jest.fn());
-    model.mutate(s => { s.parameterSet = enumParamSet; });
+    model.mutate((s) => {
+      s.parameterSet = enumParamSet;
+    });
     expect((model.state.parameterSet?.parameters[0] as NumberParameter).options).toEqual(
       (enumParamSet.parameters[0] as NumberParameter).options,
     );
@@ -59,9 +61,13 @@ describe('BUG-4b — enum parameter options survive the model update path', () =
 
   it('options survive two successive stores (simulates source-edit re-parse)', () => {
     const model = new Model({} as unknown as FS, minimalState, jest.fn());
-    model.mutate(s => { s.parameterSet = enumParamSet; });
+    model.mutate((s) => {
+      s.parameterSet = enumParamSet;
+    });
     // Second parse — would happen after user edits source and checkSyntax re-runs
-    model.mutate(s => { s.parameterSet = enumParamSet; });
+    model.mutate((s) => {
+      s.parameterSet = enumParamSet;
+    });
     expect((model.state.parameterSet?.parameters[0] as NumberParameter).options).toEqual(
       (enumParamSet.parameters[0] as NumberParameter).options,
     );
@@ -71,7 +77,9 @@ describe('BUG-4b — enum parameter options survive the model update path', () =
     // Simulate: parameterSet = JSON.parse(openscadOutputContent)
     const fromJson: ParameterSet = JSON.parse(JSON.stringify(enumParamSet));
     const model = new Model({} as unknown as FS, minimalState, jest.fn());
-    model.mutate(s => { s.parameterSet = fromJson; });
+    model.mutate((s) => {
+      s.parameterSet = fromJson;
+    });
     expect((model.state.parameterSet?.parameters[0] as NumberParameter).options).toEqual(
       (enumParamSet.parameters[0] as NumberParameter).options,
     );

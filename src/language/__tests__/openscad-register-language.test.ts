@@ -50,9 +50,18 @@ describe('OpenSCAD language registration', () => {
       extensions: ['.scad'],
       mimetypes: ['text/openscad'],
     });
-    expect(monacoMock.languages.setLanguageConfiguration).toHaveBeenCalledWith('openscad', openscadLanguage.conf);
-    expect(monacoMock.languages.setMonarchTokensProvider).toHaveBeenCalledWith('openscad', openscadLanguage.language);
+    expect(monacoMock.languages.setLanguageConfiguration).toHaveBeenCalledWith(
+      'openscad',
+      openscadLanguage.conf,
+    );
+    expect(monacoMock.languages.setMonarchTokensProvider).toHaveBeenCalledWith(
+      'openscad',
+      openscadLanguage.language,
+    );
     expect(mockedBuilder).toHaveBeenCalledWith({}, '/home', []);
-    expect(monacoMock.languages.registerCompletionItemProvider).toHaveBeenCalledWith('openscad', provider);
+    expect(monacoMock.languages.registerCompletionItemProvider).toHaveBeenCalledWith(
+      'openscad',
+      provider,
+    );
   });
 });

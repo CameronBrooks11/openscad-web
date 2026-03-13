@@ -2,7 +2,7 @@
 
 ## OpenSCAD Web Demo
 
-The OpenSCAD Web Demo source code is licensed under the [GNU GPL v2](#gplv2) *or later versions*, and is deployed under the [GNU GPL v3](#gplv3) license because of the (GPLv3 and Apache 2.0) dependencies it links with.
+The OpenSCAD Web Demo source code is licensed under the [GNU GPL v2](#gplv2) _or later versions_, and is deployed under the [GNU GPL v3](#gplv3) license because of the (GPLv3 and Apache 2.0) dependencies it links with.
 
 It ships with source or compiled versions of many open-source projects, which licenses are described below.
 
@@ -34,8 +34,8 @@ The WASM build was made possible by https://github.com/DSchroer/openscad-wasm.
     - [closepoints](#closepoints)
     - [plot-function](#plot-function)
     - [openscad-tray](#openscad-tray)
-    - [YAPP\_Box](#yapp_box)
-    - [Stemfie\_OpenSCAD](#stemfie_openscad)
+    - [YAPP_Box](#yapp_box)
+    - [Stemfie_OpenSCAD](#stemfie_openscad)
     - [UB.scad](#ubscad)
   - [Boost](#boost)
   - [GNU MPFR](#gnu-mpfr)
@@ -55,7 +55,7 @@ The WASM build was made possible by https://github.com/DSchroer/openscad-wasm.
   - [OpenSCAD-Snippet](#openscad-snippet)
   - [Lasercut](#lasercut)
   - [pathbuilder](#pathbuilder)
-  - [openscad\_attachable\_text3d](#openscad_attachable_text3d)
+  - [openscad_attachable_text3d](#openscad_attachable_text3d)
   - [Fork me on GitHub CSS ribbon](#fork-me-on-github-css-ribbon)
   - [Common licenses](#common-licenses)
     - [GPLv2](#gplv2)
@@ -615,7 +615,7 @@ fontconfig/src/ftglue.[ch]
  *
  * PS: This "glue" code is explicitely put in the public domain
  */
- ```
+```
 
 ## freetype2
 
@@ -2993,7 +2993,7 @@ however, cannot be released under any other type of license.  The
 requirement for fonts to remain under this license does not apply to
 any document created using the fonts or their derivatives.
 
- 
+
 
 DEFINITIONS
 "Font Software" refers to the set of files released by the Copyright
@@ -3050,11 +3050,11 @@ Software, subject to the following conditions:
    Software.
 
 
- 
+
 TERMINATION
 This license becomes null and void if any of the above conditions are not met.
 
- 
+
 
 DISCLAIMER
 THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
@@ -3282,7 +3282,7 @@ Mozilla Public License Version 2.0
     means any form of the work other than Source Code Form.
 
 1.7. "Larger Work"
-    means a work that combines Covered Software with other material, in 
+    means a work that combines Covered Software with other material, in
     a separate file or files, that is not Covered Software.
 
 1.8. "License"

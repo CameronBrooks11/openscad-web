@@ -5,14 +5,16 @@ import { State } from './app-state.ts';
 
 export const defaultSourcePath = '/home/playground.scad';
 export const defaultModelColor = '#f9d72c';
-const defaultBlurhash = "|KSPX^%3~qtjMx$lR*x]t7n,R%xuxbM{WBt7ayfk_3bY9FnAt8XOxanjNF%fxbMyIn%3t7NFoLaeoeV[WBo{xar^IoS1xbxcR*S0xbofRjV[j[kCNGofxaWBNHW-xasDR*WTkBxuWBM{s:t7bYahRjfkozWUadofbIW:jZ";
-  
-export function createInitialState(state: State | null, source?: {content?: string, path?: string, url?: string, blurhash?: string}): State {
+const defaultBlurhash =
+  '|KSPX^%3~qtjMx$lR*x]t7n,R%xuxbM{WBt7ayfk_3bY9FnAt8XOxanjNF%fxbMyIn%3t7NFoLaeoeV[WBo{xar^IoS1xbxcR*S0xbofRjV[j[kCNGofxaWBNHW-xasDR*WTkBxuWBM{s:t7bYahRjfkozWUadofbIW:jZ';
 
+export function createInitialState(
+  state: State | null,
+  source?: { content?: string; path?: string; url?: string; blurhash?: string },
+): State {
   type Mode = State['view']['layout']['mode'];
-  
-  const mode: Mode = window.matchMedia("(min-width: 768px)").matches 
-    ? 'multi' : 'single';
+
+  const mode: Mode = window.matchMedia('(min-width: 768px)').matches ? 'multi' : 'single';
 
   let initialState: State;
   if (state) {
@@ -34,7 +36,7 @@ export function createInitialState(state: State | null, source?: {content?: stri
     initialState = {
       params: {
         activePath,
-        sources: [{path: activePath, content, url}],
+        sources: [{ path: activePath, content, url }],
         features: [],
         exportFormat2D: 'svg',
         exportFormat3D: 'stl',
@@ -45,12 +47,12 @@ export function createInitialState(state: State | null, source?: {content?: stri
           editor: true,
           viewer: true,
           customizer: false,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
         } as any,
 
         color: defaultModelColor,
       },
-      preview: blurhash ? {blurhash} : undefined,
+      preview: blurhash ? { blurhash } : undefined,
     };
   }
 
@@ -60,15 +62,17 @@ export function createInitialState(state: State | null, source?: {content?: stri
         mode,
         editor: true,
         viewer: true,
-        customizer: initialState.view.layout.focus == 'customizer'
-      }
+        customizer: initialState.view.layout.focus == 'customizer',
+      };
     } else if (mode === 'single' && initialState.view.layout.mode === 'multi') {
       initialState.view.layout = {
         mode,
-        focus: initialState.view.layout.viewer ? 'viewer'
-          : initialState.view.layout.customizer ? 'customizer'
-          : 'editor'
-      }
+        focus: initialState.view.layout.viewer
+          ? 'viewer'
+          : initialState.view.layout.customizer
+            ? 'customizer'
+            : 'editor',
+      };
     }
   }
 
@@ -78,11 +82,10 @@ export function createInitialState(state: State | null, source?: {content?: stri
   // if (initialState.params.sourcePath !== defaultSourcePath) {
   //   fs.writeFile(defaultSourcePath, defaultScad);
   // }
-  
+
   const defaultFeatures = ['lazy-union'];
-  defaultFeatures.forEach(f => {
-    if (initialState.params.features.indexOf(f) < 0)
-    initialState.params.features.push(f);
+  defaultFeatures.forEach((f) => {
+    if (initialState.params.features.indexOf(f) < 0) initialState.params.features.push(f);
   });
 
   return initialState;
@@ -91,6 +94,6 @@ export function createInitialState(state: State | null, source?: {content?: stri
 export function getBlankProjectState() {
   return createInitialState(null, {
     path: defaultSourcePath,
-    content: defaultScad, 
+    content: defaultScad,
   });
 }

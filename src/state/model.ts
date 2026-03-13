@@ -1,29 +1,50 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import { checkSyntax, render, RenderArgs, RenderOutput } from "../runner/actions.ts";
-import { MultiLayoutComponentId, SingleLayoutComponentId, State, StatePersister } from "./app-state.ts";
+import { checkSyntax, render, RenderArgs, RenderOutput } from '../runner/actions.ts';
+import {
+  MultiLayoutComponentId,
+  SingleLayoutComponentId,
+  State,
+  StatePersister,
+} from './app-state.ts';
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
-import { bubbleUpDeepMutations } from "./deep-mutate.ts";
-import { downloadUrl, fetchSource, formatBytes, formatMillis, readFileAsDataURL } from '../utils.ts'
+import { bubbleUpDeepMutations } from './deep-mutate.ts';
+import {
+  downloadUrl,
+  fetchSource,
+  formatBytes,
+  formatMillis,
+  readFileAsDataURL,
+} from '../utils.ts';
 import { openLocalFile, saveActiveFile } from '../fs/filesystem.ts';
 
 import JSZip from 'jszip';
-import { ProcessStreams } from "../runner/openscad-runner.ts";
-import { is2DFormatExtension } from "./formats.ts";
-import { parseOff } from "../io/import_off.ts";
-import { export3MF } from "../io/export_3mf.ts";
-import chroma from "chroma-js";
+import { ProcessStreams } from '../runner/openscad-runner.ts';
+import { is2DFormatExtension } from './formats.ts';
+import { parseOff } from '../io/import_off.ts';
+import { export3MF } from '../io/export_3mf.ts';
+import chroma from 'chroma-js';
 
 const githubRx = /^https:\/\/github.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/;
 
 export class Model extends EventTarget {
-  constructor(private fs: FS, public state: State, private setStateCallback?: (state: State) => void, 
-    private statePersister?: StatePersister) {
+  constructor(
+    private fs: FS,
+    public state: State,
+    private setStateCallback?: (state: State) => void,
+    private statePersister?: StatePersister,
+  ) {
     super();
   }
-  
+
   init() {
-    if (!this.state.output && !this.state.lastCheckerRun && !this.state.previewing && !this.state.checkingSyntax && !this.state.rendering) {
+    if (
+      !this.state.output &&
+      !this.state.lastCheckerRun &&
+      !this.state.previewing &&
+      !this.state.checkingSyntax &&
+      !this.state.rendering
+    ) {
       this.processSource();
     }
   }
@@ -48,17 +69,18 @@ export class Model extends EventTarget {
   }
 
   setFormats(
-      exportFormat2D: keyof typeof VALID_EXPORT_FORMATS_2D | undefined,
-      exportFormat3D: keyof typeof VALID_EXPORT_FORMATS_3D | undefined) {
-    this.mutate(s => {
+    exportFormat2D: keyof typeof VALID_EXPORT_FORMATS_2D | undefined,
+    exportFormat3D: keyof typeof VALID_EXPORT_FORMATS_3D | undefined,
+  ) {
+    this.mutate((s) => {
       if (exportFormat2D != null) s.params.exportFormat2D = exportFormat2D;
       if (exportFormat3D != null) s.params.exportFormat3D = exportFormat3D;
     });
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setVar(name: string, value: any) {
-    this.mutate(s => s.params.vars = {...s.params.vars ?? {}, [name]: value});
-    this.render({isPreview: true, now: false});
+    this.mutate((s) => (s.params.vars = { ...(s.params.vars ?? {}), [name]: value }));
+    this.render({ isPreview: true, now: false });
   }
 
   set logsVisible(value: boolean) {
@@ -66,10 +88,10 @@ export class Model extends EventTarget {
       if (this.state.view.layout.mode === 'single') {
         this.changeSingleVisibility('editor');
       } else {
-        this.changeMultiVisibility('editor', true);  
+        this.changeMultiVisibility('editor', true);
       }
     }
-    this.mutate(s => s.view.logs = value);
+    this.mutate((s) => (s.view.logs = value));
   }
 
   isComponentFullyVisible(id: SingleLayoutComponentId) {
@@ -82,22 +104,27 @@ export class Model extends EventTarget {
 
   changeLayout(mode: 'multi' | 'single') {
     if (this.state.view.layout.mode === mode) return;
-    this.mutate(s => {
-      s.view.layout = s.view.layout.mode === 'multi'
-        ? {
-          mode: 'single',
-          focus: s.view.layout.editor ? 'editor' : s.view.layout.viewer ? 'viewer' : 'customizer'
-        }
-        : {
-          mode: 'multi',
-          editor: s.view.layout.focus === 'editor',
-          viewer: s.view.layout.focus === 'viewer',
-          customizer: s.view.layout.focus === 'customizer',
-        }
+    this.mutate((s) => {
+      s.view.layout =
+        s.view.layout.mode === 'multi'
+          ? {
+              mode: 'single',
+              focus: s.view.layout.editor
+                ? 'editor'
+                : s.view.layout.viewer
+                  ? 'viewer'
+                  : 'customizer',
+            }
+          : {
+              mode: 'multi',
+              editor: s.view.layout.focus === 'editor',
+              viewer: s.view.layout.focus === 'viewer',
+              customizer: s.view.layout.focus === 'customizer',
+            };
     });
   }
   changeSingleVisibility(focus: SingleLayoutComponentId) {
-    this.mutate(s => {
+    this.mutate((s) => {
       if (s.view.layout.mode !== 'single') throw new Error('Wrong mode');
       s.view.layout.focus = focus;
       if (focus !== 'editor') {
@@ -107,10 +134,15 @@ export class Model extends EventTarget {
   }
 
   changeMultiVisibility(target: MultiLayoutComponentId, visible: boolean) {
-    this.mutate(s => {
+    this.mutate((s) => {
       if (s.view.layout.mode !== 'multi') throw new Error('Wrong mode');
-      s.view.layout[target] = visible
-      if ((s.view.layout.customizer ? 1 : 0) + (s.view.layout.editor ? 1 : 0) + (s.view.layout.viewer ? 1 : 0) == 0) {
+      s.view.layout[target] = visible;
+      if (
+        (s.view.layout.customizer ? 1 : 0) +
+          (s.view.layout.editor ? 1 : 0) +
+          (s.view.layout.viewer ? 1 : 0) ==
+        0
+      ) {
         // Select at least one panel
         // s.view.layout.editor = true;
         s.view.layout[target] = !visible;
@@ -118,54 +150,68 @@ export class Model extends EventTarget {
           s.view.logs = false;
         }
       }
-    })
+    });
   }
 
   openFile(path: string) {
     // console.log(`openFile: ${path}`);
-    if (this.mutate(s => {
-      if (s.params.activePath != path) {
-        const readSource = (path: string) => {
-          try {
-            return new TextDecoder("utf-8").decode(this.fs.readFileSync(path));
-          } catch (e) {
-            console.error('Error while reading file:', e);
-            return '';
-          }
-        };
-        // Remove source of previous active path if it's unmodified
-        const activePathContent = readSource(s.params.activePath);
-        s.params.sources = s.params.sources.filter(src => src.path !== s.params.activePath || src.content != activePathContent);
+    if (
+      this.mutate((s) => {
+        if (s.params.activePath != path) {
+          const readSource = (path: string) => {
+            try {
+              return new TextDecoder('utf-8').decode(this.fs.readFileSync(path));
+            } catch (e) {
+              console.error('Error while reading file:', e);
+              return '';
+            }
+          };
+          // Remove source of previous active path if it's unmodified
+          const activePathContent = readSource(s.params.activePath);
+          s.params.sources = s.params.sources.filter(
+            (src) => src.path !== s.params.activePath || src.content != activePathContent,
+          );
 
-        s.params.activePath = path;
-        if (!s.params.sources.find(src => src.path === path)) {
-          const content = readSource(path);
-          s.params.sources = [...s.params.sources, {path, content}];
+          s.params.activePath = path;
+          if (!s.params.sources.find((src) => src.path === path)) {
+            const content = readSource(path);
+            s.params.sources = [...s.params.sources, { path, content }];
+          }
+          s.lastCheckerRun = undefined;
+          s.output = undefined;
+          s.export = undefined;
+          s.preview = undefined;
+          s.currentRunLogs = undefined;
+          s.error = undefined;
+          s.is2D = undefined;
         }
-        s.lastCheckerRun = undefined;
-        s.output = undefined;
-        s.export = undefined;
-        s.preview = undefined;
-        s.currentRunLogs = undefined;
-        s.error = undefined;
-        s.is2D = undefined;
-      }
-    })) {
+      })
+    ) {
       this.processSource();
     }
   }
 
   get source(): string {
-    return this.state.params.sources.find(src => src.path === this.state.params.activePath)?.content ?? '';
+    return (
+      this.state.params.sources.find((src) => src.path === this.state.params.activePath)?.content ??
+      ''
+    );
   }
   set source(source: string) {
-    if (this.mutate(s => s.params.sources = s.params.sources.map(src => src.path === s.params.activePath ? {path: src.path, content: source} : src))) {
+    if (
+      this.mutate(
+        (s) =>
+          (s.params.sources = s.params.sources.map((src) =>
+            src.path === s.params.activePath ? { path: src.path, content: source } : src,
+          )),
+      )
+    ) {
       this.processSource();
     }
   }
 
   private async processSource() {
-    const src = this.state.params.sources.find(src => src.path === this.state.params.activePath);
+    const src = this.state.params.sources.find((src) => src.path === this.state.params.activePath);
     if (src && src.content == null) {
       const { path } = src;
       let { url } = src;
@@ -174,9 +220,11 @@ export class Model extends EventTarget {
       if (url && (match = url.match(githubRx))) {
         url = `https://raw.githubusercontent.com/${match[1]}/${match[2]}/refs/heads/${match[3]}`;
       }
-      const content = new TextDecoder().decode(await fetchSource(this.fs, {path, url}));
-      this.mutate(s => {
-        s.params.sources = s.params.sources.map(src => src.path === s.params.activePath ? {...src, content} : src);
+      const content = new TextDecoder().decode(await fetchSource(this.fs, { path, url }));
+      this.mutate((s) => {
+        s.params.sources = s.params.sources.map((src) =>
+          src.path === s.params.activePath ? { ...src, content } : src,
+        );
       });
     }
     // When autoCompile is explicitly disabled, skip automatic syntax check and render.
@@ -185,31 +233,33 @@ export class Model extends EventTarget {
       if (this.state.params.activePath.endsWith('.scad')) {
         this.checkSyntax();
       }
-      this.render({isPreview: true, now: false});
+      this.render({ isPreview: true, now: false });
     }
   }
 
   async checkSyntax() {
-    this.mutate(s => s.checkingSyntax = true);
+    this.mutate((s) => (s.checkingSyntax = true));
     try {
       const checkerRun = await checkSyntax({
         activePath: this.state.params.activePath,
         sources: this.state.params.sources,
-      })({now: false});
-      this.mutate(s => {
+      })({ now: false });
+      this.mutate((s) => {
         s.lastCheckerRun = checkerRun;
         s.parameterSet = checkerRun?.parameterSet;
         s.checkingSyntax = false;
       });
     } catch (err) {
-      console.error('Error while checking syntax:', err)
+      console.error('Error while checking syntax:', err);
     } finally {
-      this.mutate(s => { if (s.checkingSyntax) s.checkingSyntax = false; });
+      this.mutate((s) => {
+        if (s.checkingSyntax) s.checkingSyntax = false;
+      });
     }
   }
 
   rawStreamsCallback(ps: ProcessStreams) {
-    this.mutate(s => {
+    this.mutate((s) => {
       if ('stdout' in ps) {
         s.currentRunLogs?.push(['stdout', ps.stdout]);
       } else {
@@ -220,17 +270,18 @@ export class Model extends EventTarget {
 
   async export() {
     if (this.state.output) {
-      const normalPassThrough = 
-        (this.state.is2D && this.state.params.exportFormat2D === 'svg')
-        || (!this.state.is2D && this.state.params.exportFormat3D === 'off');
+      const normalPassThrough =
+        (this.state.is2D && this.state.params.exportFormat2D === 'svg') ||
+        (!this.state.is2D && this.state.params.exportFormat3D === 'off');
 
       const glbPassThrough =
-        (!this.state.is2D && this.state.params.exportFormat3D === 'glb')
-        && (this.state.output.displayFile?.name.endsWith('.glb') ?? false)
-        && (this.state.output.displayFileURL != null);
+        !this.state.is2D &&
+        this.state.params.exportFormat3D === 'glb' &&
+        (this.state.output.displayFile?.name.endsWith('.glb') ?? false) &&
+        this.state.output.displayFileURL != null;
 
       if (normalPassThrough || glbPassThrough) {
-        this.mutate(s => s.export = s.output);
+        this.mutate((s) => (s.export = s.output));
         if (glbPassThrough) {
           downloadUrl(this.state.output.displayFileURL!, this.state.output.displayFile!.name);
         } else {
@@ -239,13 +290,17 @@ export class Model extends EventTarget {
         return;
       }
     }
-    if (!this.state.is2D && this.state.params.exportFormat3D == '3mf' && !this.state.params.extruderColors) {
+    if (
+      !this.state.is2D &&
+      this.state.params.exportFormat3D == '3mf' &&
+      !this.state.params.extruderColors
+    ) {
       if (!this.state.params.skipMultimaterialPrompt) {
-        this.mutate(_s => this.state.view.extruderPickerVisibility = 'exporting');
+        this.mutate((_s) => (this.state.view.extruderPickerVisibility = 'exporting'));
         return;
       }
     }
-    this.mutate(s => {
+    this.mutate((s) => {
       s.currentRunLogs ??= [];
       s.exporting = true;
     });
@@ -254,7 +309,7 @@ export class Model extends EventTarget {
       throw new Error('No output file to export');
     }
 
-    const {features, exportFormat2D, exportFormat3D} = this.state.params;
+    const { features, exportFormat2D, exportFormat3D } = this.state.params;
     const exportFormat = this.state.is2D ? exportFormat2D : exportFormat3D;
 
     try {
@@ -262,7 +317,10 @@ export class Model extends EventTarget {
       if (exportFormat === '3mf') {
         const start = performance.now();
         const data = parseOff(await this.state.output.outFile.text());
-        const exportedData = export3MF(data, this.state.params.extruderColors?.map(c => chroma(c)));
+        const exportedData = export3MF(
+          data,
+          this.state.params.extruderColors?.map((c) => chroma(c)),
+        );
         const elapsedMillis = performance.now() - start;
         output = {
           outFile: new File([exportedData], this.state.output.outFile.name.replace('.off', '.3mf')),
@@ -277,22 +335,23 @@ export class Model extends EventTarget {
           sources: [
             {
               path: '/export.scad',
-              content: `import("${this.state.output?.outFile.name}");`
+              content: `import("${this.state.output?.outFile.name}");`,
             },
             {
               path: this.state.output?.outFile.name,
               url: this.state.output?.outFileURL,
-            }
+            },
           ],
-          extraArgs: [], isPreview: false,
+          extraArgs: [],
+          isPreview: false,
           features,
           renderFormat: exportFormat,
           streamsCallback: this.rawStreamsCallback.bind(this),
-        })({now: true});
+        })({ now: true });
       }
-      
+
       const outFileURL = URL.createObjectURL(output.outFile);
-      this.mutate(s => {
+      this.mutate((s) => {
         s.exporting = false;
         if (s.export?.outFileURL?.startsWith('blob:') ?? false) {
           URL.revokeObjectURL(s.export!.outFileURL);
@@ -307,9 +366,9 @@ export class Model extends EventTarget {
         downloadUrl(s.export.outFileURL, output.outFile.name);
       });
     } catch (err) {
-      this.mutate(s => {
+      this.mutate((s) => {
         s.exporting = false;
-        console.error('Error while exporting:', err)
+        console.error('Error while exporting:', err);
         s.error = `${err}`;
       });
     }
@@ -320,10 +379,14 @@ export class Model extends EventTarget {
     const base = '/home/untitled';
     let path = `${base}.scad`;
     let n = 2;
-    const existing = new Set(this.state.params.sources.map(s => s.path));
+    const existing = new Set(this.state.params.sources.map((s) => s.path));
     while (existing.has(path)) path = `${base}-${n++}.scad`;
-    try { this.fs.writeFile(path, ''); } catch { /* fs may not support it yet */ }
-    this.mutate(s => {
+    try {
+      this.fs.writeFile(path, '');
+    } catch {
+      /* fs may not support it yet */
+    }
+    this.mutate((s) => {
       s.params.sources = [...s.params.sources, { path, content: '' }];
       s.params.activePath = path;
       s.lastCheckerRun = undefined;
@@ -341,16 +404,18 @@ export class Model extends EventTarget {
       }
     }
     for (const [relPath, content] of files) {
-      try { this.fs.writeFile(`/home/${relPath}`, content); } catch { /* ignore */ }
+      try {
+        this.fs.writeFile(`/home/${relPath}`, content);
+      } catch {
+        /* ignore */
+      }
     }
-    const entryRel = (
-      files.find(([p]) => p === 'main.scad') ??
+    const entryRel = (files.find(([p]) => p === 'main.scad') ??
       files.find(([p]) => p.endsWith('.scad')) ??
-      files[0]
-    )?.[0];
+      files[0])?.[0];
     if (entryRel) {
       const fullEntry = `/home/${entryRel}`;
-      this.mutate(s => {
+      this.mutate((s) => {
         s.params.sources = files.map(([p, content]) => ({ path: `/home/${p}`, content }));
         s.params.activePath = fullEntry;
         s.lastCheckerRun = undefined;
@@ -365,9 +430,13 @@ export class Model extends EventTarget {
     const result = await openLocalFile();
     if (!result) return false;
     const path = `/home/${result.name}`;
-    try { this.fs.writeFile(path, result.content); } catch { /* ignore */ }
-    this.mutate(s => {
-      const withoutExisting = s.params.sources.filter(src => src.path !== path);
+    try {
+      this.fs.writeFile(path, result.content);
+    } catch {
+      /* ignore */
+    }
+    this.mutate((s) => {
+      const withoutExisting = s.params.sources.filter((src) => src.path !== path);
       s.params.sources = [...withoutExisting, { path, content: result.content }];
       s.params.activePath = path;
       s.lastCheckerRun = undefined;
@@ -387,26 +456,36 @@ export class Model extends EventTarget {
       // cast required because the TS lib defines encode() → Uint8Array (= <ArrayBufferLike>)
       // while Blob's BlobPart expects ArrayBufferView<ArrayBuffer>. TS 5.7+ issue.
       const contentBytes = new TextEncoder().encode(content) as Uint8Array<ArrayBuffer>;
-      const blob = new Blob([contentBytes], {type: 'text/plain'});
+      const blob = new Blob([contentBytes], { type: 'text/plain' });
       const file = new File([blob], this.state.params.activePath.split('/').pop()!);
       downloadUrl(URL.createObjectURL(file), file.name);
     } else {
       const zip = new JSZip();
       for (const source of this.state.params.sources) {
-        let path = source.path
+        let path = source.path;
         if (path.startsWith('/')) {
           path = path.substring(1);
         }
         zip.file(path, await fetchSource(this.fs, source));
       }
-      zip.generateAsync({type: 'blob'}).then(blob => {
+      zip.generateAsync({ type: 'blob' }).then((blob) => {
         const file = new File([blob], 'project.zip');
         downloadUrl(URL.createObjectURL(file), file.name);
       });
     }
   }
 
-  async render({isPreview, mountArchives, now, retryInOtherDim}: {isPreview: boolean, mountArchives?: boolean, now: boolean, retryInOtherDim?: boolean}) {
+  async render({
+    isPreview,
+    mountArchives,
+    now,
+    retryInOtherDim,
+  }: {
+    isPreview: boolean;
+    mountArchives?: boolean;
+    now: boolean;
+    retryInOtherDim?: boolean;
+  }) {
     // console.log(JSON.stringify(this.state, null, 2));
     mountArchives ??= true;
     retryInOtherDim ??= true;
@@ -416,20 +495,14 @@ export class Model extends EventTarget {
       } else {
         s.rendering = value;
       }
-    }
-    this.mutate(s => {
+    };
+    this.mutate((s) => {
       s.currentRunLogs = [];
       setRendering(s, true);
     });
 
-    let {
-      activePath,
-      sources,
-    } = this.state.params;
-    const {
-      vars,
-      features,
-    } = this.state.params;
+    let { activePath, sources } = this.state.params;
+    const { vars, features } = this.state.params;
 
     let is2D = this.state.is2D;
 
@@ -438,7 +511,7 @@ export class Model extends EventTarget {
       const resourcePath = activePath;
       const loaderPath = '/load-resource.scad';
       is2D = is2DFormatExtension(extension);
-      
+
       mountArchives = false;
       activePath = loaderPath;
       sources = [
@@ -446,7 +519,7 @@ export class Model extends EventTarget {
           path: activePath,
           content: `${is2D ? 'linear_extrude(1) ' : ''} import("${resourcePath}");`,
         },
-        ...sources.filter(s => s.path === resourcePath),
+        ...sources.filter((s) => s.path === resourcePath),
       ];
     }
 
@@ -462,7 +535,7 @@ export class Model extends EventTarget {
       backend: this.state.params.backend,
     };
     try {
-      const output = await render(renderArgs)({now});
+      const output = await render(renderArgs)({ now });
       let displayFile = output.outFile;
       if (output.outFile.name.endsWith('.svg') || output.outFile.name.endsWith('.dxf')) {
         is2D = true;
@@ -484,22 +557,22 @@ export class Model extends EventTarget {
           features,
           isPreview: false,
           renderFormat: 'off',
-          streamsCallback: this.rawStreamsCallback.bind(this)
-        })({now});
+          streamsCallback: this.rawStreamsCallback.bind(this),
+        })({ now });
         displayFile = extrudedOutput.outFile;
       } else {
         is2D = false;
       }
       const outFileURL = URL.createObjectURL(output.outFile);
-      const displayFileURL = displayFile && await readFileAsDataURL(displayFile);
-      this.mutate(s => {
+      const displayFileURL = displayFile && (await readFileAsDataURL(displayFile));
+      this.mutate((s) => {
         setRendering(s, false);
         s.error = undefined;
         s.is2D = is2D;
         s.lastCheckerRun = {
           logText: output.logText,
           markers: output.markers,
-        }
+        };
         if (s.output?.outFileURL?.startsWith('blob:') ?? false) {
           URL.revokeObjectURL(s.output!.outFileURL);
         }
@@ -524,9 +597,9 @@ export class Model extends EventTarget {
         }
       });
     } catch (err) {
-      this.mutate(s => {
+      this.mutate((s) => {
         setRendering(s, false);
-        console.error('Error while doing ' + (isPreview ? 'preview' : 'rendering') + ':', err)
+        console.error('Error while doing ' + (isPreview ? 'preview' : 'rendering') + ':', err);
         s.error = `${err}`;
       });
     }
@@ -544,9 +617,10 @@ export class Model extends EventTarget {
           is2D = true;
         }
       }
-      if (is2D === false || is3D === false) {//} || isMixed !== undefined) {
-        this.mutate(s => s.is2D = !(is2D === false));
-        this.render({isPreview, now: true, retryInOtherDim: false});
+      if (is2D === false || is3D === false) {
+        //} || isMixed !== undefined) {
+        this.mutate((s) => (s.is2D = !(is2D === false)));
+        this.render({ isPreview, now: true, retryInOtherDim: false });
         return;
       }
     }

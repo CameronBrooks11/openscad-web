@@ -1,12 +1,12 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type KVObject = {[key: string]: any};
+type KVObject = { [key: string]: any };
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type KVEntriesMap = Map<KVObject, [string, any][]>;
 
 /**
- * 
+ *
  * @param o the object we want to mutate
  * @param mutate a function that modifies any part of the object.
  * @returns an object tree in which each node is identical to its original if no value under its subtree truly changed. If any did, the node's identity is new.
@@ -21,15 +21,14 @@ function collectObjectEntriesDeeply(o: KVObject, out: KVEntriesMap = new Map()):
   if (out.get(o)) {
     return out; // Graph cycle
   }
-  
+
   const entries = [...Object.entries(o)];
   out.set(o, entries);
   for (const [, v] of entries) {
     if (typeof v !== 'object') {
       continue;
     }
-    if (v instanceof RegExp ||
-      v instanceof Blob) {
+    if (v instanceof RegExp || v instanceof Blob) {
       continue;
     }
     collectObjectEntriesDeeply(v, out);

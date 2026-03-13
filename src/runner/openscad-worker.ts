@@ -2,12 +2,20 @@
 
 /// <reference lib="webworker" />
 
-import { createEditorFS, mountDemandLibraries, symlinkLibraries } from "../fs/filesystem.ts";
-import { createRuntime, OpenSCADRuntime } from "./openscad-runtime.ts";
-import { CompileRequest, CompileResult, CompileError, CompileStdout, CompileStderr, MergedOutput, WorkerRequest } from "./worker-protocol.ts";
-import { fetchSource } from "../utils.ts";
+import { createEditorFS, mountDemandLibraries, symlinkLibraries } from '../fs/filesystem.ts';
+import { createRuntime, OpenSCADRuntime } from './openscad-runtime.ts';
+import {
+  CompileRequest,
+  CompileResult,
+  CompileError,
+  CompileStdout,
+  CompileStderr,
+  MergedOutput,
+  WorkerRequest,
+} from './worker-protocol.ts';
+import { fetchSource } from '../utils.ts';
 
-importScripts("browserfs.min.js");
+importScripts('browserfs.min.js');
 
 declare const self: DedicatedWorkerGlobalScope;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -99,14 +107,12 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
           await createEditorFS({ allowPersistence: false });
           editorFSInitialized = true;
         }
-        const sourceTexts = sources
-          .map(s => s.content)
-          .filter((c): c is string => c != null);
+        const sourceTexts = sources.map((s) => s.content).filter((c): c is string => c != null);
         // Also ensure the library is mounted if the active source path is inside /libraries/<name>/
         const extraNames = sources
-          .map(s => s.path)
-          .filter(p => p.startsWith('/libraries/'))
-          .map(p => p.split('/')[2])
+          .map((s) => s.path)
+          .filter((p) => p.startsWith('/libraries/'))
+          .map((p) => p.split('/')[2])
           .filter(Boolean);
         libraryNames = await mountDemandLibraries(sourceTexts, extraNames);
       }
@@ -125,7 +131,8 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
         try {
           // Files under /libraries/ are already accessible via the read-only ZipFS demand mount.
           // Writing to them would fail (ZipFS is read-only), so we only verify existence.
-          const isReadOnlyMount = source.path.startsWith('/libraries/') || source.path.startsWith('/fonts/');
+          const isReadOnlyMount =
+            source.path.startsWith('/libraries/') || source.path.startsWith('/fonts/');
           if (isReadOnlyMount) {
             // File is accessible via the demand-loaded ZipFS; no write needed.
             // If somehow it's missing (unmounted lib), compilation will error naturally.
@@ -149,17 +156,13 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
       try {
         exitCode = rt.callMain(args);
       } catch (e) {
-        if (
-          e instanceof RangeError ||
-          (e instanceof Error && e.message?.includes('OOM'))
-        ) {
+        if (e instanceof RangeError || (e instanceof Error && e.message?.includes('OOM'))) {
           const elapsedMillis = performance.now() - start;
           mergedOutputs.push({ error: 'Out of memory' });
           self.postMessage({
             type: 'error',
             id,
-            message:
-              'Out of memory. The model is too large to compile in this browser.',
+            message: 'Out of memory. The model is too large to compile in this browser.',
             mergedOutputs,
             elapsedMillis,
           } satisfies CompileError);
@@ -170,7 +173,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
       const elapsedMillis = performance.now() - start;
 
       const outputs: [string, Uint8Array][] = [];
-      for (const outPath of (outputPaths ?? [])) {
+      for (const outPath of outputPaths ?? []) {
         try {
           outputs.push([outPath, rt.readFile(outPath)]);
         } catch (err) {
