@@ -82,7 +82,8 @@ export class OscCustomizerPanel extends LitElement {
 
     const setOpen = (group: string, open: boolean) => {
       const s = new Set(collapsed);
-      open ? s.delete(group) : s.add(group);
+      if (open) s.delete(group);
+      else s.add(group);
       this._model.mutate(s2 => { s2.view.collapsedCustomizerTabs = Array.from(s); });
     };
 
