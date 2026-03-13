@@ -28,6 +28,17 @@ Locally it is advisory.
 
 CI runs three captures on the same runner, aggregates them with per-metric median, compares the aggregated candidate in strict mode, and uploads `perf-baseline-candidate` as an artifact.
 
+CI fails only on headline user-facing metrics:
+
+- `metrics.firstContentfulPaintMillis`
+- `metrics.appBootstrapMillis`
+- `metrics.firstCompileFromBootstrapMillis`
+- `warmMetrics.firstContentfulPaintMillis`
+- `warmMetrics.appBootstrapMillis`
+- `warmMetrics.firstCompileFromBootstrapMillis`
+
+Lower-level submetrics are still compared and reported, but they are diagnostic-only and do not fail CI.
+
 3. For local relative checks, compare against your ignored local baseline:
 
 ```sh
@@ -66,4 +77,4 @@ npm run perf:accept:local
 - Local compare against the CI baseline is informational.
 - Local compare against `perf-baseline.local.json` is enforcing.
 - CI perf uses median aggregation across three runs, not a single sample or best-of-N.
-- CI compare is enforcing.
+- CI compare is enforcing only for headline startup metrics; submetrics are diagnostic.

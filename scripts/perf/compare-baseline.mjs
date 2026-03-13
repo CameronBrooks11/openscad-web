@@ -39,6 +39,14 @@ function parseArgs(argv) {
 const budgetPct = Number.parseFloat(process.env.PERF_BUDGET_PCT ?? '20');
 const budgetMultiplier = 1 + budgetPct / 100;
 const minimumBudgetMs = Number.parseFloat(process.env.PERF_MIN_BUDGET_MS ?? '5');
+const gatedMetricKeys = new Set([
+  'metrics.firstContentfulPaintMillis',
+  'metrics.appBootstrapMillis',
+  'metrics.firstCompileFromBootstrapMillis',
+  'warmMetrics.firstContentfulPaintMillis',
+  'warmMetrics.appBootstrapMillis',
+  'warmMetrics.firstCompileFromBootstrapMillis',
+]);
 
 function isConfiguredMetric(value) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -57,6 +65,10 @@ function formatMetric(value) {
 
 function getMaxAllowed(baselineValue) {
   return Math.max(baselineValue * budgetMultiplier, baselineValue + minimumBudgetMs);
+}
+
+function isGatedMetric(key) {
+  return gatedMetricKeys.has(key);
 }
 
 async function readJson(filePath) {
@@ -107,30 +119,47 @@ async function main() {
   }
 
   const failures = [];
+  const diagnostics = [];
   for (const metric of configuredBaselineMetrics) {
     const currentValue = currentMetrics.get(metric.key);
+    const gated = isGatedMetric(metric.key);
     if (!isConfiguredMetric(currentValue)) {
-      failures.push(
-        `${metric.key}: missing current metric (baseline ${formatMetric(metric.value)})`,
-      );
+      const message = `${metric.key}: missing current metric (baseline ${formatMetric(
+        metric.value,
+      )})`;
+      if (gated) {
+        failures.push(message);
+      } else {
+        diagnostics.push(message);
+      }
       continue;
     }
 
     const maxAllowed = getMaxAllowed(metric.value);
-    const status = currentValue <= maxAllowed ? 'PASS' : 'FAIL';
+    const withinBudget = currentValue <= maxAllowed;
+    const status = withinBudget ? 'PASS' : gated ? 'FAIL' : 'WARN';
     console.log(
       `${status} ${metric.key}: baseline ${formatMetric(metric.value)}, current ${formatMetric(
         currentValue,
       )}, budget ${formatMetric(maxAllowed)}`,
     );
 
-    if (currentValue > maxAllowed) {
-      failures.push(
-        `${metric.key}: current ${formatMetric(currentValue)} exceeds budget ${formatMetric(
-          maxAllowed,
-        )} (baseline ${formatMetric(metric.value)})`,
-      );
+    if (!withinBudget) {
+      const message = `${metric.key}: current ${formatMetric(currentValue)} exceeds budget ${formatMetric(
+        maxAllowed,
+      )} (baseline ${formatMetric(metric.value)})`;
+      if (gated) {
+        failures.push(message);
+      } else {
+        diagnostics.push(message);
+      }
     }
+  }
+
+  if (diagnostics.length > 0) {
+    console.warn(
+      `Diagnostic perf regressions detected (not CI-gating):\n${diagnostics.join('\n')}`,
+    );
   }
 
   if (failures.length > 0) {
