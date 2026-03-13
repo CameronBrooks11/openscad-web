@@ -2,6 +2,8 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { getModel } from '../../state/model-context.ts';
+import { getFS } from '../../state/fs-context.ts';
+import { clearHomeDirectory } from '../../fs/filesystem.ts';
 import { isInStandaloneMode } from '../../utils.ts';
 import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
@@ -92,19 +94,25 @@ export class OscSettingsMenu extends LitElement {
           </button>
           ${isInStandaloneMode() ? html`
             <hr />
-            <button class="item danger" @click=${this._clearLocalStorage}>Clear local storage</button>
+            <button class="item danger" @click=${this._clearLocalData}>Clear local data</button>
           ` : ''}
         </div>
       </details>
     `;
   }
 
-  private _clearLocalStorage() {
+  private _clearLocalData() {
     if (window.confirm(
       "This will clear all the edits you've made and files you've created in this playground " +
       "and will reset it to factory defaults. " +
       "Are you sure you wish to proceed? (you might lose your models!)"
     )) {
+      try {
+        clearHomeDirectory(getFS());
+      } catch (e) {
+        console.error('Failed to clear /home partition:', e);
+      }
+      // Keep this to clear any future settings persisted outside BrowserFS.
       localStorage.clear();
       location.reload();
     }

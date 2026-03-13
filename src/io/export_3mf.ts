@@ -36,19 +36,6 @@ export function export3MF(data: IndexedPolyhedron, extruderColors?: chroma.Color
     const extruderIndexByColorIndex = extruderColors &&
         getColorMapping(dataColors, extruderColors);
 
-    if (extruderColors) {
-        console.log('Extruder colors:');
-        for (const c of extruderColors) {
-            console.log(`- ${c.name()}`);
-        }
-        console.log('Model color mapping:');
-        dataColors.forEach((from, i) => {
-            const extruderIndex = extruderIndexByColorIndex![i];
-            const to = extruderColors[extruderIndex];
-            console.log(`- ${from.name()} -> ${to?.name()} (${PAINT_COLOR_MAP[extruderIndex]})`);
-        });
-    }
-
     const paintColorByColorIndex = extruderIndexByColorIndex?.map(i => PAINT_COLOR_MAP[i]);
     
     const archive = {
@@ -85,7 +72,7 @@ export function export3MF(data: IndexedPolyhedron, extruderColors?: chroma.Color
                         '</mesh>',
                     '</object>',
                 '</resources>',
-                `<build p:UUID="${buildUuid}}">`,
+                `<build p:UUID="${buildUuid}">`,
                     `<item objectid="1" p:UUID="${objectUuid}"/>`,
                 '</build>',
             '</model>',

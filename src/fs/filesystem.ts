@@ -232,3 +232,35 @@ export async function saveActiveFile(content: string): Promise<boolean> {
 export function clearActiveFileHandle(): void {
   _activeHandle = null;
 }
+
+type MutableFS = FS & {
+  existsSync?: (path: string) => boolean;
+  unlinkSync?: (path: string) => void;
+  rmdirSync?: (path: string) => void;
+};
+
+function removeTreeSync(fs: MutableFS, path: string): void {
+  const stat = fs.lstatSync(path);
+  if (stat.isDirectory()) {
+    for (const entry of fs.readdirSync(path)) {
+      removeTreeSync(fs, join(path, entry));
+    }
+    if (!fs.rmdirSync) throw new Error('Filesystem does not support rmdirSync');
+    fs.rmdirSync(path);
+    return;
+  }
+  if (!fs.unlinkSync) throw new Error('Filesystem does not support unlinkSync');
+  fs.unlinkSync(path);
+}
+
+/**
+ * Clears all user-created files in the persistent /home partition.
+ * Leaves built-in mounts (/libraries, /fonts, /tmp) untouched.
+ */
+export function clearHomeDirectory(fs: FS): void {
+  const mutableFs = fs as MutableFS;
+  if (mutableFs.existsSync && !mutableFs.existsSync('/home')) return;
+  for (const entry of mutableFs.readdirSync('/home')) {
+    removeTreeSync(mutableFs, join('/home', entry));
+  }
+}
