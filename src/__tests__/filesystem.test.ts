@@ -1,6 +1,6 @@
 // Unit tests for Phase 2 filesystem layer — F2/F3/F7 exit criteria
 
-import { extractLibraryNames } from '../fs/filesystem.ts';
+import { clearHomeDirectory, extractLibraryNames } from '../fs/filesystem.ts';
 import { zipArchives, deployedArchiveNames, ZipArchive } from '../fs/zip-archives.generated.ts';
 import libsConfig from '../../libs-config.json';
 
@@ -101,5 +101,65 @@ describe('zip-archives registry parity', () => {
       // UB.scad is stored as UB.scad.zip — name may contain dots
       expect(archive.zipPath).toBe(`./libraries/${archive.name}.zip`);
     }
+  });
+});
+
+describe('clearHomeDirectory', () => {
+  it('removes all files and subdirectories under /home recursively', () => {
+    const dirs = new Set(['/home', '/home/project', '/home/project/nested']);
+    const files = new Set(['/home/main.scad', '/home/project/a.scad', '/home/project/nested/b.txt']);
+
+    const readdirSync = jest.fn((path: string) => {
+      switch (path) {
+        case '/home':
+          return ['main.scad', 'project'];
+        case '/home/project':
+          return ['a.scad', 'nested'];
+        case '/home/project/nested':
+          return ['b.txt'];
+        default:
+          return [];
+      }
+    });
+    const unlinkSync = jest.fn((path: string) => {
+      files.delete(path);
+    });
+    const rmdirSync = jest.fn((path: string) => {
+      dirs.delete(path);
+    });
+
+    const fs = {
+      existsSync: () => true,
+      readdirSync,
+      lstatSync: (path: string) => ({ isDirectory: () => dirs.has(path) }),
+      unlinkSync,
+      rmdirSync,
+    } as unknown as FS;
+
+    clearHomeDirectory(fs);
+
+    expect(files.size).toBe(0);
+    expect(dirs.has('/home')).toBe(true);
+    expect(dirs.has('/home/project')).toBe(false);
+    expect(dirs.has('/home/project/nested')).toBe(false);
+    expect(unlinkSync).toHaveBeenCalledWith('/home/main.scad');
+    expect(unlinkSync).toHaveBeenCalledWith('/home/project/a.scad');
+    expect(unlinkSync).toHaveBeenCalledWith('/home/project/nested/b.txt');
+    expect(rmdirSync).toHaveBeenCalledWith('/home/project/nested');
+    expect(rmdirSync).toHaveBeenCalledWith('/home/project');
+  });
+
+  it('is a no-op when /home does not exist', () => {
+    const readdirSync = jest.fn();
+    const fs = {
+      existsSync: () => false,
+      readdirSync,
+      lstatSync: () => ({ isDirectory: () => false }),
+      unlinkSync: jest.fn(),
+      rmdirSync: jest.fn(),
+    } as unknown as FS;
+
+    clearHomeDirectory(fs);
+    expect(readdirSync).not.toHaveBeenCalled();
   });
 });

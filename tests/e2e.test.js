@@ -81,8 +81,7 @@ function expect3DManifold() {
 }
 function waitForCustomizeButton() {
   return page.waitForFunction(() => {
-    // Try multiple selectors for PrimeReact components
-    // ToggleButton might render as button or input elements
+    // Scan generic interactive elements and match by visible text.
     const selectors = [
       'input[role=switch]',
       'button',
@@ -105,10 +104,11 @@ function waitForCustomizeButton() {
   }, { timeout: 45000 }); // Increase timeout to 45 seconds
 }
 function waitForLabel(text) {
-  return page.waitForFunction(() => {
-    return Array.from(document.querySelectorAll('label')).find(el => el.textContent === 'myVar');
-    // return Array.from(document.querySelectorAll('label')).find(el => el.textContent === text);
-  });
+  return page.waitForFunction(
+    (expected) => Array.from(document.querySelectorAll('label')).find(el => el.textContent === expected),
+    undefined,
+    text,
+  );
 }
 
 describe('e2e', () => {
@@ -186,13 +186,13 @@ describe('worker integration', () => {
     expect3DPolySet();
   }, longTimeout);
 
-  test('exactly one worker is created per page session', async () => {
+  test('single render emits one geometry summary line', async () => {
     await loadSrc('cube(5);');
     await waitForViewer();
-    const workerCreatedLogs = messages.filter(
-      msg => msg.type === 'log' && msg.text === '[runner] Worker created'
+    const geometrySummaryLogs = messages.filter(
+      msg => msg.type === 'debug' && msg.text === 'stderr: Top level object is a 3D object (PolySet):'
     );
-    expect(workerCreatedLogs).toHaveLength(1);
+    expect(geometrySummaryLogs).toHaveLength(1);
   }, longTimeout);
 });
 
