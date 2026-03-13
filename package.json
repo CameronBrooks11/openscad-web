@@ -36,8 +36,10 @@
     "build:libs:fonts": "cross-env LIBS_BUILD_MODE=fonts webpack --config webpack.libs.config.js",
     "build:all": "npm run build:libs && npm run build",
     "lint": "eslint src/",
+    "typecheck": "npx tsc --noEmit",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "verify": "npm run lint && npm run typecheck && npm run test:unit && npm run build"
   },
   "browserslist": {
     "production": [
