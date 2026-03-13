@@ -26,6 +26,7 @@ export class OscViewerPanel extends LitElement {
   private _container: HTMLDivElement | null = null;
   private _lastOutFile: File | undefined;
   private _toastTimer: ReturnType<typeof setTimeout> | null = null;
+  private _lastSvgPreviewUrl: string | null = null;
 
   private _onState = (e: Event) => {
     const st = (e as CustomEvent<State>).detail;
@@ -45,6 +46,8 @@ export class OscViewerPanel extends LitElement {
       this._lastOutFile = st.output?.outFile;
       if (st.output?.outFile?.name.endsWith('.off')) {
         this._loadGeometry(st.output.outFile);
+      } else if (st.output?.outFile?.name.endsWith('.svg') && st.output.outFileURL) {
+        this._loadSvgPreview(st.output.outFileURL);
       }
     }
   };
@@ -59,17 +62,30 @@ export class OscViewerPanel extends LitElement {
   override disconnectedCallback() {
     super.disconnectedCallback();
     this._model?.removeEventListener('state', this._onState);
-    this._ro?.disconnect();
-    this._scene?.dispose();
-    this._scene = null;
+    this._teardownScene();
     if (this._toastTimer) clearTimeout(this._toastTimer);
   }
 
-  override firstUpdated() {
-    this._container = this.querySelector('[data-testid="viewer-canvas"]') as HTMLDivElement;
-    if (!this._container) return;
+  override updated() {
+    const nextContainer = this.querySelector(
+      '[data-testid="viewer-canvas"]',
+    ) as HTMLDivElement | null;
+    if (!nextContainer) {
+      if (this._st?.output?.outFile?.name.endsWith('.svg') && this._st.output.outFileURL) {
+        this._loadSvgPreview(this._st.output.outFileURL);
+      }
+      this._teardownScene();
+      return;
+    }
 
-    const scene = new ThreeScene(this._container);
+    if (this._scene && this._container === nextContainer) {
+      return;
+    }
+
+    this._teardownScene();
+    this._container = nextContainer;
+
+    const scene = new ThreeScene(nextContainer);
     this._scene = scene;
 
     const st = this._st ?? this._model.state;
@@ -97,6 +113,14 @@ export class OscViewerPanel extends LitElement {
     }
   }
 
+  private _teardownScene() {
+    this._ro?.disconnect();
+    this._ro = null;
+    this._scene?.dispose();
+    this._scene = null;
+    this._container = null;
+  }
+
   private async _loadGeometry(file: File) {
     const scene = this._scene;
     if (!scene) return;
@@ -119,6 +143,19 @@ export class OscViewerPanel extends LitElement {
     }
   }
 
+  private async _loadSvgPreview(svgUrl: string) {
+    if (svgUrl === this._lastSvgPreviewUrl) return;
+    this._lastSvgPreviewUrl = svgUrl;
+    try {
+      const hash = await imageToThumbhash(svgUrl);
+      this._model.mutate((s) => {
+        s.preview = { thumbhash: hash };
+      });
+    } catch (err) {
+      console.error('Error loading SVG preview:', err);
+    }
+  }
+
   private _showToast(msg: string) {
     this._toastMessage = msg;
     if (this._toastTimer) clearTimeout(this._toastTimer);
@@ -130,6 +167,10 @@ export class OscViewerPanel extends LitElement {
   override render() {
     const st = this._st;
     const isCompiling = !!(st?.rendering || st?.previewing);
+    const outName = st?.output?.outFile?.name ?? '';
+    const isSvgOutput = outName.endsWith('.svg');
+    const isDxfOutput = outName.endsWith('.dxf');
+    const shows3DViewer = !isSvgOutput && !isDxfOutput;
     const placeholderUri = (() => {
       if (st?.preview?.blurhash) return blurHashToImage(st.preview.blurhash, 100, 100);
       if (st?.preview?.thumbhash) return thumbHashToImage(st.preview.thumbhash);
@@ -170,6 +211,26 @@ export class OscViewerPanel extends LitElement {
           z-index: 10;
           transition: opacity 0.3s;
         }
+        .svg-preview,
+        .dxf-placeholder {
+          width: 100%;
+          height: 100%;
+        }
+        .svg-preview {
+          display: block;
+          object-fit: contain;
+          background: #fff;
+        }
+        .dxf-placeholder {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+          background: #f5f7fb;
+          color: #3b4455;
+          text-align: center;
+          line-height: 1.5;
+        }
       </style>
       ${isCompiling && placeholderUri
         ? html`
@@ -180,29 +241,52 @@ export class OscViewerPanel extends LitElement {
             />
           `
         : ''}
-      <div
-        data-testid="viewer-canvas"
-        style="flex:1;position:relative;width:100%;height:100%;"
-      ></div>
-      ${this._toastMessage ? html`<div class="osc-toast">${this._toastMessage}</div>` : ''}
-      <div
-        style="position:absolute;bottom:8px;right:8px;display:flex;flex-direction:column;gap:2px;z-index:2;"
-      >
-        ${NAMED_POSITIONS.map(
-          ({ name }) => html`
-            <button
-              title="${name} view"
-              @click=${() => {
-                this._scene?.setCameraPosition(name);
-                this._showToast(`${name} view`);
-              }}
-              style="font-size:0.65rem;padding:2px 6px;cursor:pointer;opacity:0.75;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:3px;"
+      ${shows3DViewer
+        ? html`
+            <div
+              data-testid="viewer-canvas"
+              style="flex:1;position:relative;width:100%;height:100%;"
+            ></div>
+          `
+        : isSvgOutput
+          ? html`
+              <img
+                class="svg-preview"
+                data-testid="viewer-svg"
+                src=${st?.output?.outFileURL ?? ''}
+                alt="Rendered SVG preview"
+              />
+            `
+          : html`
+              <div class="dxf-placeholder" data-testid="viewer-dxf-placeholder">
+                DXF exported. Click Download to open it in your CAD tool.
+              </div>
+            `}
+      ${shows3DViewer && this._toastMessage
+        ? html`<div class="osc-toast">${this._toastMessage}</div>`
+        : ''}
+      ${shows3DViewer
+        ? html`
+            <div
+              style="position:absolute;bottom:8px;right:8px;display:flex;flex-direction:column;gap:2px;z-index:2;"
             >
-              ${name}
-            </button>
-          `,
-        )}
-      </div>
+              ${NAMED_POSITIONS.map(
+                ({ name }) => html`
+                  <button
+                    title="${name} view"
+                    @click=${() => {
+                      this._scene?.setCameraPosition(name);
+                      this._showToast(`${name} view`);
+                    }}
+                    style="font-size:0.65rem;padding:2px 6px;cursor:pointer;opacity:0.75;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:3px;"
+                  >
+                    ${name}
+                  </button>
+                `,
+              )}
+            </div>
+          `
+        : ''}
     `;
   }
 }

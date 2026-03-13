@@ -72,10 +72,17 @@ export class Model extends EventTarget {
     exportFormat2D: keyof typeof VALID_EXPORT_FORMATS_2D | undefined,
     exportFormat3D: keyof typeof VALID_EXPORT_FORMATS_3D | undefined,
   ) {
+    let rerender2DPreview = false;
     this.mutate((s) => {
-      if (exportFormat2D != null) s.params.exportFormat2D = exportFormat2D;
+      if (exportFormat2D != null && s.params.exportFormat2D !== exportFormat2D) {
+        s.params.exportFormat2D = exportFormat2D;
+        rerender2DPreview = s.is2D === true && s.params.autoCompile !== false;
+      }
       if (exportFormat3D != null) s.params.exportFormat3D = exportFormat3D;
     });
+    if (rerender2DPreview) {
+      this.render({ isPreview: true, now: true });
+    }
   }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   setVar(name: string, value: any) {
@@ -534,7 +541,7 @@ export class Model extends EventTarget {
       vars,
       features,
       isPreview,
-      renderFormat: is2D ? 'svg' : 'off',
+      renderFormat: is2D ? this.state.params.exportFormat2D : 'off',
       streamsCallback: this.rawStreamsCallback.bind(this),
       backend: this.state.params.backend,
     };
@@ -543,27 +550,6 @@ export class Model extends EventTarget {
       let displayFile = output.outFile;
       if (output.outFile.name.endsWith('.svg') || output.outFile.name.endsWith('.dxf')) {
         is2D = true;
-        const fn = output.outFile.name;
-        const extrudedOutput = await render({
-          mountArchives: false,
-          scadPath: '/extruded.scad',
-          sources: [
-            {
-              path: '/extruded.scad',
-              content: `linear_extrude(0.1) import("${fn}");`,
-            },
-            {
-              path: `/${fn}`,
-              url: await readFileAsDataURL(output.outFile),
-            },
-          ],
-          vars: {},
-          features,
-          isPreview: false,
-          renderFormat: 'off',
-          streamsCallback: this.rawStreamsCallback.bind(this),
-        })({ now });
-        displayFile = extrudedOutput.outFile;
       } else {
         is2D = false;
       }

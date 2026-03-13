@@ -183,6 +183,24 @@ describe('Model — render triggering', () => {
     const firstRenderArgs = mockRender.mock.calls[0]?.[0];
     expect(firstRenderArgs.renderFormat).toBe('svg');
   });
+
+  it('uses the selected 2D export format for non-scad 2D resources', async () => {
+    model.mutate((s) => {
+      s.params.exportFormat2D = 'dxf';
+      s.params.sources = [
+        ...s.params.sources,
+        { path: '/home/image.svg', content: '<svg xmlns="http://www.w3.org/2000/svg"></svg>' },
+      ];
+    });
+    jest.clearAllMocks();
+
+    model.openFile('/home/image.svg');
+    await nextTicks();
+
+    expect(mockRender).toHaveBeenCalled();
+    const firstRenderArgs = mockRender.mock.calls[0]?.[0];
+    expect(firstRenderArgs.renderFormat).toBe('dxf');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -228,11 +246,26 @@ describe('Model — format changes', () => {
     expect(model.state.params.exportFormat2D).toBe('dxf');
   });
 
-  it('does not trigger render on format-only change (current behaviour)', async () => {
-    // NOTE: changing export format alone doesn't schedule a re-render;
+  it('does not trigger render on 3D format-only change', async () => {
     // the new format is used on the next user-initiated render.
     model.setFormats(undefined, 'off');
     await nextTicks();
     expect(mockRender).not.toHaveBeenCalled();
+  });
+
+  it('triggers an immediate preview render when the active 2D export format changes', async () => {
+    model.mutate((s) => {
+      s.is2D = true;
+    });
+    jest.clearAllMocks();
+
+    model.setFormats('dxf', undefined);
+    await nextTicks();
+
+    expect(mockRender).toHaveBeenCalledTimes(1);
+    const renderCall = mockRender.mock.calls[0]?.[0];
+    expect(renderCall.renderFormat).toBe('dxf');
+    const scheduledRender = mockRender.mock.results[0]?.value as jest.Mock | undefined;
+    expect(scheduledRender).toHaveBeenCalledWith({ now: true });
   });
 });
