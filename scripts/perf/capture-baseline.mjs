@@ -120,22 +120,18 @@ async function stopServer(server) {
   const exitPromise = waitForProcessExit(server);
   server.kill();
 
-  const exited = await Promise.race([
-    exitPromise.then(() => true),
-    sleep(5_000).then(() => false),
-  ]);
+  const exited = await Promise.race([exitPromise.then(() => true), sleep(5_000).then(() => false)]);
 
   if (!exited && server.pid) {
     if (process.platform === 'win32') {
-      const killer = spawn(process.env.ComSpec ?? 'cmd.exe', [
-        '/d',
-        '/s',
-        '/c',
-        `taskkill /PID ${server.pid} /T /F`,
-      ], {
-        stdio: 'ignore',
-        windowsHide: true,
-      });
+      const killer = spawn(
+        process.env.ComSpec ?? 'cmd.exe',
+        ['/d', '/s', '/c', `taskkill /PID ${server.pid} /T /F`],
+        {
+          stdio: 'ignore',
+          windowsHide: true,
+        },
+      );
       await waitForProcessExit(killer);
     } else {
       server.kill('SIGKILL');
