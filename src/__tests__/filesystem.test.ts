@@ -1,8 +1,30 @@
 // Unit tests for Phase 2 filesystem layer — F2/F3/F7 exit criteria
 
-import { clearHomeDirectory, extractLibraryNames } from '../fs/filesystem.ts';
+import {
+  clearActiveFileHandle,
+  clearHomeDirectory,
+  extractLibraryNames,
+  getParentDir,
+  join,
+  openLocalFile,
+  saveActiveFile,
+} from '../fs/filesystem.ts';
 import { zipArchives, deployedArchiveNames, ZipArchive } from '../fs/zip-archives.generated.ts';
 import libsConfig from '../../libs-config.json';
+
+describe('filesystem path helpers', () => {
+  it('getParentDir returns the containing directory for absolute and relative paths', () => {
+    expect(getParentDir('/home/file.scad')).toBe('/home');
+    expect(getParentDir('file.scad')).toBe('.');
+    expect(getParentDir('/file.scad')).toBe('/');
+  });
+
+  it('join handles current-directory, trailing slash, and dot segments', () => {
+    expect(join('.', 'file.scad')).toBe('file.scad');
+    expect(join('/home/', 'project')).toBe('/home/project');
+    expect(join('/home/project', '.')).toBe('/home/project');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // F3 — extractLibraryNames() parses use/include directives correctly
@@ -165,5 +187,96 @@ describe('clearHomeDirectory', () => {
 
     clearHomeDirectory(fs);
     expect(readdirSync).not.toHaveBeenCalled();
+  });
+
+  it('throws when removing a directory on a filesystem without rmdirSync support', () => {
+    const fs = {
+      existsSync: () => true,
+      readdirSync: (path: string) => (path === '/home' ? ['project'] : []),
+      lstatSync: () => ({ isDirectory: () => true }),
+    } as unknown as FS;
+
+    expect(() => clearHomeDirectory(fs)).toThrow('Filesystem does not support rmdirSync');
+  });
+
+  it('throws when removing a file on a filesystem without unlinkSync support', () => {
+    const fs = {
+      existsSync: () => true,
+      readdirSync: (path: string) => (path === '/home' ? ['main.scad'] : []),
+      lstatSync: () => ({ isDirectory: () => false }),
+      rmdirSync: jest.fn(),
+    } as unknown as FS;
+
+    expect(() => clearHomeDirectory(fs)).toThrow('Filesystem does not support unlinkSync');
+  });
+});
+
+describe('File System Access helpers', () => {
+  afterEach(() => {
+    clearActiveFileHandle();
+    delete (window as Window & { showOpenFilePicker?: unknown }).showOpenFilePicker;
+  });
+
+  it('openLocalFile returns null when the picker API is unavailable', async () => {
+    await expect(openLocalFile()).resolves.toBeNull();
+  });
+
+  it('openLocalFile returns file metadata and saveActiveFile writes via the retained handle', async () => {
+    const writable = {
+      write: jest.fn().mockResolvedValue(undefined),
+      close: jest.fn().mockResolvedValue(undefined),
+    };
+    const handle = {
+      getFile: jest.fn().mockResolvedValue({
+        name: 'demo.scad',
+        text: jest.fn().mockResolvedValue('cube(10);'),
+      }),
+      createWritable: jest.fn().mockResolvedValue(writable),
+    };
+
+    Object.defineProperty(window, 'showOpenFilePicker', {
+      configurable: true,
+      value: jest.fn().mockResolvedValue([handle]),
+    });
+
+    await expect(openLocalFile()).resolves.toEqual({
+      name: 'demo.scad',
+      content: 'cube(10);',
+    });
+    await expect(saveActiveFile('sphere(5);')).resolves.toBe(true);
+    expect(writable.write).toHaveBeenCalledWith('sphere(5);');
+    expect(writable.close).toHaveBeenCalled();
+  });
+
+  it('openLocalFile treats AbortError as a user cancel and resets failed save handles', async () => {
+    const handle = {
+      getFile: jest.fn().mockResolvedValue({
+        name: 'demo.scad',
+        text: jest.fn().mockResolvedValue('cube(10);'),
+      }),
+      createWritable: jest.fn().mockRejectedValue(new Error('disk full')),
+    };
+
+    Object.defineProperty(window, 'showOpenFilePicker', {
+      configurable: true,
+      value: jest
+        .fn()
+        .mockRejectedValueOnce(Object.assign(new Error('cancelled'), { name: 'AbortError' }))
+        .mockResolvedValueOnce([handle]),
+    });
+
+    await expect(openLocalFile()).resolves.toBeNull();
+    await openLocalFile();
+    await expect(saveActiveFile('cube(1);')).resolves.toBe(false);
+    await expect(saveActiveFile('cube(2);')).resolves.toBe(false);
+  });
+
+  it('openLocalFile rethrows non-abort picker failures', async () => {
+    Object.defineProperty(window, 'showOpenFilePicker', {
+      configurable: true,
+      value: jest.fn().mockRejectedValue(new Error('permission denied')),
+    });
+
+    await expect(openLocalFile()).rejects.toThrow('permission denied');
   });
 });
