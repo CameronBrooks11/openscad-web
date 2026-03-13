@@ -308,7 +308,7 @@ export async function buildOpenSCADCompletionItemProvider(
         const named: [string, CompletionItem][] = [
           ...mapObject(
             parsed.functions ?? {},
-            (name, mod) => [name, makeFunctionoidSuggestion(name, mod)],
+            (name, mod) => [name, makeFunctionoidSuggestion(name, mod)] as [string, CompletionItem],
             (name) => name.indexOf(word) >= 0,
           ),
         ];

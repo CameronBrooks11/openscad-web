@@ -2,13 +2,12 @@
 
 import { Source } from './state/app-state.ts';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function mapObject(
-  o: any,
-  f: (key: string, value: any) => any,
+export function mapObject<T, R>(
+  o: Record<string, T>,
+  f: (key: string, value: T) => R,
   ifPred: (key: string) => boolean,
 ) {
-  const ret = [];
+  const ret: R[] = [];
   for (const key of Object.keys(o)) {
     if (ifPred && !ifPred(key)) {
       continue;
@@ -20,9 +19,8 @@ export function mapObject(
 
 type Killer = () => void;
 export type AbortablePromise<T> = Promise<T> & { kill: Killer };
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function AbortablePromise<T>(
-  f: (resolve: (result: T) => void, reject: (error: any) => void) => Killer,
+  f: (resolve: (result: T) => void, reject: (error: unknown) => void) => Killer,
 ): AbortablePromise<T> {
   let kill: Killer;
   const promise = new Promise<T>((res, rej) => {
@@ -31,9 +29,8 @@ export function AbortablePromise<T>(
   return Object.assign(promise, { kill: kill! });
 }
 
-// <T extends any[]>(...args: T)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function turnIntoDelayableExecution<T extends any[], R>(
+// <T extends unknown[]>(...args: T)
+export function turnIntoDelayableExecution<T extends unknown[], R>(
   delay: number,
   job: (...args: T) => AbortablePromise<R>,
 ) {

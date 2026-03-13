@@ -119,12 +119,9 @@ export async function readStateFromFragment(): Promise<State | null> {
             Object.keys(VALID_EXPORT_FORMATS_3D),
             (_s) => 'stl',
           ),
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          extruderColors: validateArray(
-            params?.extruderColors,
-            validateString,
-            () => undefined as any as [],
-          ),
+          extruderColors: Array.isArray(params?.extruderColors)
+            ? validateArray(params.extruderColors, validateString)
+            : undefined,
         },
         preview: preview
           ? {

@@ -116,6 +116,7 @@ export function extractLibraryNames(source: string): string[] {
 
 // Per-thread cache of already-mounted library ZIPs
 const mountedLibraryZips = new Set<string>();
+const mountingLibraryZips = new Map<string, Promise<void>>();
 
 /**
  * Fetches and mounts a single library ZIP into BrowserFS's /libraries partition.
@@ -123,16 +124,36 @@ const mountedLibraryZips = new Set<string>();
  */
 async function fetchAndMountLibrary(name: string): Promise<void> {
   if (mountedLibraryZips.has(name)) return;
-  const archive = zipArchives.find((a) => a.name === name);
-  if (!archive) return; // unknown library — skip silently
-  if (!_rootMFS)
-    throw new Error('[filesystem] createEditorFS() must be called before mountDemandLibraries()');
-  const buf = await fetch(archive.zipPath).then((r) => r.arrayBuffer());
-  const zipFS = await createBFSBackend('ZipFS', {
-    zipData: BrowserFS.BFSRequire('buffer').Buffer.from(buf),
-  });
-  _rootMFS.mount(archive.mountPath, zipFS);
-  mountedLibraryZips.add(name);
+  const inFlight = mountingLibraryZips.get(name);
+  if (inFlight) return inFlight;
+
+  const mountPromise = (async () => {
+    const archive = zipArchives.find((a) => a.name === name);
+    if (!archive) return; // unknown library — skip silently
+    if (!_rootMFS)
+      throw new Error('[filesystem] createEditorFS() must be called before mountDemandLibraries()');
+    const buf = await fetch(archive.zipPath).then((r) => r.arrayBuffer());
+    const zipFS = await createBFSBackend('ZipFS', {
+      zipData: BrowserFS.BFSRequire('buffer').Buffer.from(buf),
+    });
+    if (mountedLibraryZips.has(name)) return;
+    try {
+      _rootMFS.mount(archive.mountPath, zipFS);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes('Mount point') || !message.includes('already taken')) {
+        throw error;
+      }
+    }
+    mountedLibraryZips.add(name);
+  })();
+
+  mountingLibraryZips.set(name, mountPromise);
+  try {
+    await mountPromise;
+  } finally {
+    mountingLibraryZips.delete(name);
+  }
 }
 
 /**

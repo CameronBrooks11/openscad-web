@@ -66,7 +66,8 @@ const config = [
     },
     devServer: {
       static: path.join(__dirname, 'dist'),
-      compress: true,
+      // Avoid intermittent ZIP streaming/content-length mismatches in local E2E runs.
+      compress: false,
       port: 4000,
     },
     plugins: [
