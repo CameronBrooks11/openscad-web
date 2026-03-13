@@ -43,7 +43,11 @@ describe('OpenSCAD language registration', () => {
     const mockedBuilder = buildOpenSCADCompletionItemProvider as unknown as jest.Mock;
     mockedBuilder.mockResolvedValue(provider);
 
-    await registerOpenSCADLanguage({} as FS, '/home', []);
+    const first = await registerOpenSCADLanguage({} as FS, '/home', []);
+    const second = await registerOpenSCADLanguage({} as FS, '/home', []);
+
+    expect(first).toBe(monacoMock);
+    expect(second).toBe(monacoMock);
 
     expect(monacoMock.languages.register).toHaveBeenCalledWith({
       id: 'openscad',
@@ -58,10 +62,13 @@ describe('OpenSCAD language registration', () => {
       'openscad',
       openscadLanguage.language,
     );
+    expect(mockedLoader.init).toHaveBeenCalledTimes(1);
+    expect(mockedBuilder).toHaveBeenCalledTimes(1);
     expect(mockedBuilder).toHaveBeenCalledWith({}, '/home', []);
     expect(monacoMock.languages.registerCompletionItemProvider).toHaveBeenCalledWith(
       'openscad',
       provider,
     );
+    expect(monacoMock.languages.registerCompletionItemProvider).toHaveBeenCalledTimes(1);
   });
 });

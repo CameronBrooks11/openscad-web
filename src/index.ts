@@ -1,8 +1,6 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import { createEditorFS, preloadAllLibraries } from './fs/filesystem.ts';
-import { registerOpenSCADLanguage } from './language/openscad-register-language.ts';
-import { zipArchives } from './fs/zip-archives.generated.ts';
 import { readStateFromFragment, writeStateInFragment } from './state/fragment-state.ts';
 import { createInitialState } from './state/initial-state.ts';
 import { parseUrlMode } from './state/url-mode.ts';
@@ -69,11 +67,6 @@ window.addEventListener('load', async () => {
   await preloadAllLibraries();
   markPerf('osc:libraries-preload-end');
   measurePerf('osc:libraries-preload', 'osc:libraries-preload-start', 'osc:libraries-preload-end');
-
-  markPerf('osc:language-register-start');
-  await registerOpenSCADLanguage(fs, '/libraries', zipArchives);
-  markPerf('osc:language-register-end');
-  measurePerf('osc:language-register', 'osc:language-register-start', 'osc:language-register-end');
 
   let statePersister: StatePersister;
   let persistedState: State | null = null;

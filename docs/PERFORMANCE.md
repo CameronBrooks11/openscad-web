@@ -16,7 +16,9 @@ npm run perf:capture
 npm run perf:compare
 ```
 
-CI does the same and uploads `perf-baseline-candidate` as an artifact.
+Locally this is advisory because the committed baseline is CI-sourced.
+
+CI runs the same comparison in strict mode and uploads `perf-baseline-candidate` as an artifact.
 
 ## Accepting a New Baseline
 
@@ -39,3 +41,5 @@ npm run perf:accept -- path/to/current-perf-baseline.json
 - Compare is automatic.
 - Baseline updates are manual.
 - Prefer CI artifact values over local machine values when re-baselining.
+- Local compare is informational by default.
+- CI compare is enforcing.

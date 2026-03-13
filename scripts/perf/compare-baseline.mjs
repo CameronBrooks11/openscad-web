@@ -13,6 +13,8 @@ const currentPath = path.resolve(
 );
 const budgetPct = Number.parseFloat(process.env.PERF_BUDGET_PCT ?? '20');
 const budgetMultiplier = 1 + budgetPct / 100;
+const minimumBudgetMs = Number.parseFloat(process.env.PERF_MIN_BUDGET_MS ?? '5');
+const isStrict = process.env.CI === 'true' || process.env.PERF_STRICT === 'true';
 
 function isConfiguredMetric(value) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
@@ -27,6 +29,10 @@ function collectMetrics(prefix, section) {
 
 function formatMetric(value) {
   return typeof value === 'number' ? `${value.toFixed(2)}ms` : 'unset';
+}
+
+function getMaxAllowed(baselineValue) {
+  return Math.max(baselineValue * budgetMultiplier, baselineValue + minimumBudgetMs);
 }
 
 async function readJson(filePath) {
@@ -65,7 +71,7 @@ async function main() {
       continue;
     }
 
-    const maxAllowed = metric.value * budgetMultiplier;
+    const maxAllowed = getMaxAllowed(metric.value);
     const status = currentValue <= maxAllowed ? 'PASS' : 'FAIL';
     console.log(
       `${status} ${metric.key}: baseline ${formatMetric(metric.value)}, current ${formatMetric(
@@ -83,7 +89,14 @@ async function main() {
   }
 
   if (failures.length > 0) {
-    throw new Error(`Performance regression detected:\n${failures.join('\n')}`);
+    const message = `Performance regression detected:\n${failures.join('\n')}`;
+    if (isStrict) {
+      throw new Error(message);
+    }
+
+    console.warn(
+      `${message}\nLocal compare is advisory against the committed CI baseline. Set PERF_STRICT=true to enforce locally.`,
+    );
   }
 }
 

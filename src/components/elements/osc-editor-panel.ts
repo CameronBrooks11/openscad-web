@@ -1,14 +1,15 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import loader from '@monaco-editor/loader';
 import openscadEditorOptions from '../../language/openscad-editor-options.ts';
 import * as monacoTypes from 'monaco-editor/esm/vs/editor/editor.api';
 import { getModel } from '../../state/model-context.ts';
 import { getFS } from '../../state/fs-context.ts';
+import { zipArchives } from '../../fs/zip-archives.generated.ts';
 import { getParentDir, join } from '../../fs/filesystem.ts';
 import { defaultSourcePath, getBlankProjectState } from '../../state/initial-state.ts';
 import { buildUrlForStateParams } from '../../state/fragment-state.ts';
+import { registerOpenSCADLanguage } from '../../language/openscad-register-language.ts';
 import { markPerf, measurePerf } from '../../perf/runtime-performance.ts';
 import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
@@ -102,8 +103,20 @@ export class OscEditorPanel extends LitElement {
     const container = this.querySelector('.osc-editor-monaco') as HTMLDivElement;
     if (!container) return;
 
+    markPerf('osc:language-register-start');
+    const monaco = (await registerOpenSCADLanguage(
+      getFS(),
+      '/libraries',
+      zipArchives,
+    )) as typeof monacoTypes;
+    markPerf('osc:language-register-end');
+    measurePerf(
+      'osc:language-register',
+      'osc:language-register-start',
+      'osc:language-register-end',
+    );
+
     markPerf('osc:editor-mount-start');
-    const monaco = (await loader.init()) as typeof monacoTypes;
     this._monaco = monaco;
 
     const st = this._st ?? this._model.state;
