@@ -31,7 +31,7 @@ module.exports = {
     '!src/**/__tests__/**',
     '!src/**/*.d.ts',
   ],
-  coverageThresholds: {
+  coverageThreshold: {
     global: { lines: 40 },
   },
 };
