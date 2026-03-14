@@ -31,9 +31,8 @@ ehthumbs.db
 # Logs
 *.log
 
-# VS Code — keep shared project settings, ignore personal files
-.vscode/*
-!.vscode/settings.json
+# VS Code
+.vscode/
 
 # Personal working directories
 working/
