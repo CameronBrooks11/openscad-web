@@ -9,15 +9,15 @@ export default defineConfig({
     alias: [
       {
         find: 'monaco-editor/esm/vs/editor/editor.api',
-        replacement: resolvePath('./__mocks__/monaco-editor.ts'),
+        replacement: resolvePath('./tests/mocks/monaco-editor.ts'),
       },
       {
         find: /\.css$/,
-        replacement: resolvePath('./__mocks__/file-mock.ts'),
+        replacement: resolvePath('./tests/mocks/file-mock.ts'),
       },
       {
         find: /^@gltf-transform\/.+$/,
-        replacement: resolvePath('./__mocks__/empty-module.ts'),
+        replacement: resolvePath('./tests/mocks/empty-module.ts'),
       },
     ],
   },
