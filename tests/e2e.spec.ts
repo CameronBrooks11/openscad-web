@@ -145,6 +145,30 @@ async function waitForRenderState(page: Page): Promise<void> {
   );
 }
 
+async function waitForAppIdle(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const shell = document.querySelector('osc-app-shell') as (Element & { _st?: unknown }) | null;
+      const state =
+        shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
+      const output =
+        state && typeof state === 'object' && 'output' in state
+          ? (state.output as Record<string, unknown> | undefined)
+          : undefined;
+      return Boolean(
+        state &&
+          !state.rendering &&
+          !state.previewing &&
+          !state.checkingSyntax &&
+          !state.exporting &&
+          output,
+      );
+    },
+    null,
+    { timeout: renderTimeoutMs },
+  );
+}
+
 async function waitForViewer(page: Page): Promise<void> {
   await page.waitForSelector('[data-testid="viewer-canvas"] canvas', { timeout: renderTimeoutMs });
   await page.waitForFunction(
@@ -182,6 +206,18 @@ async function waitForParameter(page: Page, name: string, timeout = 45_000): Pro
     name,
     { timeout },
   );
+}
+
+async function dispatchAppShortcut(page: Page, key: 'F5' | 'F6'): Promise<void> {
+  await page.evaluate((shortcut) => {
+    window.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: shortcut,
+        bubbles: true,
+        cancelable: true,
+      }),
+    );
+  }, key);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -363,11 +399,12 @@ test.describe('e2e — keyboard shortcuts', () => {
   test('pressing F5 after a render triggers a new render', async ({ page }) => {
     await loadSrc(page, 'cube(5);');
     await waitForViewer(page);
+    await waitForAppIdle(page);
     const before = await getAppShellState(page);
     expect(before).not.toBeNull();
     const beforeOutFileUrl = before?.outFileURL ?? null;
 
-    await page.keyboard.press('F5');
+    await dispatchAppShortcut(page, 'F5');
     await page.waitForFunction(
       (prevUrl) => {
         const shell = document.querySelector('osc-app-shell') as
@@ -392,11 +429,12 @@ test.describe('e2e — keyboard shortcuts', () => {
   test('pressing F6 after a render triggers a full render', async ({ page }) => {
     await loadSrc(page, 'cube(5);');
     await waitForViewer(page);
+    await waitForAppIdle(page);
     const before = await getAppShellState(page);
     expect(before).not.toBeNull();
     const beforeOutFileUrl = before?.outFileURL ?? null;
 
-    await page.keyboard.press('F6');
+    await dispatchAppShortcut(page, 'F6');
     await page.waitForFunction(
       (prevUrl) => {
         const shell = document.querySelector('osc-app-shell') as

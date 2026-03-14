@@ -43,12 +43,25 @@ export type OpenSCADInvocationCallback = { result: OpenSCADInvocationResults } |
 // R6 — Priority levels (higher number = higher priority)
 // ---------------------------------------------------------------------------
 export type JobPriority = 'export' | 'render' | 'preview' | 'syntax';
+// Syntax checking is background bookkeeping; explicit user-triggered work must
+// win when the queue is contended.
 const PRIORITY: Record<JobPriority, number> = {
-  export: 0,
-  render: 1,
-  preview: 2,
-  syntax: 3,
+  syntax: 0,
+  preview: 1,
+  render: 2,
+  export: 3,
 };
+
+const EXPECTED_CANCELLATION_MESSAGES = new Set([
+  'Cancelled',
+  'Superseded by higher-priority job',
+]);
+
+export function isExpectedJobCancellation(error: unknown): boolean {
+  if (error == null) return false;
+  const message = error instanceof Error ? error.message : String(error);
+  return EXPECTED_CANCELLATION_MESSAGES.has(message);
+}
 
 // ---------------------------------------------------------------------------
 // R3 — Persistent singleton Worker

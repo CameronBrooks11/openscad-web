@@ -301,3 +301,36 @@ describe('Model — format changes', () => {
     expect(scheduledRender).toHaveBeenCalledWith({ now: true });
   });
 });
+
+// ---------------------------------------------------------------------------
+// describe: expected cancellation handling
+// ---------------------------------------------------------------------------
+
+describe('Model — expected cancellation handling', () => {
+  it('does not surface expected syntax cancellations as errors', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockCheckSyntax.mockReturnValueOnce(
+      vi.fn().mockRejectedValue(new Error('Superseded by higher-priority job')),
+    );
+
+    await model.checkSyntax();
+
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(model.state.checkingSyntax).toBeFalsy();
+    consoleError.mockRestore();
+  });
+
+  it('does not surface expected render cancellations as user-facing errors', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mockRender.mockReturnValueOnce(
+      vi.fn().mockRejectedValue(new Error('Superseded by higher-priority job')),
+    );
+
+    await model.render({ isPreview: true, now: true });
+
+    expect(consoleError).not.toHaveBeenCalled();
+    expect(model.state.error).toBeUndefined();
+    expect(model.state.previewing).toBeFalsy();
+    consoleError.mockRestore();
+  });
+});

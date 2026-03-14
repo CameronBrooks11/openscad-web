@@ -19,7 +19,7 @@ import {
 import { openLocalFile, saveActiveFile } from '../fs/filesystem.ts';
 
 import JSZip from 'jszip';
-import { ProcessStreams } from '../runner/openscad-runner.ts';
+import { isExpectedJobCancellation, ProcessStreams } from '../runner/openscad-runner.ts';
 import { is2DFormatExtension } from './formats.ts';
 import { parseOff } from '../io/import_off.ts';
 import { export3MF } from '../io/export_3mf.ts';
@@ -243,8 +243,8 @@ export class Model extends EventTarget {
     if (this.source.trim() !== '') {
       const shouldCheckSyntax = this.state.params.activePath.endsWith('.scad');
       if (immediatePreview) {
-        // Keep the boot-time preview immediate, but avoid letting the syntax job
-        // preempt and discard the very first visible render.
+        // Keep the boot-time preview immediate and enqueue syntax only after the
+        // first visible render has settled so startup stays user-visible first.
         await this.render({ isPreview: true, now: true });
         if (shouldCheckSyntax) {
           this.checkSyntax();
@@ -271,7 +271,9 @@ export class Model extends EventTarget {
         s.checkingSyntax = false;
       });
     } catch (err) {
-      console.error('Error while checking syntax:', err);
+      if (!isExpectedJobCancellation(err)) {
+        console.error('Error while checking syntax:', err);
+      }
     } finally {
       this.mutate((s) => {
         if (s.checkingSyntax) s.checkingSyntax = false;
@@ -599,8 +601,10 @@ export class Model extends EventTarget {
     } catch (err) {
       this.mutate((s) => {
         setRendering(s, false);
-        console.error('Error while doing ' + (isPreview ? 'preview' : 'rendering') + ':', err);
-        s.error = `${err}`;
+        if (!isExpectedJobCancellation(err)) {
+          console.error('Error while doing ' + (isPreview ? 'preview' : 'rendering') + ':', err);
+          s.error = `${err}`;
+        }
       });
     }
     if (retryInOtherDim) {

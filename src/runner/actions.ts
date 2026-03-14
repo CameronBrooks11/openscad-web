@@ -1,7 +1,7 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
-import { ProcessStreams, spawnOpenSCAD } from './openscad-runner.ts';
+import { ProcessStreams, isExpectedJobCancellation, spawnOpenSCAD } from './openscad-runner.ts';
 import { processMergedOutputs } from './output-parser.ts';
 import { AbortablePromise, turnIntoDelayableExecution } from '../utils.ts';
 import { Source } from '../state/app-state.ts';
@@ -64,7 +64,9 @@ export const checkSyntax = turnIntoDelayableExecution(syntaxDelay, (sargs: Synta
           parameterSet,
         });
       } catch (e) {
-        console.error(e);
+        if (!isExpectedJobCancellation(e)) {
+          console.error(e);
+        }
         rej(e);
       }
     })();
@@ -205,7 +207,9 @@ export const render = turnIntoDelayableExecution(renderDelay, (renderArgs: Rende
         const outFile = new File([blob], fileName, { type });
         resolve({ outFile, logText, markers, elapsedMillis: result.elapsedMillis });
       } catch (e) {
-        console.error(e);
+        if (!isExpectedJobCancellation(e)) {
+          console.error(e);
+        }
         reject(e);
       }
     })();
