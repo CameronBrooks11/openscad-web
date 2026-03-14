@@ -121,6 +121,32 @@ describe('Model — render triggering', () => {
     expect(scheduledRender).toHaveBeenCalledWith({ now: true });
   });
 
+  it('delays the initial syntax check until the boot preview has settled', async () => {
+    let resolveRender: ((value: unknown) => void) | undefined;
+    const pendingRender = new Promise((resolve) => {
+      resolveRender = resolve;
+    });
+    const scheduledRender = jest.fn().mockImplementation(() => pendingRender);
+    mockRender.mockReturnValueOnce(scheduledRender);
+
+    model.init();
+    await nextTicks(1);
+
+    expect(mockRender).toHaveBeenCalledTimes(1);
+    expect(scheduledRender).toHaveBeenCalledWith({ now: true });
+    expect(mockCheckSyntax).not.toHaveBeenCalled();
+
+    resolveRender?.({
+      outFile: new File(['content'], 'test.glb', { type: 'model/gltf-binary' }),
+      logText: '',
+      markers: [],
+      elapsedMillis: 0,
+    });
+    await nextTicks();
+
+    expect(mockCheckSyntax).toHaveBeenCalledTimes(1);
+  });
+
   it('does not re-render when only viewstate changes (showAxes, layout)', async () => {
     // Directly mutate a view-only field — processSource should NOT be triggered
     model.mutate((s) => {

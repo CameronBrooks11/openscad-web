@@ -241,10 +241,20 @@ export class Model extends EventTarget {
     // When autoCompile is explicitly disabled, skip automatic syntax check and render.
     if (this.state.params.autoCompile === false) return;
     if (this.source.trim() !== '') {
-      if (this.state.params.activePath.endsWith('.scad')) {
+      const shouldCheckSyntax = this.state.params.activePath.endsWith('.scad');
+      if (immediatePreview) {
+        // Keep the boot-time preview immediate, but avoid letting the syntax job
+        // preempt and discard the very first visible render.
+        await this.render({ isPreview: true, now: true });
+        if (shouldCheckSyntax) {
+          this.checkSyntax();
+        }
+        return;
+      }
+      if (shouldCheckSyntax) {
         this.checkSyntax();
       }
-      this.render({ isPreview: true, now: immediatePreview });
+      this.render({ isPreview: true, now: false });
     }
   }
 
