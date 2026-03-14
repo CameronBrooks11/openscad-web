@@ -3,6 +3,7 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — no type declarations for the WASM module
 import OpenSCAD from '../wasm/openscad.js';
+import { resolveRuntimeAssetUrl } from '../runtime/asset-urls.ts';
 
 export type RuntimeOptions = {
   print: (text: string) => void;
@@ -31,6 +32,7 @@ export async function createRuntime(opts: RuntimeOptions): Promise<OpenSCADRunti
     noInitialRun: true,
     print: opts.print,
     printErr: opts.printErr,
+    locateFile: (path: string) => resolveRuntimeAssetUrl(path),
   });
 
   return {

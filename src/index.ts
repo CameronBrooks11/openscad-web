@@ -2,6 +2,7 @@
 
 import { createEditorFS, preloadEditorLibraries } from './fs/filesystem.ts';
 import {
+  getBootstrapPrefetchSpecifiers,
   injectBootstrapPrefetchHints,
   shouldPreloadEditorLibraries,
 } from './fs/library-delivery.ts';
@@ -14,6 +15,7 @@ import { parseUrlMode } from './state/url-mode.ts';
 import { setModel } from './state/model-context.ts';
 import { setFS } from './state/fs-context.ts';
 import { Model } from './state/model.ts';
+import { openSCADWorkerUrl } from './runner/worker-bootstrap.ts';
 import { isInStandaloneMode, registerCustomAppHeightCSSProperty } from './utils.ts';
 import { State, StatePersister } from './state/app-state.ts';
 import { markPerf, measurePerf } from './perf/runtime-performance.ts';
@@ -36,7 +38,7 @@ if (!isProductionBuild()) {
   debug.disable();
 }
 
-injectBootstrapPrefetchHints();
+injectBootstrapPrefetchHints(getBootstrapPrefetchSpecifiers(undefined, openSCADWorkerUrl));
 
 window.addEventListener('load', async () => {
   const rootEl = document.getElementById('root')!;

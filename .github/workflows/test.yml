@@ -42,6 +42,8 @@ jobs:
         run: npm run build:libs
 
       - run: npm run build
+        env:
+          PUBLIC_URL: /openscad-web/
       - name: Archive production artifacts
         uses: actions/upload-artifact@v7
         with:

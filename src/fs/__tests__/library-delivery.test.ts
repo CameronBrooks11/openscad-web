@@ -17,10 +17,10 @@ describe('library-delivery policy', () => {
   });
 
   it('builds bootstrap prefetch specifiers from core assets plus prefetched archives', () => {
-    const specifiers = getBootstrapPrefetchSpecifiers();
+    const specifiers = getBootstrapPrefetchSpecifiers(zipArchives, 'workers/openscad-worker.js');
     expect(specifiers).toContain('openscad.wasm');
-    expect(specifiers).toContain('openscad-worker.js');
     expect(specifiers).toContain('libraries/fonts.zip');
+    expect(specifiers).toContain('workers/openscad-worker.js');
     for (const archive of getPrefetchedArchives()) {
       expect(specifiers).toContain(archive.zipPath);
     }

@@ -51,14 +51,15 @@ Licenses: see [LICENSE.md](./LICENSE.md).
 The project uses:
 
 - explicit Node build scripts for WASM, font, and library asset preparation, all driven by `libs-config.json`
-- webpack for app and worker bundling
+- Vite for app and worker bundling
 - an explicit Workbox build step for `sw.js` generation in production builds
 
-This replaces the earlier webpack-as-task-runner setup with a cleaner split between asset preparation and bundling.
+This replaces the earlier webpack-as-task-runner setup with a cleaner split between asset preparation and bundling, while also moving the app and worker bundle to a Vite-based flow.
 
 Runtime asset and library delivery policy:
 
-- runtime asset URLs resolve against the current page or worker URL rather than webpack-specific path assumptions
+- runtime asset URLs resolve against the current page origin plus the active base path instead of bundler-output-relative paths
+- runtime asset URLs resolve through `import.meta.env.BASE_URL` so subpath deploys and local preview paths stay consistent
 - BrowserFS is loaded explicitly by the app and worker runtime instead of via hand-maintained HTML glue
 - bootstrap prefetch hints come from generated library metadata instead of hardcoded HTML links
 - full editor mode eagerly mounts all libraries on the main thread so browsing and completions keep working
@@ -86,7 +87,7 @@ npm run start
 # http://localhost:4000/
 ```
 
-Local prod (test both the different inlining and serving under a prefix):
+Local prod (build for a prefixed `/dist/` path and serve the repo root so the app is exercised at `http://localhost:3000/dist/`):
 
 ```bash
 npm install
@@ -111,7 +112,7 @@ npm run build:libs  # if the library/WASM assets are not already prepared
 npm run test:e2e
 ```
 
-Run the browser E2E suite against the webpack dev server for local debugging:
+Run the browser E2E suite against the Vite dev server for local debugging:
 
 ```bash
 npx playwright install chromium

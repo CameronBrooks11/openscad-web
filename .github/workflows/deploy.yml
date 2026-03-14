@@ -36,8 +36,7 @@ jobs:
 
       - name: Build
         env:
-          NODE_ENV: production
-          PUBLIC_URL: /openscad-web
+          PUBLIC_URL: /openscad-web/
         run: npm run build
 
       - name: Deploy
