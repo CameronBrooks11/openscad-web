@@ -20,6 +20,8 @@ public/libraries/*
 # Test coverage
 coverage/
 perf-baseline.local.json
+playwright-report/
+test-results/
 
 # OS artifacts
 .DS_Store

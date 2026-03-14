@@ -81,6 +81,30 @@ npm run start:production
 # http://localhost:3000/dist/
 ```
 
+## Testing
+
+Run the unit suite:
+
+```bash
+npm run test:unit
+```
+
+Run the browser E2E suite against the canonical production-style path:
+
+```bash
+npx playwright install chromium
+npm run build:libs  # if the library/WASM assets are not already prepared
+npm run test:e2e
+```
+
+Run the browser E2E suite against the webpack dev server for local debugging:
+
+```bash
+npx playwright install chromium
+npm run build:libs  # if the library/WASM assets are not already prepared
+npm run test:e2e:dev
+```
+
 Deployment (edit "homepage" in `package.json` to match your deployment root!):
 
 ```bash

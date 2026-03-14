@@ -23,6 +23,10 @@ jobs:
           node-version: ${{ matrix.node.version }}
       - run: npm ci
 
+      - name: Install Playwright Chromium
+        if: matrix.node.name == 'supported'
+        run: npx playwright install --with-deps chromium
+
       - name: Cache build libs
         id: cache-libs
         uses: actions/cache@v4
@@ -44,5 +48,15 @@ jobs:
           name: dist-node-${{ matrix.node.name }}
           path: dist
           retention-days: 30
-      - run: NODE_ENV=development npm run test:e2e
-      - run: NODE_ENV=production  npm run test:e2e
+      - run: npm run test:e2e
+        if: matrix.node.name == 'supported'
+      - name: Archive Playwright artifacts
+        if: always() && matrix.node.name == 'supported'
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-node-${{ matrix.node.name }}
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 30

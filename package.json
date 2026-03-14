@@ -22,11 +22,11 @@
     "uzip": "^0.20201231.0"
   },
   "scripts": {
-    "test:e2e": "jest",
+    "test:e2e": "playwright test",
+    "test:e2e:dev": "cross-env E2E_SERVER_MODE=dev playwright test",
     "test:unit": "vitest run",
     "start:development": "npx webpack serve --mode=development",
-    "start:production": "cross-env NODE_ENV=production PUBLIC_URL=http://localhost:3000/dist/ npm run build && npx serve",
-    "start:test": "npm run start:development",
+    "start:production": "cross-env NODE_ENV=production PUBLIC_URL=http://localhost:3000/dist/ npm run build && npx serve -l 3000",
     "start": "npm run start:development",
     "build": "cross-env NODE_ENV=production webpack --mode=production",
     "build:libs": "cross-env LIBS_BUILD_MODE=all webpack --config webpack.libs.config.js",
@@ -61,6 +61,7 @@
     ]
   },
   "devDependencies": {
+    "@playwright/test": "^1.54.2",
     "@types/chroma-js": "^2.4.5",
     "@types/debug": "^4.1.12",
     "@types/filesystem": "^0.0.36",
@@ -74,8 +75,6 @@
     "css-loader": "^7.1.2",
     "eslint": "^9.39.4",
     "jsdom": "^26.1.0",
-    "jest": "^29.7.0",
-    "jest-puppeteer": "^11.0.0",
     "livereload": "^0.9.3",
     "prettier": "^3.8.1",
     "puppeteer": "^23.11.1",
