@@ -54,7 +54,7 @@ The project uses:
 - Vite for app and worker bundling
 - an explicit Workbox build step for `sw.js` generation in production builds
 
-This replaces the earlier webpack-as-task-runner setup with a cleaner split between asset preparation and bundling, while also moving the app and worker bundle to a Vite-based flow.
+Asset preparation is handled by explicit Node scripts, while Vite bundles the app and worker and Workbox generates the production service worker.
 
 Runtime asset and library delivery policy:
 

@@ -32,8 +32,7 @@ declare interface BrowserFSInterface {
   WorkerFS?: any;
 }
 
-declare let BrowserFS: BrowserFSInterface;
-
 declare module 'browserfs' {
+  const BrowserFS: BrowserFSInterface;
   export = BrowserFS;
 }

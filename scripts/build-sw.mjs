@@ -18,8 +18,7 @@ try {
     maximumFileSizeToCacheInBytes: 200 * 1024 * 1024,
     clientsClaim: true,
     skipWaiting: true,
-    // Preserve the prior GenerateSW rule order in this extraction slice.
-    // Cache-policy cleanup is a separate Phase 10 task.
+    // Preserve the established runtime-caching rule order to avoid behavior drift.
     runtimeCaching: [
       {
         urlPattern: ({ url }) => url.origin === self.location.origin,
