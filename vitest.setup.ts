@@ -20,12 +20,8 @@ const globals = {
   DecompressionStream,
   TextEncoder,
   TextDecoder,
-  atob:
-    globalThis.atob ??
-    ((value: string) => Buffer.from(value, 'base64').toString('binary')),
-  btoa:
-    globalThis.btoa ??
-    ((value: string) => Buffer.from(value, 'binary').toString('base64')),
+  atob: globalThis.atob ?? ((value: string) => Buffer.from(value, 'base64').toString('binary')),
+  btoa: globalThis.btoa ?? ((value: string) => Buffer.from(value, 'binary').toString('base64')),
 };
 
 for (const [name, value] of Object.entries(globals)) {

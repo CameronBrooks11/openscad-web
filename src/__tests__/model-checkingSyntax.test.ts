@@ -3,9 +3,7 @@ import { Model } from '../state/model.ts';
 import { defaultModelColor, defaultSourcePath } from '../state/initial-state.ts';
 
 vi.mock('../runner/actions.ts', () => ({
-  checkSyntax: vi
-    .fn()
-    .mockReturnValue(vi.fn().mockRejectedValue(new Error('mock runner failure'))),
+  checkSyntax: vi.fn().mockReturnValue(vi.fn().mockRejectedValue(new Error('mock runner failure'))),
   render: vi.fn(),
   getDefaultCompileArgs: vi.fn().mockReturnValue(['--backend=manifold']),
 }));
