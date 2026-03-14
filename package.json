@@ -27,11 +27,12 @@
     "start:development": "npx webpack serve --mode=development",
     "start:production": "cross-env NODE_ENV=production PUBLIC_URL=http://localhost:3000/dist/ npm run build && npx serve -l 3000",
     "start": "npm run start:development",
-    "build": "cross-env NODE_ENV=production webpack --mode=production",
-    "build:libs": "cross-env LIBS_BUILD_MODE=all webpack --config webpack.libs.config.js",
-    "build:libs:clean": "cross-env LIBS_BUILD_MODE=clean webpack --config webpack.libs.config.js",
-    "build:libs:wasm": "cross-env LIBS_BUILD_MODE=wasm webpack --config webpack.libs.config.js",
-    "build:libs:fonts": "cross-env LIBS_BUILD_MODE=fonts webpack --config webpack.libs.config.js",
+    "build": "cross-env NODE_ENV=production webpack --mode=production && node ./scripts/build-sw.mjs",
+    "build:libs": "cross-env LIBS_BUILD_MODE=all node ./scripts/build-assets/cli.mjs",
+    "build:libs:clean": "cross-env LIBS_BUILD_MODE=clean node ./scripts/build-assets/cli.mjs",
+    "build:libs:wasm": "cross-env LIBS_BUILD_MODE=wasm node ./scripts/build-assets/cli.mjs",
+    "build:libs:fonts": "cross-env LIBS_BUILD_MODE=fonts node ./scripts/build-assets/cli.mjs",
+    "build:libs:libraries": "cross-env LIBS_BUILD_MODE=libs node ./scripts/build-assets/cli.mjs",
     "build:all": "npm run build:libs && npm run build",
     "lint": "eslint src/",
     "typecheck": "npx tsc --noEmit",
@@ -87,6 +88,6 @@
     "webpack": "^5.97.1",
     "webpack-cli": "^6.0.1",
     "webpack-dev-server": "^5.2.0",
-    "workbox-webpack-plugin": "^7.3.0"
+    "workbox-build": "^7.4.0"
   }
 }

@@ -1,6 +1,13 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import { createEditorFS, preloadAllLibraries } from './fs/filesystem.ts';
+import { createEditorFS, preloadEditorLibraries } from './fs/filesystem.ts';
+import {
+  injectBootstrapPrefetchHints,
+  shouldPreloadEditorLibraries,
+} from './fs/library-delivery.ts';
+import { ensureBrowserFSLoaded, getBrowserFS } from './runtime/browserfs-runtime.ts';
+import { isProductionBuild } from './runtime/build-env.ts';
+import { registerAppServiceWorker } from './runtime/service-worker.ts';
 import { readStateFromFragment, writeStateInFragment } from './state/fragment-state.ts';
 import { createInitialState } from './state/initial-state.ts';
 import { parseUrlMode } from './state/url-mode.ts';
@@ -22,40 +29,35 @@ import './components/elements/osc-customizer-shell.ts';
 
 const log = debug('app:log');
 
-if (process.env.NODE_ENV !== 'production') {
+if (!isProductionBuild()) {
   debug.enable('*');
   log('Logging is enabled!');
 } else {
   debug.disable();
 }
 
-declare let BrowserFS: BrowserFSInterface;
+injectBootstrapPrefetchHints();
 
 window.addEventListener('load', async () => {
-  markPerf('osc:app-bootstrap-start', { standalone: isInStandaloneMode() });
+  const rootEl = document.getElementById('root')!;
+  const urlModeResult = parseUrlMode(window.location.search);
 
-  if (process.env.NODE_ENV === 'production') {
-    if ('serviceWorker' in navigator) {
-      try {
-        const registration = await navigator.serviceWorker.register('./sw.js');
-        console.log('ServiceWorker registration successful with scope: ', registration.scope);
-        registration.onupdatefound = () => {
-          const installingWorker = registration.installing;
-          if (installingWorker) {
-            installingWorker.onstatechange = () => {
-              if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                window.location.reload();
-              }
-            };
-          }
-        };
-      } catch (err) {
-        console.log('ServiceWorker registration failed: ', err);
-      }
-    }
+  if ('error' in urlModeResult) {
+    markPerf('osc:app-bootstrap-error');
+    rootEl.innerHTML = `
+      <div style="padding:2rem;font-family:monospace;color:red;">
+        <h2>Invalid URL parameters</h2>
+        <pre>${urlModeResult.error}</pre>
+      </div>`;
+    return;
   }
 
+  markPerf('osc:app-bootstrap-start', { standalone: isInStandaloneMode() });
+  await registerAppServiceWorker();
+
   registerCustomAppHeightCSSProperty();
+
+  await ensureBrowserFSLoaded();
 
   markPerf('osc:main-fs-init-start');
   const fs = await createEditorFS({ allowPersistence: isInStandaloneMode() });
@@ -63,16 +65,22 @@ window.addEventListener('load', async () => {
   measurePerf('osc:main-fs-init', 'osc:main-fs-init-start', 'osc:main-fs-init-end');
   setFS(fs);
 
-  markPerf('osc:libraries-preload-start');
-  await preloadAllLibraries();
-  markPerf('osc:libraries-preload-end');
-  measurePerf('osc:libraries-preload', 'osc:libraries-preload-start', 'osc:libraries-preload-end');
+  if (shouldPreloadEditorLibraries(urlModeResult.mode)) {
+    markPerf('osc:libraries-preload-start');
+    await preloadEditorLibraries();
+    markPerf('osc:libraries-preload-end');
+    measurePerf(
+      'osc:libraries-preload',
+      'osc:libraries-preload-start',
+      'osc:libraries-preload-end',
+    );
+  }
 
   let statePersister: StatePersister;
   let persistedState: State | null = null;
 
   if (isInStandaloneMode()) {
-    const bfs: FS = BrowserFS.BFSRequire('fs');
+    const bfs: FS = getBrowserFS().BFSRequire('fs');
     try {
       const data = JSON.parse(
         new TextDecoder('utf-8').decode(bfs.readFileSync('/home/state.json')),
@@ -93,19 +101,6 @@ window.addEventListener('load', async () => {
   }
 
   const initialState = createInitialState(persistedState);
-  const urlModeResult = parseUrlMode(window.location.search);
-
-  const rootEl = document.getElementById('root')!;
-
-  if ('error' in urlModeResult) {
-    markPerf('osc:app-bootstrap-error');
-    rootEl.innerHTML = `
-      <div style="padding:2rem;font-family:monospace;color:red;">
-        <h2>Invalid URL parameters</h2>
-        <pre>${urlModeResult.error}</pre>
-      </div>`;
-    return;
-  }
 
   // Create and register model — init() is called lazily by the shell elements
   const model = new Model(fs, initialState, undefined, statePersister);

@@ -48,7 +48,21 @@ Licenses: see [LICENSE.md](./LICENSE.md).
 
 ## Building
 
-The project uses a **webpack-based build system** that reads library metadata from `libs-config.json` to automatically download, clone, and package OpenSCAD libraries and dependencies. This replaces the previous Makefile approach with a more standard, maintainable solution.
+The project uses:
+
+- explicit Node build scripts for WASM, font, and library asset preparation, all driven by `libs-config.json`
+- webpack for app and worker bundling
+- an explicit Workbox build step for `sw.js` generation in production builds
+
+This replaces the earlier webpack-as-task-runner setup with a cleaner split between asset preparation and bundling.
+
+Runtime asset and library delivery policy:
+
+- runtime asset URLs resolve against the current page or worker URL rather than webpack-specific path assumptions
+- BrowserFS is loaded explicitly by the app and worker runtime instead of via hand-maintained HTML glue
+- bootstrap prefetch hints come from generated library metadata instead of hardcoded HTML links
+- full editor mode eagerly mounts all libraries on the main thread so browsing and completions keep working
+- embed/customizer shells and worker compile paths keep using demand-loaded libraries
 
 Prerequisites:
 
@@ -144,7 +158,7 @@ The build system fetches a prebuilt OpenSCAD web WASM binary, but you can build 
 
 ## Adding OpenSCAD libraries
 
-The build system uses a webpack plugin that reads from `libs-config.json` to manage all library dependencies. You'll need to update 3 files (search for BOSL2 for an example):
+The asset build pipeline reads from `libs-config.json` to manage all library dependencies. You'll need to update 3 files (search for BOSL2 for an example):
 
 - [libs-config.json](./libs-config.json): to add the library's metadata including repository URL, branch, and files to include/exclude in the zip archive
 
@@ -173,5 +187,6 @@ Available build commands:
 - `npm run build:libs:clean` - Clean all build artifacts
 - `npm run build:libs:wasm` - Download/build just the WASM binary
 - `npm run build:libs:fonts` - Download/build just the fonts
+- `npm run build:libs:libraries` - Rebuild just the packaged library ZIPs and generated registry
 
 Send us a PR, then once it's merged request an update to the hosted https://ochafik.com/openscad2 demo.

@@ -1,0 +1,55 @@
+#!/usr/bin/env node
+
+import path from 'node:path';
+import workboxBuild from 'workbox-build';
+
+const { generateSW } = workboxBuild;
+
+const distDir = path.resolve('dist');
+const swDest = path.join(distDir, 'sw.js');
+
+try {
+  const result = await generateSW({
+    mode: 'production',
+    globDirectory: distDir,
+    globPatterns: ['**/*'],
+    swDest,
+    globIgnores: ['**/.*', '**/*.map', 'manifest*.js'],
+    maximumFileSizeToCacheInBytes: 200 * 1024 * 1024,
+    clientsClaim: true,
+    skipWaiting: true,
+    // Preserve the prior GenerateSW rule order in this extraction slice.
+    // Cache-policy cleanup is a separate Phase 10 task.
+    runtimeCaching: [
+      {
+        urlPattern: ({ url }) => url.origin === self.location.origin,
+        handler: 'StaleWhileRevalidate',
+        options: {
+          cacheName: 'same-origin-assets',
+          expiration: { maxEntries: 200, purgeOnQuotaError: true },
+        },
+      },
+      {
+        urlPattern: ({ url }) =>
+          url.pathname.endsWith('.wasm') || url.pathname.includes('/libraries/'),
+        handler: 'CacheFirst',
+        options: {
+          cacheName: 'large-assets',
+          expiration: { maxEntries: 50, purgeOnQuotaError: true },
+        },
+      },
+    ],
+  });
+
+  if (result.warnings.length > 0) {
+    for (const warning of result.warnings) {
+      console.warn(`[build-sw] ${warning}`);
+    }
+  }
+  console.log(
+    `[build-sw] Generated ${swDest} with ${result.count} precached entries (${result.size} bytes).`,
+  );
+} catch (error) {
+  console.error(error);
+  process.exitCode = 1;
+}

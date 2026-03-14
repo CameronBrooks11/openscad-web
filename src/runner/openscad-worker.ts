@@ -4,6 +4,7 @@
 
 import { createEditorFS, mountDemandLibraries, symlinkLibraries } from '../fs/filesystem.ts';
 import { markPerf, measurePerf } from '../perf/runtime-performance.ts';
+import { ensureWorkerBrowserFSLoaded } from '../runtime/browserfs-runtime.ts';
 import { createRuntime, OpenSCADRuntime } from './openscad-runtime.ts';
 import {
   CompileRequest,
@@ -17,11 +18,8 @@ import {
 } from './worker-protocol.ts';
 import { fetchSource } from '../utils.ts';
 
-importScripts('browserfs.min.js');
-
 declare const self: DedicatedWorkerGlobalScope;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-declare const BrowserFS: any;
+const BrowserFS = ensureWorkerBrowserFSLoaded();
 
 // WASM initializes exactly once per worker lifetime (R4)
 let currentJobId: string | null = null;

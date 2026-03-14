@@ -1,6 +1,5 @@
 import CopyPlugin from 'copy-webpack-plugin';
 import webpack from 'webpack';
-import WorkboxPlugin from 'workbox-webpack-plugin';
 
 import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -74,40 +73,6 @@ const config = [
       new webpack.EnvironmentPlugin({
         'process.env.NODE_ENV': 'development',
       }),
-      ...(process.env.NODE_ENV === 'production'
-        ? [
-            new WorkboxPlugin.GenerateSW({
-              exclude: [/(^|\/)\./, /\.map$/, /^manifest.*\.js$/],
-              // these options encourage the ServiceWorkers to get in there fast
-              // and not allow any straggling 'old' SWs to hang around
-              swDest: path.join(__dirname, 'dist', 'sw.js'),
-              maximumFileSizeToCacheInBytes: 200 * 1024 * 1024,
-              clientsClaim: true,
-              skipWaiting: true,
-              runtimeCaching: [
-                {
-                  // Same-origin assets: use stale-while-revalidate for fast loads
-                  urlPattern: ({ url }) => url.origin === self.location.origin,
-                  handler: 'StaleWhileRevalidate',
-                  options: {
-                    cacheName: 'same-origin-assets',
-                    expiration: { maxEntries: 200, purgeOnQuotaError: true },
-                  },
-                },
-                {
-                  // Large stable assets (.wasm, library zips): cache-first
-                  urlPattern: ({ url }) =>
-                    url.pathname.endsWith('.wasm') || url.pathname.includes('/libraries/'),
-                  handler: 'CacheFirst',
-                  options: {
-                    cacheName: 'large-assets',
-                    expiration: { maxEntries: 50, purgeOnQuotaError: true },
-                  },
-                },
-              ],
-            }),
-          ]
-        : []),
       new CopyPlugin({
         patterns: [
           {

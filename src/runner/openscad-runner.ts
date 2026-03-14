@@ -4,6 +4,7 @@ import { AbortablePromise } from '../utils.ts';
 import { Source } from '../state/app-state.ts';
 import { mountDemandLibraries } from '../fs/filesystem.ts';
 import { markPerf, measurePerf, recordPerfDuration } from '../perf/runtime-performance.ts';
+import { createOpenSCADWorker } from './worker-bootstrap.ts';
 import {
   CompileRequest,
   CancelRequest,
@@ -74,7 +75,7 @@ const HARD_TIMEOUT_MS = 60_000;
 
 function getWorker(): Worker {
   if (!_worker) {
-    _worker = new Worker('./openscad-worker.js');
+    _worker = createOpenSCADWorker();
     _worker.onmessage = handleWorkerMessage;
     _worker.onerror = handleWorkerError;
   }

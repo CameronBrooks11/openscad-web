@@ -24,7 +24,7 @@ vi.mock('../../fs/filesystem.ts', () => ({
   mountDemandLibraries: vi.fn().mockResolvedValue([]),
   extractLibraryNames: vi.fn().mockReturnValue([]),
   createEditorFS: vi.fn().mockResolvedValue(undefined),
-  preloadAllLibraries: vi.fn().mockResolvedValue(undefined),
+  preloadEditorLibraries: vi.fn().mockResolvedValue(undefined),
   symlinkLibraries: vi.fn().mockResolvedValue(undefined),
   saveActiveFile: vi.fn().mockResolvedValue(false),
   openLocalFile: vi.fn().mockResolvedValue(null),

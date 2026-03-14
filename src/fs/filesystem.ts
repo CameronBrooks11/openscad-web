@@ -1,8 +1,8 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
+import { getBrowserFS } from '../runtime/browserfs-runtime.ts';
+import { resolveRuntimeAssetUrl } from '../runtime/asset-urls.ts';
 import { zipArchives, ZipArchive } from './zip-archives.generated.ts';
-
-declare let BrowserFS: BrowserFSInterface;
 
 // Re-export for consumers that need the type
 export type { ZipArchive };
@@ -25,8 +25,9 @@ export function join(a: string, b: string): string {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function createBFSBackend(fsName: string, options?: Record<string, unknown>): Promise<any> {
   return new Promise((resolve, reject) => {
+    const browserFS = getBrowserFS();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const FSCtor = (BrowserFS.FileSystem as any)[fsName];
+    const FSCtor = (browserFS.FileSystem as any)[fsName];
     if (!FSCtor?.Create) {
       reject(new Error(`BrowserFS backend '${fsName}' not available`));
       return;
@@ -61,10 +62,13 @@ export async function createEditorFS({
 }: {
   allowPersistence: boolean;
 }): Promise<FS> {
+  const browserFS = getBrowserFS();
   // Fonts are always pre-loaded — needed for any text() call in OpenSCAD
-  const fontsBuf = await fetch('./libraries/fonts.zip').then((r) => r.arrayBuffer());
+  const fontsBuf = await fetch(resolveRuntimeAssetUrl('libraries/fonts.zip')).then((r) =>
+    r.arrayBuffer(),
+  );
   const fontsFS = await createBFSBackend('ZipFS', {
-    zipData: BrowserFS.BFSRequire('buffer').Buffer.from(fontsBuf),
+    zipData: browserFS.BFSRequire('buffer').Buffer.from(fontsBuf),
   });
 
   const rootFS = await createBFSBackend('InMemory');
@@ -84,8 +88,8 @@ export async function createEditorFS({
   });
 
   const ctx = typeof window === 'object' ? window : self;
-  BrowserFS.install(ctx);
-  await BrowserFS.initialize(_rootMFS);
+  browserFS.install(ctx);
+  await browserFS.initialize(_rootMFS);
 
   // F2: storage budget warning for standalone mode
   if (allowPersistence && 'storage' in navigator) {
@@ -95,7 +99,7 @@ export async function createEditorFS({
     }
   }
 
-  return BrowserFS.BFSRequire('fs');
+  return browserFS.BFSRequire('fs');
 }
 
 // ---------------------------------------------------------------------------
@@ -132,9 +136,10 @@ async function fetchAndMountLibrary(name: string): Promise<void> {
     if (!archive) return; // unknown library — skip silently
     if (!_rootMFS)
       throw new Error('[filesystem] createEditorFS() must be called before mountDemandLibraries()');
-    const buf = await fetch(archive.zipPath).then((r) => r.arrayBuffer());
+    const browserFS = getBrowserFS();
+    const buf = await fetch(resolveRuntimeAssetUrl(archive.zipPath)).then((r) => r.arrayBuffer());
     const zipFS = await createBFSBackend('ZipFS', {
-      zipData: BrowserFS.BFSRequire('buffer').Buffer.from(buf),
+      zipData: browserFS.BFSRequire('buffer').Buffer.from(buf),
     });
     if (mountedLibraryZips.has(name)) return;
     try {
@@ -172,10 +177,13 @@ export async function mountDemandLibraries(
 }
 
 /**
- * Pre-mounts all known libraries (for the main-thread FilePicker and code completion).
- * Uses the same session cache as demand loading, so per-job compile calls are free.
+ * Eagerly mounts all library archives on the main thread so the full editor UI
+ * can browse and complete against the entire /libraries tree.
+ *
+ * This is intentionally only used by editor mode. Embed/customizer shells keep
+ * using worker-side demand loading.
  */
-export async function preloadAllLibraries(): Promise<void> {
+export async function preloadEditorLibraries(): Promise<void> {
   await Promise.all(zipArchives.map((a) => fetchAndMountLibrary(a.name)));
 }
 
