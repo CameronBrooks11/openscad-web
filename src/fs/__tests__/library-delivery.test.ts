@@ -37,7 +37,9 @@ describe('library-delivery policy', () => {
 
     injectBootstrapPrefetchHints(['./libraries/MCAD.zip', './libraries/MCAD.zip']);
 
-    const prefetchLinks = [...document.head.querySelectorAll<HTMLLinkElement>('link[rel="prefetch"]')];
+    const prefetchLinks = [
+      ...document.head.querySelectorAll<HTMLLinkElement>('link[rel="prefetch"]'),
+    ];
     expect(prefetchLinks).toHaveLength(1);
     expect(prefetchLinks[0]!.href).toContain('/libraries/MCAD.zip');
   });

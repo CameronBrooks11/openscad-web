@@ -52,10 +52,7 @@ const PRIORITY: Record<JobPriority, number> = {
   export: 3,
 };
 
-const EXPECTED_CANCELLATION_MESSAGES = new Set([
-  'Cancelled',
-  'Superseded by higher-priority job',
-]);
+const EXPECTED_CANCELLATION_MESSAGES = new Set(['Cancelled', 'Superseded by higher-priority job']);
 
 export function isExpectedJobCancellation(error: unknown): boolean {
   if (error == null) return false;

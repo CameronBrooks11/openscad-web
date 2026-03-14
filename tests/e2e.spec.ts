@@ -157,11 +157,11 @@ async function waitForAppIdle(page: Page): Promise<void> {
           : undefined;
       return Boolean(
         state &&
-          !state.rendering &&
-          !state.previewing &&
-          !state.checkingSyntax &&
-          !state.exporting &&
-          output,
+        !state.rendering &&
+        !state.previewing &&
+        !state.checkingSyntax &&
+        !state.exporting &&
+        output,
       );
     },
     null,
