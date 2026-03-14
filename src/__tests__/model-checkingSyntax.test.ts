@@ -2,19 +2,19 @@ import type { State } from '../state/app-state.ts';
 import { Model } from '../state/model.ts';
 import { defaultModelColor, defaultSourcePath } from '../state/initial-state.ts';
 
-jest.mock('../runner/actions.ts', () => ({
-  checkSyntax: jest
+vi.mock('../runner/actions.ts', () => ({
+  checkSyntax: vi
     .fn()
-    .mockReturnValue(jest.fn().mockRejectedValue(new Error('mock runner failure'))),
-  render: jest.fn(),
-  getDefaultCompileArgs: jest.fn().mockReturnValue(['--backend=manifold']),
+    .mockReturnValue(vi.fn().mockRejectedValue(new Error('mock runner failure'))),
+  render: vi.fn(),
+  getDefaultCompileArgs: vi.fn().mockReturnValue(['--backend=manifold']),
 }));
 
 describe('Model.checkSyntax', () => {
   const makeMockFs = () => ({
-    readFileSync: jest.fn((_path: string) => new Uint8Array(0)),
-    writeFile: jest.fn(),
-    isFile: jest.fn(() => false),
+    readFileSync: vi.fn((_path: string) => new Uint8Array(0)),
+    writeFile: vi.fn(),
+    isFile: vi.fn(() => false),
   });
 
   function createState(): State {
@@ -41,7 +41,7 @@ describe('Model.checkSyntax', () => {
   }
 
   it('clears checkingSyntax when the syntax runner rejects', async () => {
-    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const model = new Model(makeMockFs() as unknown as FS, createState());
 
     await model.checkSyntax();

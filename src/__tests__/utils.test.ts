@@ -7,12 +7,12 @@ import { turnIntoDelayableExecution, AbortablePromise, isInStandaloneMode } from
 // ---------------------------------------------------------------------------
 
 describe('turnIntoDelayableExecution – kill cancels pending timeout (BUG-7)', () => {
-  beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
 
   it('kill() before timeout prevents job from executing', () => {
     let executed = false;
-    const job = jest.fn(() =>
+    const job = vi.fn(() =>
       AbortablePromise<void>((res) => {
         executed = true;
         res();
@@ -27,7 +27,7 @@ describe('turnIntoDelayableExecution – kill cancels pending timeout (BUG-7)', 
     promise.kill();
 
     // advance all timers — job must NOT run
-    jest.runAllTimers();
+    vi.runAllTimers();
 
     expect(executed).toBe(false);
     expect(job).not.toHaveBeenCalled();
@@ -60,15 +60,15 @@ describe('isInStandaloneMode (BUG-9)', () => {
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       configurable: true,
-      value: jest.fn().mockImplementation((query: string) => ({
+      value: vi.fn().mockImplementation((query: string) => ({
         matches: standaloneMatches && query === '(display-mode: standalone)',
         media: query,
         onchange: null,
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
-        dispatchEvent: jest.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
       })),
     });
   }

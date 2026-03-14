@@ -135,7 +135,7 @@ describe('clearHomeDirectory', () => {
       '/home/project/nested/b.txt',
     ]);
 
-    const readdirSync = jest.fn((path: string) => {
+    const readdirSync = vi.fn((path: string) => {
       switch (path) {
         case '/home':
           return ['main.scad', 'project'];
@@ -147,10 +147,10 @@ describe('clearHomeDirectory', () => {
           return [];
       }
     });
-    const unlinkSync = jest.fn((path: string) => {
+    const unlinkSync = vi.fn((path: string) => {
       files.delete(path);
     });
-    const rmdirSync = jest.fn((path: string) => {
+    const rmdirSync = vi.fn((path: string) => {
       dirs.delete(path);
     });
 
@@ -176,13 +176,13 @@ describe('clearHomeDirectory', () => {
   });
 
   it('is a no-op when /home does not exist', () => {
-    const readdirSync = jest.fn();
+    const readdirSync = vi.fn();
     const fs = {
       existsSync: () => false,
       readdirSync,
       lstatSync: () => ({ isDirectory: () => false }),
-      unlinkSync: jest.fn(),
-      rmdirSync: jest.fn(),
+      unlinkSync: vi.fn(),
+      rmdirSync: vi.fn(),
     } as unknown as FS;
 
     clearHomeDirectory(fs);
@@ -204,7 +204,7 @@ describe('clearHomeDirectory', () => {
       existsSync: () => true,
       readdirSync: (path: string) => (path === '/home' ? ['main.scad'] : []),
       lstatSync: () => ({ isDirectory: () => false }),
-      rmdirSync: jest.fn(),
+      rmdirSync: vi.fn(),
     } as unknown as FS;
 
     expect(() => clearHomeDirectory(fs)).toThrow('Filesystem does not support unlinkSync');
@@ -223,20 +223,20 @@ describe('File System Access helpers', () => {
 
   it('openLocalFile returns file metadata and saveActiveFile writes via the retained handle', async () => {
     const writable = {
-      write: jest.fn().mockResolvedValue(undefined),
-      close: jest.fn().mockResolvedValue(undefined),
+      write: vi.fn().mockResolvedValue(undefined),
+      close: vi.fn().mockResolvedValue(undefined),
     };
     const handle = {
-      getFile: jest.fn().mockResolvedValue({
+      getFile: vi.fn().mockResolvedValue({
         name: 'demo.scad',
-        text: jest.fn().mockResolvedValue('cube(10);'),
+        text: vi.fn().mockResolvedValue('cube(10);'),
       }),
-      createWritable: jest.fn().mockResolvedValue(writable),
+      createWritable: vi.fn().mockResolvedValue(writable),
     };
 
     Object.defineProperty(window, 'showOpenFilePicker', {
       configurable: true,
-      value: jest.fn().mockResolvedValue([handle]),
+      value: vi.fn().mockResolvedValue([handle]),
     });
 
     await expect(openLocalFile()).resolves.toEqual({
@@ -250,16 +250,16 @@ describe('File System Access helpers', () => {
 
   it('openLocalFile treats AbortError as a user cancel and resets failed save handles', async () => {
     const handle = {
-      getFile: jest.fn().mockResolvedValue({
+      getFile: vi.fn().mockResolvedValue({
         name: 'demo.scad',
-        text: jest.fn().mockResolvedValue('cube(10);'),
+        text: vi.fn().mockResolvedValue('cube(10);'),
       }),
-      createWritable: jest.fn().mockRejectedValue(new Error('disk full')),
+      createWritable: vi.fn().mockRejectedValue(new Error('disk full')),
     };
 
     Object.defineProperty(window, 'showOpenFilePicker', {
       configurable: true,
-      value: jest
+      value: vi
         .fn()
         .mockRejectedValueOnce(Object.assign(new Error('cancelled'), { name: 'AbortError' }))
         .mockResolvedValueOnce([handle]),
@@ -274,7 +274,7 @@ describe('File System Access helpers', () => {
   it('openLocalFile rethrows non-abort picker failures', async () => {
     Object.defineProperty(window, 'showOpenFilePicker', {
       configurable: true,
-      value: jest.fn().mockRejectedValue(new Error('permission denied')),
+      value: vi.fn().mockRejectedValue(new Error('permission denied')),
     });
 
     await expect(openLocalFile()).rejects.toThrow('permission denied');

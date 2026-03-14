@@ -1,10 +1,10 @@
-jest.mock('@monaco-editor/loader', () => ({
+vi.mock('@monaco-editor/loader', () => ({
   __esModule: true,
-  default: { init: jest.fn() },
+  default: { init: vi.fn() },
 }));
 
-jest.mock('../openscad-completions.ts', () => ({
-  buildOpenSCADCompletionItemProvider: jest.fn(),
+vi.mock('../openscad-completions.ts', () => ({
+  buildOpenSCADCompletionItemProvider: vi.fn(),
 }));
 
 import loader from '@monaco-editor/loader';
@@ -27,20 +27,24 @@ describe('OpenSCAD language registration', () => {
   });
 
   it('registers language, configuration, tokenizer, and completion provider', async () => {
-    const provider = { provideCompletionItems: jest.fn() };
+    const provider = { provideCompletionItems: vi.fn() };
     const monacoMock = {
       languages: {
-        register: jest.fn(),
-        setLanguageConfiguration: jest.fn(),
-        setMonarchTokensProvider: jest.fn(),
-        registerCompletionItemProvider: jest.fn(),
+        register: vi.fn(),
+        setLanguageConfiguration: vi.fn(),
+        setMonarchTokensProvider: vi.fn(),
+        registerCompletionItemProvider: vi.fn(),
       },
     };
 
-    const mockedLoader = loader as unknown as { init: jest.Mock };
+    const mockedLoader = loader as unknown as {
+      init: ReturnType<typeof vi.fn>;
+    };
     mockedLoader.init.mockResolvedValue(monacoMock);
 
-    const mockedBuilder = buildOpenSCADCompletionItemProvider as unknown as jest.Mock;
+    const mockedBuilder = buildOpenSCADCompletionItemProvider as unknown as ReturnType<
+      typeof vi.fn
+    >;
     mockedBuilder.mockResolvedValue(provider);
 
     const first = await registerOpenSCADLanguage({} as FS, '/home', []);

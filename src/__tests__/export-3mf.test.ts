@@ -32,7 +32,7 @@ describe('export3MF', () => {
   });
 
   it('does not emit debug console logs when extruder colors are provided', () => {
-    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     try {
       export3MF(sampleData, [chroma('#ff0000')]);
       expect(logSpy).not.toHaveBeenCalled();

@@ -5,14 +5,14 @@
 //   2. compileWithFallback: success path, no-retry path, and missing-library retry path
 //
 // compileWithFallback calls spawnOpenSCAD from the same module, so we cannot
-// mock spawnOpenSCAD via jest.mock without breaking the internal call chain.
+// replace spawnOpenSCAD at the module boundary without breaking the internal call chain.
 // Instead, we install a fake Worker in globalThis that immediately posts a
 // synthetic "result" message back to the runner, exercising the full JS-layer
 // path without requiring a real WASM binary.
 //
-// Full round-trip compilation with real WASM is deferred (see
-// working/reference/deferred-items.md) because openscad.js uses import.meta.url
-// and ESM exports that cannot load in jest CJS environment.
+// Full round-trip compilation with real WASM remains intentionally deferred from
+// this JS-layer suite. The Vitest migration removed the old Jest CJS blocker,
+// but the fake-Worker harness still provides the focused coverage used here.
 
 import { getDefaultCompileArgs } from '../actions.ts';
 import { clearPerfSnapshot, getPerfSnapshot } from '../../perf/runtime-performance.ts';
@@ -20,23 +20,23 @@ import { clearPerfSnapshot, getPerfSnapshot } from '../../perf/runtime-performan
 // ---------------------------------------------------------------------------
 // Mock filesystem.ts — used by compileWithFallback for on-demand library mount
 // ---------------------------------------------------------------------------
-jest.mock('../../fs/filesystem.ts', () => ({
-  mountDemandLibraries: jest.fn().mockResolvedValue([]),
-  extractLibraryNames: jest.fn().mockReturnValue([]),
-  createEditorFS: jest.fn().mockResolvedValue(undefined),
-  preloadAllLibraries: jest.fn().mockResolvedValue(undefined),
-  symlinkLibraries: jest.fn().mockResolvedValue(undefined),
-  saveActiveFile: jest.fn().mockResolvedValue(false),
-  openLocalFile: jest.fn().mockResolvedValue(null),
-  clearActiveFileHandle: jest.fn(),
-  getParentDir: jest.fn((p: string) => p.split('/').slice(0, -1).join('/') || '/'),
-  join: jest.fn((...args: string[]) => args.join('/')),
+vi.mock('../../fs/filesystem.ts', () => ({
+  mountDemandLibraries: vi.fn().mockResolvedValue([]),
+  extractLibraryNames: vi.fn().mockReturnValue([]),
+  createEditorFS: vi.fn().mockResolvedValue(undefined),
+  preloadAllLibraries: vi.fn().mockResolvedValue(undefined),
+  symlinkLibraries: vi.fn().mockResolvedValue(undefined),
+  saveActiveFile: vi.fn().mockResolvedValue(false),
+  openLocalFile: vi.fn().mockResolvedValue(null),
+  clearActiveFileHandle: vi.fn(),
+  getParentDir: vi.fn((p: string) => p.split('/').slice(0, -1).join('/') || '/'),
+  join: vi.fn((...args: string[]) => args.join('/')),
 }));
 
 import { compileWithFallback } from '../openscad-runner.ts';
 import { mountDemandLibraries } from '../../fs/filesystem.ts';
 
-const mockMount = mountDemandLibraries as jest.Mock;
+const mockMount = mountDemandLibraries as ReturnType<typeof vi.fn>;
 
 // ---------------------------------------------------------------------------
 // Fake Worker that drives the runner message loop
@@ -97,7 +97,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   _workerSpecs = [];
   clearPerfSnapshot();
 });
@@ -131,7 +131,7 @@ describe('compile pipeline — compileWithFallback success', () => {
 
     const result = await compileWithFallback(
       { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
-      jest.fn(),
+      vi.fn(),
     );
 
     expect(result.exitCode).toBe(0);
@@ -143,7 +143,7 @@ describe('compile pipeline — compileWithFallback success', () => {
 
     const result = await compileWithFallback(
       { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
-      jest.fn(),
+      vi.fn(),
     );
 
     expect(result.exitCode).toBe(1);
@@ -163,7 +163,7 @@ describe('compile pipeline — compileWithFallback success', () => {
 
     const result = await compileWithFallback(
       { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
-      jest.fn(),
+      vi.fn(),
     );
 
     expect(result.perf?.workerWasmInitMillis).toBe(44);
@@ -189,7 +189,7 @@ describe('compile pipeline — compileWithFallback success', () => {
 
     const result = await compileWithFallback(
       { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
-      jest.fn(),
+      vi.fn(),
     );
 
     expect(result.error).toBe('boom');
@@ -216,7 +216,7 @@ describe('compile pipeline — compileWithFallback retry on missing library', ()
 
     const result = await compileWithFallback(
       { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
-      jest.fn(),
+      vi.fn(),
     );
 
     expect(result.exitCode).toBe(0);
@@ -235,7 +235,7 @@ describe('compile pipeline — compileWithFallback retry on missing library', ()
 
     const result = await compileWithFallback(
       { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
-      jest.fn(),
+      vi.fn(),
     );
 
     expect(result.exitCode).toBe(1);

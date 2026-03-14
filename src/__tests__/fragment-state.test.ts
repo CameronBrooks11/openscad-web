@@ -71,27 +71,30 @@ describe('readStateFromFragment – view.showAxes / lineNumbers (BUG-5)', () => 
 // ---------------------------------------------------------------------------
 
 describe('round-trip: encodeStateParamsAsFragment → readStateFromFragment', () => {
+  async function loadInitialState() {
+    return (await import('../state/initial-state.ts')).createInitialState;
+  }
+
   function mockMatchMedia() {
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       configurable: true,
-      value: jest.fn().mockImplementation((query: string) => ({
+      value: vi.fn().mockImplementation((query: string) => ({
         matches: false,
         media: query,
         onchange: null,
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
-        dispatchEvent: jest.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
       })),
     });
   }
 
   it('preserves all key state fields through gzip+base64 encode/decode cycle', async () => {
     mockMatchMedia();
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createInitialState } = require('../state/initial-state.ts');
+    const createInitialState = await loadInitialState();
 
     const state = createInitialState(null, { content: 'cube(10);' });
     // Override non-default values to verify round-trip fidelity for each field.
@@ -124,27 +127,26 @@ describe('round-trip: encodeStateParamsAsFragment → readStateFromFragment', ()
 });
 
 describe('buildUrlForStateParams – must be async (BUG-6)', () => {
-  it('returns a Promise (not a string with "[object Promise]" in it)', () => {
-    // Import createInitialState lazily to avoid window.matchMedia issues at module load
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createInitialState } = require('../state/initial-state.ts');
-
+  it('returns a Promise (not a string with "[object Promise]" in it)', async () => {
     // Mock matchMedia so createInitialState doesn't throw
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       configurable: true,
-      value: jest.fn().mockImplementation((query: string) => ({
+      value: vi.fn().mockImplementation((query: string) => ({
         matches: false,
         media: query,
         onchange: null,
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
-        dispatchEvent: jest.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
       })),
     });
 
+    const createInitialState = await import('../state/initial-state.ts').then(
+      ({ createInitialState: importedCreateInitialState }) => importedCreateInitialState,
+    );
     const state = createInitialState(null, { content: 'cube(10);' });
     const result = buildUrlForStateParams(state);
     // Before fix: result is a string (sync return), and it contains '[object Promise]'
@@ -176,19 +178,20 @@ describe('fragment-state — edge cases (T2)', () => {
     Object.defineProperty(window, 'matchMedia', {
       writable: true,
       configurable: true,
-      value: jest.fn().mockImplementation((query: string) => ({
+      value: vi.fn().mockImplementation((query: string) => ({
         matches: false,
         media: query,
         onchange: null,
-        addListener: jest.fn(),
-        removeListener: jest.fn(),
-        addEventListener: jest.fn(),
-        removeEventListener: jest.fn(),
-        dispatchEvent: jest.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
       })),
     });
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createInitialState } = require('../state/initial-state.ts');
+    const createInitialState = await import('../state/initial-state.ts').then(
+      ({ createInitialState: importedCreateInitialState }) => importedCreateInitialState,
+    );
     const state = createInitialState(null, { content: 'sphere(5);' });
 
     const fragment = await encodeStateParamsAsFragment(state);

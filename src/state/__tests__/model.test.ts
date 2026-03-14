@@ -12,9 +12,9 @@ import { defaultSourcePath, defaultModelColor } from '../initial-state.ts';
 
 // Mock the heavy runner actions so no Worker / WASM is touched.
 // checkSyntax and render are "turnable" factory functions: f(args) => g({now}) => Promise
-jest.mock('../../runner/actions.ts', () => {
+vi.mock('../../runner/actions.ts', () => {
   const makeDelayable = (resolvedValue: unknown) =>
-    jest.fn().mockReturnValue(jest.fn().mockResolvedValue(resolvedValue));
+    vi.fn().mockReturnValue(vi.fn().mockResolvedValue(resolvedValue));
   return {
     checkSyntax: makeDelayable({ logText: '', markers: [], parameterSet: undefined }),
     render: makeDelayable({
@@ -23,21 +23,21 @@ jest.mock('../../runner/actions.ts', () => {
       markers: [],
       elapsedMillis: 0,
     }),
-    getDefaultCompileArgs: jest.fn().mockReturnValue(['--backend=manifold']),
+    getDefaultCompileArgs: vi.fn().mockReturnValue(['--backend=manifold']),
   };
 });
 
 // Mock heavy IO that model.render() uses after a successful compile (avoided
 // because the mock render resolves immediately but we still need the symbols).
-jest.mock('../../io/import_off.ts', () => ({ parseOff: jest.fn() }));
+vi.mock('../../io/import_off.ts', () => ({ parseOff: vi.fn() }));
 
 // ---------------------------------------------------------------------------
 // Import mocked actions so we can inspect call counts.
 // ---------------------------------------------------------------------------
 import { checkSyntax as _mockCheckSyntax, render as _mockRender } from '../../runner/actions.ts';
 
-const mockCheckSyntax = _mockCheckSyntax as jest.Mock;
-const mockRender = _mockRender as jest.Mock;
+const mockCheckSyntax = _mockCheckSyntax as ReturnType<typeof vi.fn>;
+const mockRender = _mockRender as ReturnType<typeof vi.fn>;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -69,9 +69,9 @@ function createTestState(content = 'cube(10);'): State {
 
 /** Minimal FS stub — only the methods model.ts actually calls. */
 const makeMockFs = () => ({
-  readFileSync: jest.fn((_path: string) => new Uint8Array(0)),
-  writeFile: jest.fn(),
-  isFile: jest.fn(() => false),
+  readFileSync: vi.fn((_path: string) => new Uint8Array(0)),
+  writeFile: vi.fn(),
+  isFile: vi.fn(() => false),
 });
 
 /** Flush microtasks + one macrotask tick so async methods (processSource, checkSyntax…) resolve. */
@@ -90,11 +90,11 @@ let mockFs: ReturnType<typeof makeMockFs>;
 let stateHistory: State[];
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 
   // Stub browser globals that model.ts uses
   Object.defineProperty(global, 'URL', {
-    value: { createObjectURL: jest.fn(() => 'blob:fake-url'), revokeObjectURL: jest.fn() },
+    value: { createObjectURL: vi.fn(() => 'blob:fake-url'), revokeObjectURL: vi.fn() },
     writable: true,
     configurable: true,
   });
@@ -116,7 +116,9 @@ describe('Model — render triggering', () => {
     await nextTicks();
 
     expect(mockRender).toHaveBeenCalledTimes(1);
-    const scheduledRender = mockRender.mock.results[0]?.value as jest.Mock | undefined;
+    const scheduledRender = mockRender.mock.results[0]?.value as
+      | ReturnType<typeof vi.fn>
+      | undefined;
     expect(scheduledRender).toBeDefined();
     expect(scheduledRender).toHaveBeenCalledWith({ now: true });
   });
@@ -126,7 +128,7 @@ describe('Model — render triggering', () => {
     const pendingRender = new Promise((resolve) => {
       resolveRender = resolve;
     });
-    const scheduledRender = jest.fn().mockImplementation(() => pendingRender);
+    const scheduledRender = vi.fn().mockImplementation(() => pendingRender);
     mockRender.mockReturnValueOnce(scheduledRender);
 
     model.init();
@@ -161,7 +163,9 @@ describe('Model — render triggering', () => {
     model.source = 'sphere(5);';
     await nextTicks();
     expect(mockRender).toHaveBeenCalled();
-    const scheduledRender = mockRender.mock.results[0]?.value as jest.Mock | undefined;
+    const scheduledRender = mockRender.mock.results[0]?.value as
+      | ReturnType<typeof vi.fn>
+      | undefined;
     expect(scheduledRender).toBeDefined();
     expect(scheduledRender).toHaveBeenCalledWith({ now: false });
   });
@@ -186,7 +190,7 @@ describe('Model — render triggering', () => {
         { path: '/home/other.scad', content: 'cylinder(5,3);' },
       ];
     });
-    jest.clearAllMocks(); // reset call counts after the above mutation
+    vi.clearAllMocks(); // reset call counts after the above mutation
 
     model.openFile('/home/other.scad');
     await nextTicks();
@@ -200,7 +204,7 @@ describe('Model — render triggering', () => {
         { path: '/home/image.svg', content: '<svg xmlns="http://www.w3.org/2000/svg"></svg>' },
       ];
     });
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     model.openFile('/home/image.svg');
     await nextTicks();
@@ -218,7 +222,7 @@ describe('Model — render triggering', () => {
         { path: '/home/image.svg', content: '<svg xmlns="http://www.w3.org/2000/svg"></svg>' },
       ];
     });
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     model.openFile('/home/image.svg');
     await nextTicks();
@@ -250,7 +254,7 @@ describe('Model — setVar', () => {
 
   it('also triggers render when var is set to a different value', async () => {
     model.setVar('size', 10);
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     model.setVar('size', 20);
     await nextTicks();
     expect(mockRender).toHaveBeenCalled();
@@ -283,7 +287,7 @@ describe('Model — format changes', () => {
     model.mutate((s) => {
       s.is2D = true;
     });
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     model.setFormats('dxf', undefined);
     await nextTicks();
@@ -291,7 +295,9 @@ describe('Model — format changes', () => {
     expect(mockRender).toHaveBeenCalledTimes(1);
     const renderCall = mockRender.mock.calls[0]?.[0];
     expect(renderCall.renderFormat).toBe('dxf');
-    const scheduledRender = mockRender.mock.results[0]?.value as jest.Mock | undefined;
+    const scheduledRender = mockRender.mock.results[0]?.value as
+      | ReturnType<typeof vi.fn>
+      | undefined;
     expect(scheduledRender).toHaveBeenCalledWith({ now: true });
   });
 });
