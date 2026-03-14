@@ -48,7 +48,7 @@ function createJobRuntime(): Promise<OpenSCADRuntime> {
   });
 }
 
-// BrowserFS (global) is initialized once per worker.
+// BrowserFS is initialized once per worker runtime.
 // The per-instance WASM FS mounts (mkdir + mount + symlinks) are re-done for every fresh WASM instance.
 let editorFSInitialized = false;
 

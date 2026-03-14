@@ -16,6 +16,7 @@ The WASM build was made possible by https://github.com/DSchroer/openscad-wasm.
 - [Licenses](#licenses)
   - [OpenSCAD Web Demo](#openscad-web-demo)
   - [Manifold](#manifold)
+  - [BrowserFS](#browserfs)
   - [JSZip](#jszip)
   - [PrimeReact](#primereact)
   - [Monaco Editor](#monaco-editor)
@@ -73,6 +74,14 @@ The WASM build was made possible by https://github.com/DSchroer/openscad-wasm.
 https://github.com/elalish/manifold
 
 Licensed under the [Apache 2.0](#apache2) license.
+
+## BrowserFS
+
+https://github.com/jvilk/BrowserFS
+
+Bundled as a runtime dependency for the in-browser filesystem layer.
+
+Licensed under the MIT License.
 
 ## JSZip
 

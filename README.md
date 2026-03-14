@@ -60,7 +60,7 @@ Runtime asset and library delivery policy:
 
 - runtime asset URLs resolve against the current page origin plus the active base path instead of bundler-output-relative paths
 - runtime asset URLs resolve through `import.meta.env.BASE_URL` so subpath deploys and local preview paths stay consistent
-- BrowserFS is loaded explicitly by the app and worker runtime instead of via hand-maintained HTML glue
+- BrowserFS is bundled as a runtime dependency in the app and worker instead of being loaded through a hand-maintained public script
 - bootstrap prefetch hints come from generated library metadata instead of hardcoded HTML links
 - full editor mode eagerly mounts all libraries on the main thread so browsing and completions keep working
 - embed/customizer shells and worker compile paths keep using demand-loaded libraries
