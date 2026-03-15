@@ -1,7 +1,7 @@
 export type BuildMode = 'development' | 'production';
 
 export function getBuildMode(): BuildMode {
-  return process.env.NODE_ENV === 'production' ? 'production' : 'development';
+  return import.meta.env.PROD ? 'production' : 'development';
 }
 
 export function isProductionBuild(): boolean {

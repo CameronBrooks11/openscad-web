@@ -10,8 +10,8 @@ describe('resolveRuntimeAssetUrl', () => {
   });
 
   it('resolves plain asset specifiers against a base URL', () => {
-    expect(resolveRuntimeAssetUrl('openscad-worker.js', 'https://example.com/openscad-web/')).toBe(
-      'https://example.com/openscad-web/openscad-worker.js',
-    );
+    expect(
+      resolveRuntimeAssetUrl('assets/runtime-worker.js', 'https://example.com/openscad-web/'),
+    ).toBe('https://example.com/openscad-web/assets/runtime-worker.js');
   });
 });

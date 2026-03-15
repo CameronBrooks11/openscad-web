@@ -59,8 +59,7 @@ jobs:
       - name: Build app
         run: npm run build
         env:
-          NODE_ENV: production
-          PUBLIC_URL: /openscad-web
+          PUBLIC_URL: /openscad-web/
 
   e2e:
     runs-on: ubuntu-24.04
@@ -143,12 +142,10 @@ jobs:
       - name: Build app for perf capture
         run: npm run build
         env:
-          NODE_ENV: production
+          PUBLIC_URL: /
 
       - name: Capture aggregated perf baseline candidate
         run: npm run perf:capture:series
-        env:
-          NODE_ENV: production
 
       - name: Compare perf baseline
         run: npm run perf:compare

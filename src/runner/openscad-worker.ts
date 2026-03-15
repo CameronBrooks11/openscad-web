@@ -19,7 +19,6 @@ import {
 import { fetchSource } from '../utils.ts';
 
 declare const self: DedicatedWorkerGlobalScope;
-const BrowserFS = ensureWorkerBrowserFSLoaded();
 
 // WASM initializes exactly once per worker lifetime (R4)
 let currentJobId: string | null = null;
@@ -49,7 +48,7 @@ function createJobRuntime(): Promise<OpenSCADRuntime> {
   });
 }
 
-// BrowserFS (global) is initialized once per worker.
+// BrowserFS is initialized once per worker runtime.
 // The per-instance WASM FS mounts (mkdir + mount + symlinks) are re-done for every fresh WASM instance.
 let editorFSInitialized = false;
 
@@ -60,7 +59,8 @@ let editorFSInitialized = false;
  * Then creates WASM FS symlinks so OpenSCAD can resolve `use <LibName/...>` from CWD.
  */
 async function ensureArchivesMounted(rt: OpenSCADRuntime, libraryNames: string[]): Promise<void> {
-  const BFS = new BrowserFS.EmscriptenFS(
+  const browserFS = await ensureWorkerBrowserFSLoaded();
+  const BFS = new browserFS.EmscriptenFS(
     rt.FS,
     rt.PATH ?? {
       join2: (a: string, b: string) => `${a}/${b}`,
@@ -101,6 +101,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
     const perf: CompilePerfStats = {};
 
     try {
+      await ensureWorkerBrowserFSLoaded();
       // F3: Demand-load only the libraries referenced in the source texts
       let libraryNames: string[] = [];
       if (mountArchives) {

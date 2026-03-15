@@ -5,14 +5,23 @@ import { zipArchives, type ZipArchive } from './zip-archives.generated.ts';
 export const LIBRARY_DELIVERY_POLICY =
   'selected-prefetch bootstrap + editor eager mount + worker demand-load';
 
-const CORE_PREFETCH_SPECIFIERS = ['openscad.wasm', 'openscad-worker.js', 'libraries/fonts.zip'];
+const CORE_PREFETCH_SPECIFIERS = ['libraries/fonts.zip'];
 
 export function getPrefetchedArchives(archives: ZipArchive[] = zipArchives): ZipArchive[] {
   return archives.filter((archive) => archive.prefetch === true);
 }
 
-export function getBootstrapPrefetchSpecifiers(archives: ZipArchive[] = zipArchives): string[] {
-  return [...CORE_PREFETCH_SPECIFIERS, ...getPrefetchedArchives(archives).map((a) => a.zipPath)];
+export function getBootstrapPrefetchSpecifiers(
+  archives: ZipArchive[] = zipArchives,
+  workerSpecifier?: string,
+  wasmSpecifier?: string,
+): string[] {
+  return [
+    ...(wasmSpecifier ? [wasmSpecifier] : []),
+    ...CORE_PREFETCH_SPECIFIERS,
+    ...(workerSpecifier ? [workerSpecifier] : []),
+    ...getPrefetchedArchives(archives).map((a) => a.zipPath),
+  ];
 }
 
 export function injectBootstrapPrefetchHints(
@@ -31,11 +40,12 @@ export function injectBootstrapPrefetchHints(
     if (existingHrefs.has(href)) continue;
 
     const link = document.createElement('link');
+    const { pathname } = new URL(href);
     link.rel = 'prefetch';
     link.href = href;
-    if (href.endsWith('.js')) {
+    if (pathname.endsWith('.js')) {
       link.as = 'script';
-    } else if (href.endsWith('.wasm') || href.endsWith('.zip')) {
+    } else if (pathname.endsWith('.wasm') || pathname.endsWith('.zip')) {
       link.as = 'fetch';
     }
     document.head.appendChild(link);
