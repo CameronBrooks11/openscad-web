@@ -9,18 +9,12 @@
       content="OpenSCAD Playground: edit .scad models and render them to STL from the browser (WebAssembly build OpenSCAD, with Monaco editor and STL Viewer)"
     />
 
-    <link rel="icon" href="favicon.ico" />
-    <link rel="apple-touch-icon" href="logo192.png" />
-    <!-- https://developers.google.com/web/fundamentals/web-app-manifest/ -->
-    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" href="/openscad-web/favicon.ico" />
+    <link rel="apple-touch-icon" href="/openscad-web/logo192.png" />
+    <link rel="manifest" href="/openscad-web/manifest.json" />
     <meta name="theme-color" content="#000000" />
 
-    <!-- <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.5.0/model-viewer.min.js" defer></script> -->
-
-    <script src="./index.js" defer></script>
-
-    <!-- <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-fork-ribbon-css/0.2.3/gh-fork-ribbon.min.css"> -->
-    <link rel="stylesheet" href="./gh-fork-ribbon.min.css" />
+    <link rel="stylesheet" href="/openscad-web/gh-fork-ribbon.min.css" />
 
     <style>
       #root,
@@ -30,7 +24,6 @@
         flex-direction: column;
         flex: 1;
         margin: 0;
-
         height: 100vh;
         height: var(--app-height);
       }
@@ -60,8 +53,6 @@
         bottom: 0;
       }
 
-      /* Monaco theme controls editor surfaces; avoid overriding its background layers globally. */
-
       .opacity-animated {
         transition: opacity 0.5s ease-in-out;
       }
@@ -86,10 +77,12 @@
         background-color: #333;
       }
     </style>
+    <script type="module" crossorigin src="/openscad-web/assets/index-DEmiqtGo.js"></script>
+    <link rel="stylesheet" crossorigin href="/openscad-web/assets/index-D9J-i7Hy.css">
   </head>
   <body>
     <audio id="complete-sound">
-      <source src="complete.wav" type="audio/wav" />
+      <source src="/openscad-web/complete.wav" type="audio/wav" />
       Your browser does not support the audio element.
     </audio>
     <a
