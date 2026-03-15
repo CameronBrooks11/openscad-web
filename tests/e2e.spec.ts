@@ -252,9 +252,10 @@ test.afterEach(async ({ page }, testInfo) => {
   expect(errors, JSON.stringify(errors, null, 2)).toHaveLength(0);
 
   if (isProductionServer) {
-    const prodDriftMessages = messages.filter((message) =>
-      message.text.includes('Logging is enabled!') ||
-      message.text.includes('Lit is in dev mode. Not recommended for production!'),
+    const prodDriftMessages = messages.filter(
+      (message) =>
+        message.text.includes('Logging is enabled!') ||
+        message.text.includes('Lit is in dev mode. Not recommended for production!'),
     );
     expect(prodDriftMessages, JSON.stringify(prodDriftMessages, null, 2)).toHaveLength(0);
   }
