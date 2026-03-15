@@ -2,10 +2,6 @@
 
 [Open the Demo](https://cameronbrooks11.github.io/openscad-web/)
 
-<a href="https://cameronbrooks11.github.io/openscad-web/" target="_blank">
-<img width="694" alt="OpenSCAD Web screenshot" src="https://github.com/user-attachments/assets/58305f27-7e95-4c56-9cd7-0d766e0a21ae" />
-</a>
-
 OpenSCAD Web is a browser-based OpenSCAD editor, previewer, and customizer built around a headless WebAssembly build of OpenSCAD. The app uses Lit for the UI shell, Monaco for editing, Three.js for 3D viewing, BrowserFS for the virtual filesystem, and Vite for app and worker bundling.
 
 Licensing and bundled third-party notices live in [LICENSE.md](./LICENSE.md).
