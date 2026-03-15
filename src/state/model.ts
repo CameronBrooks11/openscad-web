@@ -24,6 +24,7 @@ import { is2DFormatExtension } from './formats.ts';
 import { parseOff } from '../io/import_off.ts';
 import { export3MF } from '../io/export_3mf.ts';
 import chroma from 'chroma-js';
+import { normalizeOperationFailure, UserFacingOperation } from '../user-facing-errors.ts';
 
 export class Model extends EventTarget {
   constructor(
@@ -64,6 +65,25 @@ export class Model extends EventTarget {
     }
 
     return false;
+  }
+
+  clearError() {
+    this.mutate((s) => {
+      s.error = undefined;
+      s.errorDetails = undefined;
+    });
+  }
+
+  private applyUserFacingError(s: State, error: unknown, operation: UserFacingOperation) {
+    const normalized = normalizeOperationFailure(error, operation);
+    s.error = normalized.message;
+    s.errorDetails = normalized.details;
+    if (normalized.markers || normalized.logText) {
+      s.lastCheckerRun = {
+        logText: normalized.logText ?? '',
+        markers: normalized.markers ?? [],
+      };
+    }
   }
 
   setFormats(
@@ -188,6 +208,7 @@ export class Model extends EventTarget {
           s.preview = undefined;
           s.currentRunLogs = undefined;
           s.error = undefined;
+          s.errorDetails = undefined;
           s.is2D = undefined;
         }
       })
@@ -222,16 +243,25 @@ export class Model extends EventTarget {
   } = {}) {
     const src = this.state.params.sources.find((src) => src.path === this.state.params.activePath);
     if (src && src.content == null) {
-      const { path } = src;
-      const { url } = src;
-      const content = new TextDecoder().decode(
-        await fetchSource(this.fs, { path, url }, { baseUrl: window.location.href }),
-      );
-      this.mutate((s) => {
-        s.params.sources = s.params.sources.map((src) =>
-          src.path === s.params.activePath ? { ...src, content } : src,
+      try {
+        const { path } = src;
+        const { url } = src;
+        const content = new TextDecoder().decode(
+          await fetchSource(this.fs, { path, url }, { baseUrl: window.location.href }),
         );
-      });
+        this.mutate((s) => {
+          s.params.sources = s.params.sources.map((src) =>
+            src.path === s.params.activePath ? { ...src, content } : src,
+          );
+          s.error = undefined;
+          s.errorDetails = undefined;
+        });
+      } catch (err) {
+        this.mutate((s) => {
+          this.applyUserFacingError(s, err, 'source');
+        });
+        return;
+      }
     }
     // When autoCompile is explicitly disabled, skip automatic syntax check and render.
     if (this.state.params.autoCompile === false) return;
@@ -268,6 +298,9 @@ export class Model extends EventTarget {
     } catch (err) {
       if (!isExpectedJobCancellation(err)) {
         console.error('Error while checking syntax:', err);
+        this.mutate((s) => {
+          this.applyUserFacingError(s, err, 'syntax');
+        });
       }
     } finally {
       this.mutate((s) => {
@@ -321,16 +354,17 @@ export class Model extends EventTarget {
     this.mutate((s) => {
       s.currentRunLogs ??= [];
       s.exporting = true;
+      s.error = undefined;
+      s.errorDetails = undefined;
     });
 
-    if (!this.state.output?.outFile || !this.state.output?.outFileURL) {
-      throw new Error('No output file to export');
-    }
-
-    const { features, exportFormat2D, exportFormat3D } = this.state.params;
-    const exportFormat = this.state.is2D ? exportFormat2D : exportFormat3D;
-
     try {
+      if (!this.state.output?.outFile || !this.state.output?.outFileURL) {
+        throw new Error('No output file to export');
+      }
+
+      const { features, exportFormat2D, exportFormat3D } = this.state.params;
+      const exportFormat = this.state.is2D ? exportFormat2D : exportFormat3D;
       let output: RenderOutput;
       if (exportFormat === '3mf') {
         const start = performance.now();
@@ -387,7 +421,7 @@ export class Model extends EventTarget {
       this.mutate((s) => {
         s.exporting = false;
         console.error('Error while exporting:', err);
-        s.error = `${err}`;
+        this.applyUserFacingError(s, err, 'export');
       });
     }
   }
@@ -409,6 +443,8 @@ export class Model extends EventTarget {
       s.params.activePath = path;
       s.lastCheckerRun = undefined;
       s.output = undefined;
+      s.error = undefined;
+      s.errorDetails = undefined;
     });
   }
 
@@ -438,6 +474,8 @@ export class Model extends EventTarget {
         s.params.activePath = fullEntry;
         s.lastCheckerRun = undefined;
         s.output = undefined;
+        s.error = undefined;
+        s.errorDetails = undefined;
       });
       this.processSource();
     }
@@ -459,6 +497,8 @@ export class Model extends EventTarget {
       s.params.activePath = path;
       s.lastCheckerRun = undefined;
       s.output = undefined;
+      s.error = undefined;
+      s.errorDetails = undefined;
     });
     this.processSource();
     return true;
@@ -517,6 +557,8 @@ export class Model extends EventTarget {
     this.mutate((s) => {
       s.currentRunLogs = [];
       setRendering(s, true);
+      s.error = undefined;
+      s.errorDetails = undefined;
     });
 
     let { activePath, sources } = this.state.params;
@@ -565,6 +607,7 @@ export class Model extends EventTarget {
       this.mutate((s) => {
         setRendering(s, false);
         s.error = undefined;
+        s.errorDetails = undefined;
         s.is2D = is2D;
         s.lastCheckerRun = {
           logText: output.logText,
@@ -598,7 +641,7 @@ export class Model extends EventTarget {
         setRendering(s, false);
         if (!isExpectedJobCancellation(err)) {
           console.error('Error while doing ' + (isPreview ? 'preview' : 'rendering') + ':', err);
-          s.error = `${err}`;
+          this.applyUserFacingError(s, err, isPreview ? 'preview' : 'render');
         }
       });
     }

@@ -82,6 +82,7 @@ export interface State {
 
   parameterSet?: ParameterSet;
   error?: string;
+  errorDetails?: string;
   is2D?: boolean;
   output?: FileOutput & {
     isPreview: boolean;

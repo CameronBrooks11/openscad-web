@@ -7,6 +7,7 @@ import { AbortablePromise, turnIntoDelayableExecution } from '../utils.ts';
 import { Source } from '../state/app-state.ts';
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from '../state/formats.ts';
 import { ParameterSet } from '../state/customizer-types.ts';
+import { createOperationFailure } from '../user-facing-errors.ts';
 
 const syntaxDelay = 300;
 
@@ -188,12 +189,23 @@ export const render = turnIntoDelayableExecution(renderDelay, (renderArgs: Rende
         });
 
         if (result.error) {
-          reject(result.error);
+          reject(
+            createOperationFailure(isPreview ? 'preview' : 'render', result.error, {
+              markers,
+              logText,
+            }),
+          );
+          return;
         }
 
         const [output] = result.outputs ?? [];
         if (!output) {
-          reject(new Error('No output from runner!'));
+          reject(
+            createOperationFailure(isPreview ? 'preview' : 'render', 'No output from runner!', {
+              markers,
+              logText,
+            }),
+          );
           return;
         }
         const [filePath, content] = output;

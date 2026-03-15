@@ -5,6 +5,8 @@
 import { Model } from '../model.ts';
 import { State } from '../app-state.ts';
 import { defaultSourcePath, defaultModelColor } from '../initial-state.ts';
+import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import { createOperationFailure } from '../../user-facing-errors.ts';
 
 // ---------------------------------------------------------------------------
 // Module mocks — must be declared before any imports
@@ -332,5 +334,71 @@ describe('Model — expected cancellation handling', () => {
     expect(model.state.error).toBeUndefined();
     expect(model.state.previewing).toBeFalsy();
     consoleError.mockRestore();
+  });
+
+  it('normalizes render timeout errors into user-facing text', async () => {
+    mockRender.mockReturnValueOnce(
+      vi.fn().mockRejectedValue(new Error('Compile timed out after 30s')),
+    );
+
+    await model.render({ isPreview: true, now: true });
+
+    expect(model.state.error).toBe(
+      'Preview timed out. Try simplifying the model or rendering a smaller part.',
+    );
+    expect(model.state.errorDetails).toBe('Compile timed out after 30s');
+  });
+
+  it('preserves syntax markers when a render fails with parser errors', async () => {
+    mockRender.mockReturnValueOnce(
+      vi.fn().mockRejectedValue(
+        createOperationFailure('preview', 'OpenSCAD invocation failed: parser error', {
+          logText: 'ERROR: Parser error in file "/home/playground.scad", line 1: syntax error',
+          markers: [
+            {
+              startLineNumber: 1,
+              startColumn: 1,
+              endLineNumber: 1,
+              endColumn: 100,
+              message: 'syntax error',
+              severity: monaco.MarkerSeverity.Error,
+            },
+          ],
+        }),
+      ),
+    );
+
+    await model.render({ isPreview: true, now: true });
+
+    expect(model.state.error).toBe(
+      'OpenSCAD reported syntax errors. Review the highlighted lines and logs.',
+    );
+    expect(model.state.lastCheckerRun?.markers).toHaveLength(1);
+    expect(model.state.lastCheckerRun?.logText).toContain('Parser error');
+  });
+
+  it('surfaces external source load failures through state.error', async () => {
+    model = new Model(
+      mockFs as unknown as FS,
+      {
+        ...createTestState(undefined),
+        params: {
+          activePath: defaultSourcePath,
+          sources: [{ path: defaultSourcePath, url: 'https://example.com/model.scad' }],
+          features: [],
+          exportFormat2D: 'svg',
+          exportFormat3D: 'stl',
+        },
+      },
+      (s) => stateHistory.push(s),
+      undefined,
+    );
+
+    model.init();
+    await nextTicks();
+
+    expect(model.state.error).toBe('External source URLs must stay on this site.');
+    expect(model.state.errorDetails).toBe('source URL must be same-origin relative/absolute.');
+    expect(mockRender).not.toHaveBeenCalled();
   });
 });

@@ -358,6 +358,42 @@ test.describe('worker integration', () => {
     expect(second).not.toBeNull();
     expect(second?.outFileURL).toBe(first?.outFileURL);
   });
+
+  test('invalid syntax shows a normalized error banner and markers', async ({ page }) => {
+    await loadSrc(page, 'cube(;');
+    await page.waitForFunction(
+      () => {
+        const shell = document.querySelector('osc-app-shell') as
+          | (Element & { _st?: unknown })
+          | null;
+        const state =
+          shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
+        const lastCheckerRun =
+          state && typeof state === 'object' && 'lastCheckerRun' in state
+            ? (state.lastCheckerRun as Record<string, unknown> | undefined)
+            : undefined;
+        const markers =
+          lastCheckerRun && typeof lastCheckerRun === 'object' && 'markers' in lastCheckerRun
+            ? (lastCheckerRun.markers as unknown[] | undefined)
+            : undefined;
+        return Boolean(
+          state &&
+          !state.rendering &&
+          !state.previewing &&
+          typeof state.error === 'string' &&
+          state.error.includes('OpenSCAD reported syntax errors') &&
+          Array.isArray(markers) &&
+          markers.length > 0,
+        );
+      },
+      null,
+      { timeout: renderTimeoutMs },
+    );
+
+    await expect(page.locator('[data-testid="error-banner"]')).toContainText(
+      'OpenSCAD reported syntax errors',
+    );
+  });
 });
 
 test.describe('conformance — geometry primitives', () => {

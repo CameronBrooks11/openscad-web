@@ -39,11 +39,12 @@ export function isAllowedExternalSourceUrl(
 
   try {
     const parsed = new URL(value);
+    const baseOrigin = getBaseOrigin(getBaseUrl(baseUrl));
+    if (parsed.protocol === 'blob:') {
+      return parsed.origin === baseOrigin;
+    }
     if (!['http:', 'https:'].includes(parsed.protocol)) return false;
-    return (
-      parsed.origin === getBaseOrigin(getBaseUrl(baseUrl)) ||
-      (allowCrossOriginHttps && parsed.protocol === 'https:')
-    );
+    return parsed.origin === baseOrigin || (allowCrossOriginHttps && parsed.protocol === 'https:');
   } catch {
     return false;
   }
@@ -76,6 +77,12 @@ export function resolveExternalSourceUrl(
 
   const normalized = new URL(normalizeGitHubBlobUrl(resolved.href));
   const isSameOrigin = normalized.origin === getBaseOrigin(resolvedBaseUrl);
+  if (normalized.protocol === 'blob:') {
+    if (!isSameOrigin) {
+      throw new Error(getAllowedSourceUrlError(allowCrossOriginHttps));
+    }
+    return normalized;
+  }
   if (!isSameOrigin && !(allowCrossOriginHttps && normalized.protocol === 'https:')) {
     throw new Error(getAllowedSourceUrlError(allowCrossOriginHttps));
   }

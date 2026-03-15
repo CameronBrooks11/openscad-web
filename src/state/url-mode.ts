@@ -7,6 +7,7 @@ import {
   normalizeGitHubBlobUrl,
   resolveExternalSourceUrl,
 } from '../external-source.ts';
+import { formatExternalLoadError } from '../user-facing-errors.ts';
 
 export type AppMode = 'editor' | 'customizer' | 'embed';
 
@@ -138,7 +139,7 @@ export async function fetchExternalModel(modelUrl: string): Promise<string | { e
     const buffer = await fetchResolvedExternalSourceBytes(resolved, { maxBytes: MODEL_MAX_BYTES });
     return new TextDecoder().decode(buffer);
   } catch (e) {
-    return { error: (e as Error).message };
+    return { error: formatExternalLoadError(e, 'model') };
   }
 }
 

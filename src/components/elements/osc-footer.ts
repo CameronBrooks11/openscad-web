@@ -93,6 +93,46 @@ export class OscFooter extends LitElement {
     .spacer {
       flex: 1;
     }
+    .error-banner {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin: 5px 5px 0;
+      padding: 10px 12px;
+      border: 1px solid #ef9a9a;
+      border-radius: 8px;
+      background: #fff5f5;
+      color: #7f1d1d;
+    }
+    .error-banner-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .error-banner-message {
+      flex: 1;
+      font-size: 0.9rem;
+      line-height: 1.4;
+    }
+    .error-banner-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .error-details {
+      font-size: 0.8rem;
+      color: #5f1a1a;
+    }
+    .error-details summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .error-details pre {
+      margin: 8px 0 0;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
   `;
 
   @state() private _st: State | null = null;
@@ -126,9 +166,48 @@ export class OscFooter extends LitElement {
       markers.length === 0
         ? undefined
         : markers.reduce((a, b) => (a.severity > b.severity ? a : b)).severity;
-    const hasOutput = !!(st.lastCheckerRun || st.output);
+    const hasDiagnostics = !!(
+      st.lastCheckerRun ||
+      st.output ||
+      st.error ||
+      st.currentRunLogs?.length
+    );
 
     return html`
+      ${st.error
+        ? html`
+            <div class="error-banner" data-testid="error-banner">
+              <div class="error-banner-header">
+                <div class="error-banner-message">${st.error}</div>
+                <button class="foot-btn danger" @click=${() => this._model.clearError()}>
+                  Dismiss
+                </button>
+              </div>
+              <div class="error-banner-actions">
+                ${st.currentRunLogs?.length
+                  ? html`
+                      <button
+                        class="foot-btn"
+                        @click=${() => {
+                          this._model.logsVisible = true;
+                        }}
+                      >
+                        Show Logs
+                      </button>
+                    `
+                  : ''}
+              </div>
+              ${st.errorDetails
+                ? html`
+                    <details class="error-details">
+                      <summary>Technical details</summary>
+                      <pre>${st.errorDetails}</pre>
+                    </details>
+                  `
+                : ''}
+            </div>
+          `
+        : ''}
       <div class="progress-bar-track" style="visibility:${busy ? 'visible' : 'hidden'};">
         <div class="progress-bar-indeterminate"></div>
       </div>
@@ -149,7 +228,7 @@ export class OscFooter extends LitElement {
 
         <osc-multimaterial-dialog></osc-multimaterial-dialog>
 
-        ${hasOutput
+        ${hasDiagnostics
           ? html`
               <button
                 class="foot-btn ${maxSev === monaco.MarkerSeverity.Error
