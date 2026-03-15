@@ -34,6 +34,7 @@ export default defineConfig(({ command }) => {
     build: {
       outDir: 'dist',
       target: 'es2022',
+      emptyOutDir: true,
     },
     server: {
       host: '127.0.0.1',

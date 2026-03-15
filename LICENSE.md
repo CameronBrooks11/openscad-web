@@ -34,6 +34,7 @@ The WASM build was made possible by https://github.com/DSchroer/openscad-wasm.
   - [Noto Fonts](#noto-fonts)
   - [SCAD Libraries](#scad-libraries)
     - [MCAD](#mcad)
+    - [BOSL](#bosl)
     - [BOSL2](#bosl2)
     - [NopSCADlib](#nopscadlib)
     - [brailleSCAD](#braillescad)
@@ -234,9 +235,15 @@ https://github.com/openscad/MCAD
 
 Licensed under the [GNU LGPLv2.1](#lgplv21).
 
-### BOSL2
+### BOSL
 
 https://github.com/revarbat/BOSL
+
+Covered by the same BSD 2-Clause notice reproduced below for the
+original BOSL codebase and its BOSL2 successor.
+
+### BOSL2
+
 https://github.com/BelfrySCAD/BOSL2
 
 ```
@@ -822,13 +829,13 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## boltsparts
+### boltsparts
 
 https://github.com/boltsparts/boltsparts
 
 Licensed under the [GPLv3](#gplv3).
 
-## OpenSCAD-Snippet
+### OpenSCAD-Snippet
 
 https://github.com/AngeloNicoli/OpenSCAD-Snippet
 
@@ -856,7 +863,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Lasercut
+### lasercut
 
 https://github.com/bmsleight/lasercut
 
@@ -886,7 +893,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## pathbuilder
+### pathbuilder
 
 https://github.com/dinther/pathbuilder
 
@@ -914,7 +921,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## openscad_attachable_text3d
+### openscad_attachable_text3d
 
 https://github.com/jon-gilbert/openscad_attachable_text3d
 

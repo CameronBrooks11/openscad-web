@@ -8,7 +8,7 @@ const { generateSW } = workboxBuild;
 
 const distDir = path.resolve('dist');
 const swDest = path.join(distDir, 'sw.js');
-const obsoleteArtifacts = ['openscad.js', 'openscad.wasm'];
+const obsoleteArtifacts = ['openscad.js', 'openscad.wasm', 'fonts/InterVariable.woff2'];
 
 async function removeObsoleteArtifacts() {
   for (const artifact of obsoleteArtifacts) {
@@ -17,6 +17,12 @@ async function removeObsoleteArtifacts() {
     } catch {
       /* ignore */
     }
+  }
+
+  try {
+    await fs.rmdir(path.join(distDir, 'fonts'));
+  } catch {
+    /* ignore */
   }
 }
 

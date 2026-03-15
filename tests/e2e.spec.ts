@@ -246,13 +246,6 @@ test.afterEach(async ({ page }, testInfo) => {
     if (message.type !== 'error' && message.type !== 'pageerror') return false;
     if (message.text.includes('net::ERR_CONTENT_LENGTH_MISMATCH')) return false;
     if (message.text.includes('net::ERR_INCOMPLETE_CHUNKED_ENCODING')) return false;
-    if (
-      message.text.includes('404') &&
-      (message.location?.url?.includes('fonts/InterVariable.woff') ||
-        message.text.includes('fonts/InterVariable.woff'))
-    ) {
-      return false;
-    }
     return true;
   });
 
