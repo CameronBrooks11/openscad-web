@@ -65,6 +65,7 @@ Runtime asset and library delivery policy:
 - bootstrap prefetch hints come from generated library metadata instead of hardcoded HTML links
 - full editor mode eagerly mounts all libraries on the main thread so browsing and completions keep working
 - embed/customizer shells and worker compile paths keep using demand-loaded libraries
+- production builds now run with `NODE_ENV=production` explicitly so Vite resolves production export conditions for bundled dependencies like Lit
 
 Prerequisites:
 
