@@ -19,6 +19,7 @@ import { openSCADWorkerUrl } from './runner/worker-bootstrap.ts';
 import { isInStandaloneMode, registerCustomAppHeightCSSProperty } from './utils.ts';
 import { State, StatePersister } from './state/app-state.ts';
 import { markPerf, measurePerf } from './perf/runtime-performance.ts';
+import { openSCADWasmUrl } from './runner/openscad-asset-urls.ts';
 import './index.css';
 import 'monaco-editor/min/vs/editor/editor.main.css';
 
@@ -38,7 +39,9 @@ if (!isProductionBuild()) {
   debug.disable();
 }
 
-injectBootstrapPrefetchHints(getBootstrapPrefetchSpecifiers(undefined, openSCADWorkerUrl));
+injectBootstrapPrefetchHints(
+  getBootstrapPrefetchSpecifiers(undefined, openSCADWorkerUrl, openSCADWasmUrl),
+);
 
 window.addEventListener('load', async () => {
   const rootEl = document.getElementById('root')!;

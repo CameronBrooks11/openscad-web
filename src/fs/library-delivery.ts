@@ -1,12 +1,11 @@
 import type { AppMode } from '../state/url-mode.ts';
 import { resolveRuntimeAssetUrl } from '../runtime/asset-urls.ts';
-import { openSCADWasmUrl } from '../runner/openscad-asset-urls.ts';
 import { zipArchives, type ZipArchive } from './zip-archives.generated.ts';
 
 export const LIBRARY_DELIVERY_POLICY =
   'selected-prefetch bootstrap + editor eager mount + worker demand-load';
 
-const CORE_PREFETCH_SPECIFIERS = [openSCADWasmUrl, 'libraries/fonts.zip'];
+const CORE_PREFETCH_SPECIFIERS = ['libraries/fonts.zip'];
 
 export function getPrefetchedArchives(archives: ZipArchive[] = zipArchives): ZipArchive[] {
   return archives.filter((archive) => archive.prefetch === true);
@@ -15,8 +14,10 @@ export function getPrefetchedArchives(archives: ZipArchive[] = zipArchives): Zip
 export function getBootstrapPrefetchSpecifiers(
   archives: ZipArchive[] = zipArchives,
   workerSpecifier?: string,
+  wasmSpecifier?: string,
 ): string[] {
   return [
+    ...(wasmSpecifier ? [wasmSpecifier] : []),
     ...CORE_PREFETCH_SPECIFIERS,
     ...(workerSpecifier ? [workerSpecifier] : []),
     ...getPrefetchedArchives(archives).map((a) => a.zipPath),
