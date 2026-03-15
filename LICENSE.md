@@ -4,7 +4,9 @@
 
 The OpenSCAD Web Demo source code is licensed under the [GNU GPL v2](#gplv2) _or later versions_, and is deployed under the [GNU GPL v3](#gplv3) license because of the (GPLv3 and Apache 2.0) dependencies it links with.
 
-It ships with source or compiled versions of many open-source projects, which licenses are described below.
+It ships with source, compiled, vendored, or lazily delivered versions of many open-source projects.
+This file records the project license plus third-party notices for directly referenced runtime dependencies,
+vendored assets, and lazily shipped libraries/fonts/WASM components that are part of the distributed app.
 
 Note that only the software compiled to WASM is technically "linked" together, which is why you'll see some
 GPLv2 and v3 together in this doc (for files - e.g. lazily loaded `.scad` libraries that aren't linked together).
@@ -17,10 +19,17 @@ The WASM build was made possible by https://github.com/DSchroer/openscad-wasm.
   - [OpenSCAD Web Demo](#openscad-web-demo)
   - [Manifold](#manifold)
   - [BrowserFS](#browserfs)
+  - [BlurHash](#blurhash)
+  - [chroma.js](#chromajs)
+  - [debug](#debug)
   - [JSZip](#jszip)
-  - [PrimeReact](#primereact)
+  - [Lit](#lit)
+  - [Monaco Editor Loader](#monaco-editor-loader)
   - [Monaco Editor](#monaco-editor)
   - [Three.js](#threejs)
+  - [ThumbHash](#thumbhash)
+  - [uuid](#uuid)
+  - [UZIP](#uzip)
   - [Liberation Fonts](#liberation-fonts)
   - [Noto Fonts](#noto-fonts)
   - [SCAD Libraries](#scad-libraries)
@@ -58,6 +67,8 @@ The WASM build was made possible by https://github.com/DSchroer/openscad-wasm.
   - [openscad_attachable_text3d](#openscad_attachable_text3d)
   - [Fork me on GitHub CSS ribbon](#fork-me-on-github-css-ribbon)
   - [Common licenses](#common-licenses)
+    - [MIT](#mit)
+    - [BSD 3-Clause](#bsd-3-clause)
     - [GPLv2](#gplv2)
     - [GPLv3](#gplv3)
     - [LGPLv2.1](#lgplv21)
@@ -72,7 +83,7 @@ The WASM build was made possible by https://github.com/DSchroer/openscad-wasm.
 
 https://github.com/elalish/manifold
 
-Licensed under the [Apache 2.0](#apache2) license.
+Licensed under the [Apache 2.0](#apache-20) license.
 
 ## BrowserFS
 
@@ -80,85 +91,126 @@ https://github.com/jvilk/BrowserFS
 
 Bundled as a runtime dependency for the in-browser filesystem layer.
 
-Licensed under the MIT License.
+Copyright (c) 2013-2017 John Vilk and other BrowserFS contributors.
+
+Licensed under the [MIT License](#mit).
+
+## BlurHash
+
+https://github.com/woltapp/blurhash/tree/master/TypeScript
+
+Used for placeholder image hash encoding and decoding.
+
+The published `blurhash` npm package declares MIT licensing in its package metadata.
+
+Licensed under the [MIT License](#mit).
+
+## chroma.js
+
+https://github.com/gka/chroma.js
+
+Used for color transforms in export and multimaterial UI flows.
+
+Copyright (c) 2011-2025 Gregor Aisch.
+
+The distributed package includes ColorBrewer data and declares
+`(BSD-3-Clause AND Apache-2.0)` licensing upstream.
+
+Licensed under the [BSD 3-Clause License](#bsd-3-clause) and the
+[Apache 2.0](#apache-20) license.
+
+## debug
+
+https://github.com/debug-js/debug
+
+Used for browser-side debug logging.
+
+Copyright (c) 2014-2017 TJ Holowaychuk.
+Copyright (c) 2018-2021 Josh Junon.
+
+Licensed under the [MIT License](#mit).
 
 ## JSZip
 
 https://github.com/Stuk/jszip
 
-Licensed under the [GPLv3](#gplv3) (actually dual-licensed under MIT, but we're picking this one here for brevity).
+Used for ZIP creation and inspection.
 
-## PrimeReact
+Copyright (c) 2009-2016 Stuart Knightley, David Duponchel,
+Franz Buchinger, and Antonio Afonso.
 
-https://github.com/primefaces/primereact
+JSZip is dual-licensed upstream under MIT or GPLv3. This project relies on
+the [MIT License](#mit) option.
 
-```
-The MIT License (MIT)
+## Lit
 
-Copyright (c) 2016-2022 PrimeTek
+https://lit.dev/
 
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+Used for the web component UI shell.
 
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+Copyright (c) 2017 Google LLC.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-```
+Licensed under the [BSD 3-Clause License](#bsd-3-clause).
+
+## Monaco Editor Loader
+
+https://github.com/suren-atoyan/monaco-loader
+
+Used to configure and initialize Monaco in the browser.
+
+Copyright (c) 2021 Suren Atoyan.
+
+Licensed under the [MIT License](#mit).
 
 ## Monaco Editor
 
 https://github.com/microsoft/monaco-editor
 
-```
-The MIT License (MIT)
+Used for the code editor and language services.
 
-Copyright (c) 2016 - present Microsoft Corporation
+Copyright (c) 2016-present Microsoft Corporation.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
-```
+Licensed under the [MIT License](#mit).
 
 ## Three.js
 
-Used for the 3D visualization
+https://threejs.org/
 
-```
-The MIT License
+Used for the 3D visualization.
 
-Copyright © 2010-2022 three.js authors
+Copyright (c) 2010-2026 three.js authors.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+Licensed under the [MIT License](#mit).
 
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
+## ThumbHash
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-```
+https://github.com/evanw/thumbhash
+
+Used for placeholder image hash encoding and decoding.
+
+The published `thumbhash` npm package declares MIT licensing in its package metadata.
+
+Licensed under the [MIT License](#mit).
+
+## uuid
+
+https://github.com/uuidjs/uuid
+
+Used for 3MF export identifiers.
+
+Copyright (c) 2010-2020 Robert Kieffer and other contributors.
+
+Licensed under the [MIT License](#mit).
+
+## UZIP
+
+https://github.com/photopea/UZIP.js
+
+Used for 3MF ZIP archive writing.
+
+Copyright (c) 2018 Photopea.
+
+Licensed under the [MIT License](#mit).
 
 ## Liberation Fonts
 
@@ -894,10 +946,18 @@ SOFTWARE.
 
 https://github.com/simonwhitaker/github-fork-ribbon-css
 
+Copyright (c) 2013 Simon Whitaker.
+
+Licensed under the [MIT License](#mit).
+
+## Common licenses
+
+These are linked from a few of the packages listed above.
+
+### MIT
+
 ```
 The MIT License (MIT)
-
-Copyright (c) 2013 Simon Whitaker
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -918,9 +978,36 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Common licenses
+### BSD 3-Clause
 
-These are linked from a few of the packages listed above.
+```
+BSD 3-Clause License
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
 
 ### GPLv2
 
