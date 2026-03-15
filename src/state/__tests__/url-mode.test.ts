@@ -103,6 +103,10 @@ describe('isAllowedModelUrl', () => {
     expect(isAllowedModelUrl('/model.scad')).toBe(true);
   });
 
+  it('allows same-origin absolute http URLs', () => {
+    expect(isAllowedModelUrl(`${window.location.origin}/model.scad`)).toBe(true);
+  });
+
   it('rejects http:// URLs', () => {
     expect(isAllowedModelUrl('http://example.com/model.scad')).toBe(false);
   });

@@ -213,4 +213,36 @@ describe('fragment-state — edge cases (T2)', () => {
     const state = await readStateFromFragment();
     expect(state?.params.sources[0]?.content).toBe('cylinder(5, 3);');
   });
+
+  it('rejects legacy #url fragments that target cross-origin sources', async () => {
+    window.location.hash = '#url=' + encodeURIComponent('https://example.com/model.scad');
+    const state = await readStateFromFragment();
+    expect(state).toBeNull();
+  });
+
+  it('canonicalizes same-origin relative source URLs during fragment decode', async () => {
+    const fragment = encodeURIComponent(
+      JSON.stringify({
+        params: {
+          activePath: '/test.scad',
+          features: [],
+          sources: [{ path: '/test.scad', url: './fixtures/test.scad' }],
+          exportFormat2D: 'svg',
+          exportFormat3D: 'stl',
+        },
+        view: {
+          logs: false,
+          layout: { mode: 'multi', editor: true, viewer: true, customizer: false },
+          color: '#aabbcc',
+          showAxes: true,
+          lineNumbers: false,
+        },
+      }),
+    );
+    window.location.hash = '#' + fragment;
+
+    const state = await readStateFromFragment();
+
+    expect(state?.params.sources[0]?.url).toBe('http://localhost/fixtures/test.scad');
+  });
 });

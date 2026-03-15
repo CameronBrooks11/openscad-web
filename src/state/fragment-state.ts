@@ -1,5 +1,6 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
+import { resolveExternalSourceUrl } from '../external-source.ts';
 import { State } from './app-state.ts';
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
 import { validateArray, validateBoolean, validateString, validateStringEnum } from '../utils.ts';
@@ -14,13 +15,20 @@ function validateVars(v: unknown): State['params']['vars'] {
   );
 }
 
+function validateSourceUrl(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  return resolveExternalSourceUrl(value, {
+    baseUrl: window.location.href,
+  }).href;
+}
+
 function validateSources(value: unknown): State['params']['sources'] {
   return validateArray(
     value as State['params']['sources'],
     (src) => ({
       path: validateString(src?.path, () => defaultSourcePath),
       content: src?.content != null ? validateString(src.content) : undefined,
-      url: src?.url != null ? validateString(src.url) : undefined,
+      url: validateSourceUrl(src?.url),
     }),
     () => [{ path: defaultSourcePath, content: '' }],
   );
@@ -86,8 +94,11 @@ export async function readStateFromFragment(): Promise<State | null> {
       } else if (serialized.startsWith('url=')) {
         // For testing
         const url = decodeURIComponent(serialized.substring('url='.length));
-        const path = '/' + new URL(url).pathname.split('/').pop();
-        return createInitialState(null, { path, url });
+        const resolvedUrl = resolveExternalSourceUrl(url, {
+          baseUrl: window.location.href,
+        });
+        const path = '/' + resolvedUrl.pathname.split('/').pop();
+        return createInitialState(null, { path, url: resolvedUrl.href });
       }
       let obj;
       try {

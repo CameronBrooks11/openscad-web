@@ -108,6 +108,8 @@ The app is deployed as a static `dist/` directory. The build path is controlled 
 
 For deployment details, self-hosting notes, and GitHub Pages behavior, see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
 
+Security assumptions, CSP guidance, and external-source loading policy are documented in [docs/SECURITY.md](./docs/SECURITY.md).
+
 ## Contributing
 
 Contributor workflow, verification expectations, and repo conventions are documented in [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md).

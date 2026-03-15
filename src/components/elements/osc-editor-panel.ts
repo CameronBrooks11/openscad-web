@@ -411,7 +411,11 @@ export class OscEditorPanel extends LitElement {
                     href="#new-project"
                     @click=${async (e: Event) => {
                       e.preventDefault();
-                      window.open(await buildUrlForStateParams(getBlankProjectState()), '_blank');
+                      window.open(
+                        await buildUrlForStateParams(getBlankProjectState()),
+                        '_blank',
+                        'noopener,noreferrer',
+                      );
                       this._menuOpen = false;
                     }}
                     >New project</a
@@ -452,8 +456,11 @@ export class OscEditorPanel extends LitElement {
           .value=${activePath}
           @change=${(e: Event) => {
             const key = (e.target as HTMLSelectElement).value;
-            if (key.startsWith('https://')) window.open(key, '_blank');
-            else this._model.openFile(key);
+            if (key.startsWith('https://')) {
+              window.open(key, '_blank', 'noopener,noreferrer');
+            } else {
+              this._model.openFile(key);
+            }
           }}
         >
           ${Array.from(groupedFileOptions.entries()).map(

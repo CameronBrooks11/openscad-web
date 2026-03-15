@@ -143,6 +143,8 @@ If you touch any of the following, also read [docs/DEPLOYMENT.md](./DEPLOYMENT.m
 - runtime asset URL resolution
 - worker bootstrap or wasm delivery
 
+If the change touches URL parsing, service worker behavior, `postMessage`, external fetching, or `_blank` navigation, also read [docs/SECURITY.md](./SECURITY.md).
+
 ## Coding Notes
 
 - The repo standard is LF line endings, enforced by `.gitattributes`

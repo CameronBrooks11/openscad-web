@@ -2,6 +2,8 @@
 
 OpenSCAD Web deploys as a static `dist/` directory produced by Vite plus a post-build Workbox service worker step.
 
+Security headers, CSP guidance, and external-source loading assumptions are documented in [docs/SECURITY.md](./SECURITY.md).
+
 ## Deployment Model
 
 The shipped output includes:
@@ -101,6 +103,7 @@ Your static host should:
 - serve `.wasm` with an appropriate wasm MIME type if the host does not already do this automatically
 - allow service worker registration under the deployment scope
 - preserve hashed asset filenames and relative structure under `dist/assets/` and `dist/libraries/`
+- set a CSP that matches the current runtime contract instead of relying on host defaults
 
 ## Validation Checklist
 

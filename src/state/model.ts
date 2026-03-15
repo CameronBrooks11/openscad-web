@@ -25,8 +25,6 @@ import { parseOff } from '../io/import_off.ts';
 import { export3MF } from '../io/export_3mf.ts';
 import chroma from 'chroma-js';
 
-const githubRx = /^https:\/\/github.com\/([^/]+)\/([^/]+)\/blob\/(.+)$/;
-
 export class Model extends EventTarget {
   constructor(
     private fs: FS,
@@ -225,13 +223,10 @@ export class Model extends EventTarget {
     const src = this.state.params.sources.find((src) => src.path === this.state.params.activePath);
     if (src && src.content == null) {
       const { path } = src;
-      let { url } = src;
-      // Transform https://github.com/tenstad/keyboard/blob/main/keyboard.scad to https://raw.githubusercontent.com/tenstad/keyboard/refs/heads/main/keyboard.scad
-      let match;
-      if (url && (match = url.match(githubRx))) {
-        url = `https://raw.githubusercontent.com/${match[1]}/${match[2]}/refs/heads/${match[3]}`;
-      }
-      const content = new TextDecoder().decode(await fetchSource(this.fs, { path, url }));
+      const { url } = src;
+      const content = new TextDecoder().decode(
+        await fetchSource(this.fs, { path, url }, { baseUrl: window.location.href }),
+      );
       this.mutate((s) => {
         s.params.sources = s.params.sources.map((src) =>
           src.path === s.params.activePath ? { ...src, content } : src,

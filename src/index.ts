@@ -49,11 +49,15 @@ window.addEventListener('load', async () => {
 
   if ('error' in urlModeResult) {
     markPerf('osc:app-bootstrap-error');
-    rootEl.innerHTML = `
-      <div style="padding:2rem;font-family:monospace;color:red;">
-        <h2>Invalid URL parameters</h2>
-        <pre>${urlModeResult.error}</pre>
-      </div>`;
+    rootEl.replaceChildren();
+    const errorWrap = document.createElement('div');
+    errorWrap.style.cssText = 'padding:2rem;font-family:monospace;color:red;';
+    const heading = document.createElement('h2');
+    heading.textContent = 'Invalid URL parameters';
+    const detail = document.createElement('pre');
+    detail.textContent = urlModeResult.error;
+    errorWrap.append(heading, detail);
+    rootEl.appendChild(errorWrap);
     return;
   }
 

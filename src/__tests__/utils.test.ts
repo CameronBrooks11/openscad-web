@@ -1,6 +1,11 @@
 // Tests for utils.ts — BUG-7 (debounce kill) and BUG-9 (isInStandaloneMode)
 
-import { turnIntoDelayableExecution, AbortablePromise, isInStandaloneMode } from '../utils.ts';
+import {
+  turnIntoDelayableExecution,
+  AbortablePromise,
+  fetchSource,
+  isInStandaloneMode,
+} from '../utils.ts';
 
 // ---------------------------------------------------------------------------
 // BUG-7 — kill() must cancel a pending (not-yet-started) execution
@@ -92,5 +97,45 @@ describe('isInStandaloneMode (BUG-9)', () => {
       configurable: true,
     });
     expect(isInStandaloneMode()).toBe(false);
+  });
+});
+
+describe('fetchSource external URL policy', () => {
+  const originalFetch = global.fetch;
+  const fsStub = { readFileSync: vi.fn() } as unknown as FS;
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.restoreAllMocks();
+  });
+
+  it('resolves same-origin relative text URLs against the provided base URL', async () => {
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response('cube(1);\r\nsphere(2);', {
+        headers: { 'content-length': '19' },
+      }),
+    ) as typeof fetch;
+
+    const data = await fetchSource(
+      fsStub,
+      { path: '/home/playground.scad', url: './models/example.scad' },
+      { baseUrl: 'https://example.com/app/' },
+    );
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://example.com/app/models/example.scad',
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(new TextDecoder().decode(data)).toBe('cube(1);\nsphere(2);');
+  });
+
+  it('rejects cross-origin source URLs for generic source loading', async () => {
+    await expect(
+      fetchSource(
+        fsStub,
+        { path: '/home/playground.scad', url: 'https://example.com/model.scad' },
+        { baseUrl: 'http://localhost:4000/' },
+      ),
+    ).rejects.toThrow('source URL must be same-origin relative/absolute.');
   });
 });

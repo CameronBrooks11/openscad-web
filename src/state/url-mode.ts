@@ -1,5 +1,13 @@
 // URL-mode parsing, external model fetching, and customizer share URL builder.
 
+import {
+  EXTERNAL_SOURCE_MAX_BYTES,
+  fetchResolvedExternalSourceBytes,
+  isAllowedExternalSourceUrl,
+  normalizeGitHubBlobUrl,
+  resolveExternalSourceUrl,
+} from '../external-source.ts';
+
 export type AppMode = 'editor' | 'customizer' | 'embed';
 
 export interface UrlModeParams {
@@ -15,8 +23,6 @@ export interface UrlModeParams {
   };
 }
 
-const ABSOLUTE_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
-
 /** Query-param keys that are reserved by the router and must NOT be treated
  *  as pre-populated customizer variables. */
 const KNOWN_PARAMS = new Set([
@@ -31,20 +37,13 @@ const KNOWN_PARAMS = new Set([
   'autoCompile',
 ]);
 
-/** Returns true for same-origin relative paths (./  ../  /) and https:// URLs.
- *  Rejects non-HTTPS absolute URLs and all other schemes (javascript:, data:, etc.). */
+/** Returns true for same-origin relative/absolute paths and HTTPS cross-origin URLs.
+ *  Rejects non-HTTPS cross-origin URLs and all other schemes (javascript:, data:, etc.). */
 export function isAllowedModelUrl(modelUrl: string): boolean {
-  const value = modelUrl.trim();
-  if (value.startsWith('./') || value.startsWith('../') || value.startsWith('/')) {
-    return true;
-  }
-  if (!ABSOLUTE_SCHEME_RE.test(value)) return false;
-  try {
-    const parsed = new URL(value);
-    return parsed.protocol === 'https:';
-  } catch {
-    return false;
-  }
+  return isAllowedExternalSourceUrl(modelUrl, {
+    allowCrossOriginHttps: true,
+    baseUrl: window.location.href,
+  });
 }
 
 /** Parse `window.location.search` into a UrlModeParams object.
@@ -60,7 +59,7 @@ export function parseUrlMode(search: string): UrlModeParams | { error: string } 
   const modelUrl = params.get('model');
   if (modelUrl !== null && !isAllowedModelUrl(modelUrl)) {
     return {
-      error: `model URL must be https:// or same-origin relative. Got: ${modelUrl.slice(0, 40)}`,
+      error: `model URL must be https:// or same-origin. Got: ${modelUrl.slice(0, 40)}`,
     };
   }
 
@@ -89,24 +88,17 @@ export function parseUrlMode(search: string): UrlModeParams | { error: string } 
 // U2 — External model fetching
 // ---------------------------------------------------------------------------
 
-const MODEL_MAX_BYTES = 2 * 1024 * 1024; // 2 MB hard cap
+const MODEL_MAX_BYTES = EXTERNAL_SOURCE_MAX_BYTES;
 
-/** Convert a github.com blob URL to the equivalent raw.githubusercontent.com URL. */
-export function normalizeGitHubUrl(url: string): string {
-  const ghBlobRe = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/;
-  const match = url.match(ghBlobRe);
-  if (match) {
-    const [, user, repo, branch, path] = match;
-    return `https://raw.githubusercontent.com/${user}/${repo}/${branch}/${path}`;
-  }
-  return url;
-}
+export const normalizeGitHubUrl = normalizeGitHubBlobUrl;
 
 /** Resolve a model URL relative to the current page origin. */
 function resolveModelUrl(modelUrl: string): URL | { error: string } {
   try {
-    // Relative paths resolve against current page; absolute HTTPS pass through.
-    return new URL(modelUrl, window.location.href);
+    return resolveExternalSourceUrl(modelUrl, {
+      allowCrossOriginHttps: true,
+      baseUrl: window.location.href,
+    });
   } catch {
     return { error: `Invalid model URL: ${modelUrl.slice(0, 80)}` };
   }
@@ -129,57 +121,25 @@ function checkTrustNotice(origin: string): boolean {
  *  Returns the text content or `{ error: string }`. */
 export async function fetchExternalModel(modelUrl: string): Promise<string | { error: string }> {
   if (!isAllowedModelUrl(modelUrl)) {
-    return { error: `model URL must be https:// or same-origin relative.` };
+    return { error: `model URL must be https:// or same-origin.` };
   }
 
   const resolved = resolveModelUrl(modelUrl);
   if ('error' in resolved) return resolved;
 
-  // Normalize GitHub blob URLs to raw content URLs.
-  const finalUrl = normalizeGitHubUrl(resolved.href);
-  let fetchUrl: URL;
-  try {
-    fetchUrl = new URL(finalUrl);
-  } catch {
-    return { error: `Invalid resolved URL.` };
-  }
-
   // Cross-origin fetch: show trust notice once per origin per session.
-  if (fetchUrl.origin !== window.location.origin) {
-    if (!checkTrustNotice(fetchUrl.origin)) {
+  if (resolved.origin !== window.location.origin) {
+    if (!checkTrustNotice(resolved.origin)) {
       return { error: 'Fetch cancelled by user.' };
     }
   }
 
-  let response: Response;
   try {
-    response = await fetch(fetchUrl.href, {
-      signal: AbortSignal.timeout(10_000),
-    });
+    const buffer = await fetchResolvedExternalSourceBytes(resolved, { maxBytes: MODEL_MAX_BYTES });
+    return new TextDecoder().decode(buffer);
   } catch (e) {
-    return { error: `Failed to fetch model: ${(e as Error).message}` };
+    return { error: (e as Error).message };
   }
-
-  if (!response.ok) {
-    return { error: `HTTP ${response.status} while fetching model.` };
-  }
-
-  // Guard against oversized responses.
-  const contentLength = response.headers.get('content-length');
-  if (contentLength && Number(contentLength) > MODEL_MAX_BYTES) {
-    return {
-      error: `Model file is too large (> ${MODEL_MAX_BYTES / 1024 / 1024} MB).`,
-    };
-  }
-
-  const buffer = await response.arrayBuffer();
-  if (buffer.byteLength > MODEL_MAX_BYTES) {
-    return {
-      error: `Model file is too large (> ${MODEL_MAX_BYTES / 1024 / 1024} MB).`,
-    };
-  }
-
-  return new TextDecoder().decode(buffer);
 }
 
 // ---------------------------------------------------------------------------

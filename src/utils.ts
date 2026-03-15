@@ -1,5 +1,6 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
+import { fetchExternalSourceBytes } from './external-source.ts';
 import { Source } from './state/app-state.ts';
 
 export function mapObject<T, R>(
@@ -145,21 +146,19 @@ export function downloadUrl(url: string, filename: string) {
   link.parentNode?.removeChild(link);
 }
 
-export async function fetchSource(fs: FS, { content, path, url }: Source): Promise<Uint8Array> {
+export async function fetchSource(
+  fs: FS,
+  { content, path, url }: Source,
+  { baseUrl }: { baseUrl?: string } = {},
+): Promise<Uint8Array> {
   const isText = path.endsWith('.scad') || path.endsWith('.json');
-  if (content) {
+  if (content != null) {
     return new TextEncoder().encode(content);
   } else if (url) {
-    if (isText) {
-      content = await (await fetch(url)).text();
-      return new TextEncoder().encode(content.replace(/\r\n/g, '\n'));
-    } else {
-      // Fetch bytes
-      const response = await fetch(url);
-      const buffer = await response.arrayBuffer();
-      const data = new Uint8Array(buffer);
-      return data;
-    }
+    const data = await fetchExternalSourceBytes(url, { baseUrl });
+    if (!isText) return data;
+    content = new TextDecoder().decode(data);
+    return new TextEncoder().encode(content.replace(/\r\n/g, '\n'));
   } else if (path) {
     const data = fs.readFileSync(path);
     return new Uint8Array('buffer' in data ? data.buffer : data);

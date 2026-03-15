@@ -19,6 +19,7 @@ import {
 import { fetchSource } from '../utils.ts';
 
 declare const self: DedicatedWorkerGlobalScope;
+const appBaseUrl = new URL(import.meta.env.BASE_URL, self.location.origin).href;
 
 // WASM initializes exactly once per worker lifetime (R4)
 let currentJobId: string | null = null;
@@ -156,7 +157,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
             }
           } else {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const content = await fetchSource(rt.FS, source as any);
+            const content = await fetchSource(rt.FS, source as any, { baseUrl: appBaseUrl });
             rt.writeFile(source.path, content);
           }
         } catch (err) {
