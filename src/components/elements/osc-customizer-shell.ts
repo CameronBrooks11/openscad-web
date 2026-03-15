@@ -138,7 +138,7 @@ export class OscCustomizerShell extends LitElement {
         <osc-customizer-panel></osc-customizer-panel>
       </div>
       <div class="back-bar">
-        <a href=${buildEditorUrl()} target="_blank" rel="noreferrer">View in Editor</a>
+        <a href=${buildEditorUrl()} target="_blank" rel="noopener noreferrer">View in Editor</a>
       </div>
     `;
   }

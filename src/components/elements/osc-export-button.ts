@@ -138,24 +138,42 @@ export class OscExportButton extends LitElement {
 
     return html`
       <div class="split">
-        <button class="main" ?disabled=${disabled} @click=${() => this._model.export()}>
-          ⬇ ${selected?.buttonLabel ?? 'Export'}
+        <button
+          class="main"
+          ?disabled=${disabled}
+          aria-label=${selected?.buttonLabel ?? 'Export'}
+          @click=${() => this._model.export()}
+        >
+          <span aria-hidden="true">⬇</span> ${selected?.buttonLabel ?? 'Export'}
         </button>
         <button
           class="arrow"
           ?disabled=${disabled}
           @click=${this._toggleMenu}
           title="Choose format"
+          aria-label="Choose export format"
+          aria-haspopup="menu"
+          aria-expanded=${this._open ? 'true' : 'false'}
         >
           ▾
         </button>
       </div>
       ${this._open
         ? html`
-            <div class="menu" style="position:absolute; z-index:1000; margin-top:30px;">
+            <div
+              class="menu"
+              role="menu"
+              aria-label="Export format options"
+              style="position:absolute; z-index:1000; margin-top:30px;"
+            >
               ${options.map(
                 (f) => html`
-                  <button class="menu-item" @click=${() => this._selectFormat(f.key, is2D)}>
+                  <button
+                    class="menu-item"
+                    role="menuitemradio"
+                    aria-checked=${currentKey === f.key ? 'true' : 'false'}
+                    @click=${() => this._selectFormat(f.key, is2D)}
+                  >
                     ${f.label}
                   </button>
                 `,
@@ -165,6 +183,7 @@ export class OscExportButton extends LitElement {
                     <hr />
                     <button
                       class="menu-item"
+                      role="menuitem"
                       @click=${() => {
                         this._open = false;
                         this._model.mutate((s) => {

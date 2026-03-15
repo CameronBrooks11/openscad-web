@@ -93,7 +93,11 @@ export class OscPanelSwitcher extends LitElement {
 
     return html`
       <div class="bar">
-        <div class="tabs">
+        <div
+          class="tabs"
+          role=${layout.mode === 'single' ? 'tablist' : 'group'}
+          aria-label=${layout.mode === 'single' ? 'Visible panel' : 'Visible panels'}
+        >
           ${layout.mode === 'multi'
             ? targets.map(({ id, label, title }) => {
                 const on = !!(layout as unknown as Record<string, boolean>)[id];
@@ -101,6 +105,9 @@ export class OscPanelSwitcher extends LitElement {
                   <button
                     class="tab ${on ? 'toggled' : 'untoggled'}"
                     title="${title}"
+                    aria-label=${`${title} panel`}
+                    aria-pressed=${on ? 'true' : 'false'}
+                    aria-controls=${`panel-${id}`}
                     @click=${() => this._model.changeMultiVisibility(id, !on)}
                   >
                     ${label}
@@ -112,6 +119,10 @@ export class OscPanelSwitcher extends LitElement {
                   <button
                     class="tab ${layout.focus === id ? 'active' : ''}"
                     title="${title}"
+                    role="tab"
+                    aria-label=${`${title} panel`}
+                    aria-selected=${layout.focus === id ? 'true' : 'false'}
+                    aria-controls=${`panel-${id}`}
                     @click=${() => this._model.changeSingleVisibility(id)}
                   >
                     ${label}

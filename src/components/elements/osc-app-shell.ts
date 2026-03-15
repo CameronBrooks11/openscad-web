@@ -132,6 +132,7 @@ export class OscAppShell extends LitElement {
           ${layout.editor
             ? html`
                 <osc-editor-panel
+                  id="panel-editor"
                   style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow:hidden;"
                 ></osc-editor-panel>
               `
@@ -139,6 +140,7 @@ export class OscAppShell extends LitElement {
           ${layout.viewer
             ? html`
                 <osc-viewer-panel
+                  id="panel-viewer"
                   style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow:hidden;"
                 ></osc-viewer-panel>
               `
@@ -146,6 +148,7 @@ export class OscAppShell extends LitElement {
           ${layout.customizer
             ? html`
                 <osc-customizer-panel
+                  id="panel-customizer"
                   style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow-y:auto;"
                 ></osc-customizer-panel>
               `
@@ -163,16 +166,25 @@ export class OscAppShell extends LitElement {
         <osc-panel-switcher></osc-panel-switcher>
         <div class="panels-single">
           <osc-editor-panel
+            id="panel-editor"
             class="absolute-fill opacity-animated ${focus !== 'editor' ? 'opacity-0' : ''}"
             style="z-index:${zOf('editor')};"
+            ?inert=${focus !== 'editor'}
+            aria-hidden=${focus !== 'editor' ? 'true' : 'false'}
           ></osc-editor-panel>
           <osc-viewer-panel
+            id="panel-viewer"
             class="absolute-fill"
             style="z-index:${zOf('viewer')};"
+            ?inert=${focus !== 'viewer'}
+            aria-hidden=${focus !== 'viewer' ? 'true' : 'false'}
           ></osc-viewer-panel>
           <osc-customizer-panel
+            id="panel-customizer"
             class="absolute-fill opacity-animated ${focus !== 'customizer' ? 'opacity-0' : ''}"
             style="z-index:${zOf('customizer')};overflow-y:auto;"
+            ?inert=${focus !== 'customizer'}
+            aria-hidden=${focus !== 'customizer' ? 'true' : 'false'}
           ></osc-customizer-panel>
         </div>
         <osc-footer></osc-footer>

@@ -105,10 +105,11 @@ export class OscSettingsMenu extends LitElement {
 
     return html`
       <details>
-        <summary title="Settings">⚙</summary>
-        <div class="menu">
+        <summary title="Settings" aria-label="Settings menu">⚙</summary>
+        <div class="menu" role="menu" aria-label="Settings menu">
           <button
             class="item"
+            role="menuitem"
             @click=${() =>
               this._model.changeLayout(st.view.layout.mode === 'multi' ? 'single' : 'multi')}
           >
@@ -119,6 +120,8 @@ export class OscSettingsMenu extends LitElement {
           <hr />
           <button
             class="item"
+            role="menuitemcheckbox"
+            aria-checked=${st.view.showAxes ? 'true' : 'false'}
             @click=${() =>
               this._model.mutate((s) => {
                 s.view.showAxes = !s.view.showAxes;
@@ -128,6 +131,8 @@ export class OscSettingsMenu extends LitElement {
           </button>
           <button
             class="item"
+            role="menuitemcheckbox"
+            aria-checked=${st.view.lineNumbers ? 'true' : 'false'}
             @click=${() =>
               this._model.mutate((s) => {
                 s.view.lineNumbers = !s.view.lineNumbers;
@@ -137,6 +142,8 @@ export class OscSettingsMenu extends LitElement {
           </button>
           <button
             class="item"
+            role="menuitemcheckbox"
+            aria-checked=${(st.params.autoCompile ?? true) ? 'true' : 'false'}
             @click=${() =>
               this._model.mutate((s) => {
                 s.params.autoCompile = !(s.params.autoCompile ?? true);
@@ -148,6 +155,8 @@ export class OscSettingsMenu extends LitElement {
           </button>
           <button
             class="item"
+            role="menuitemcheckbox"
+            aria-checked=${(st.view.customizerGroupsCollapsed ?? false) ? 'true' : 'false'}
             @click=${() =>
               this._model.mutate((s) => {
                 s.view.customizerGroupsCollapsed = !(s.view.customizerGroupsCollapsed ?? false);
@@ -160,6 +169,7 @@ export class OscSettingsMenu extends LitElement {
           <hr />
           <button
             class="item"
+            role="menuitem"
             @click=${() =>
               this._model.mutate((s) => {
                 s.params.backend = s.params.backend === 'cgal' ? 'manifold' : 'cgal';
@@ -170,7 +180,9 @@ export class OscSettingsMenu extends LitElement {
           ${isInStandaloneMode()
             ? html`
                 <hr />
-                <button class="item danger" @click=${this._clearLocalData}>Clear local data</button>
+                <button class="item danger" role="menuitem" @click=${this._clearLocalData}>
+                  Clear local data
+                </button>
               `
             : ''}
         </div>

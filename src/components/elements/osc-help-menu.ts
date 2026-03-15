@@ -73,36 +73,48 @@ export class OscHelpMenu extends LitElement {
   override render() {
     return html`
       <details>
-        <summary title="Help &amp; Licenses">?</summary>
-        <div class="menu">
+        <summary title="Help &amp; Licenses" aria-label="Help and licenses menu">?</summary>
+        <div class="menu" role="menu" aria-label="Help and licenses">
           <a
             href="https://github.com/openscad/openscad-playground/"
             target="_blank"
             rel="noreferrer"
+            role="menuitem"
             >openscad-playground</a
           >
           <a
             href="https://github.com/openscad/openscad-playground/blob/main/LICENSE.md"
             target="_blank"
             rel="noreferrer"
+            role="menuitem"
             >LICENSES</a
           >
-          <a href="https://openscad.org/documentation.html" target="_blank" rel="noreferrer"
+          <a
+            href="https://openscad.org/documentation.html"
+            target="_blank"
+            rel="noreferrer"
+            role="menuitem"
             >OpenSCAD Docs</a
           >
           <a
             href="https://en.wikibooks.org/wiki/OpenSCAD_User_Manual/Customizer"
             target="_blank"
             rel="noreferrer"
+            role="menuitem"
             >Customizer Syntax</a
           >
-          <a href="https://openscad.org/cheatsheet/" target="_blank" rel="noreferrer"
+          <a
+            href="https://openscad.org/cheatsheet/"
+            target="_blank"
+            rel="noreferrer"
+            role="menuitem"
             >OpenSCAD Cheatsheet</a
           >
           <a
             href="https://github.com/BelfrySCAD/BOSL2/wiki/CheatSheet"
             target="_blank"
             rel="noreferrer"
+            role="menuitem"
             >BOSL2 Cheatsheet</a
           >
         </div>

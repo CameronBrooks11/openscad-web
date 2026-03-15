@@ -176,7 +176,7 @@ export class OscFooter extends LitElement {
     return html`
       ${st.error
         ? html`
-            <div class="error-banner" data-testid="error-banner">
+            <div class="error-banner" data-testid="error-banner" role="alert">
               <div class="error-banner-header">
                 <div class="error-banner-message">${st.error}</div>
                 <button class="foot-btn danger" @click=${() => this._model.clearError()}>

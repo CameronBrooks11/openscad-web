@@ -173,38 +173,47 @@ export class OscCustomizerPanel extends LitElement {
   private _renderParam(param: Parameter, value: any) {
     const isDefault =
       value === undefined || JSON.stringify(value) === JSON.stringify(param.initial);
+    const labelId = this._controlId(param);
 
     return html`
       <div class="param-row">
         <div class="param-header">
           <div>
-            <div class="param-label">${param.name}</div>
+            <div class="param-label" id=${labelId}>${param.name}</div>
             <div class="param-caption">${param.caption}</div>
           </div>
           <div class="param-controls">
-            ${this._renderControl(param, value)}
+            ${this._renderControl(param, value, labelId)}
             <button
               class="reset ${isDefault ? 'hidden' : ''}"
               title="Reset to default"
+              aria-label=${`Reset ${param.name} to default`}
               @click=${() => this._handleChange(param.name, param.initial)}
             >
               ↺
             </button>
           </div>
         </div>
-        ${this._renderSlider(param, value)}
+        ${this._renderSlider(param, value, labelId)}
       </div>
     `;
   }
 
+  private _controlId(param: Parameter, suffix = 'input') {
+    const safeName = param.name.replace(/[^a-z0-9_-]+/gi, '-').toLowerCase();
+    return `customizer-${safeName}-${suffix}`;
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private _renderControl(param: Parameter, value: any) {
+  private _renderControl(param: Parameter, value: any, labelId: string) {
     const v = value ?? param.initial;
 
     // Number with options → select dropdown
     if (param.type === 'number' && 'options' in param && param.options) {
       return html`
         <select
+          id=${this._controlId(param)}
+          aria-labelledby=${labelId}
           @change=${(e: Event) =>
             this._handleChange(param.name, Number((e.target as HTMLSelectElement).value))}
         >
@@ -221,6 +230,8 @@ export class OscCustomizerPanel extends LitElement {
     if (param.type === 'string' && param.options) {
       return html`
         <select
+          id=${this._controlId(param)}
+          aria-labelledby=${labelId}
           @change=${(e: Event) =>
             this._handleChange(param.name, (e.target as HTMLSelectElement).value)}
         >
@@ -238,6 +249,8 @@ export class OscCustomizerPanel extends LitElement {
       return html`
         <input
           type="checkbox"
+          id=${this._controlId(param)}
+          aria-labelledby=${labelId}
           .checked=${!!v}
           @change=${(e: Event) =>
             this._handleChange(param.name, (e.target as HTMLInputElement).checked)}
@@ -254,6 +267,7 @@ export class OscCustomizerPanel extends LitElement {
             (_, i) => html`
               <input
                 type="number"
+                aria-label=${`${param.name} value ${i + 1}`}
                 style="width:56px;"
                 size="5"
                 .value=${String(arr[i] ?? (param.initial as number[])[i])}
@@ -274,6 +288,8 @@ export class OscCustomizerPanel extends LitElement {
       return html`
         <input
           type="number"
+          id=${this._controlId(param)}
+          aria-labelledby=${labelId}
           size="5"
           style="width:72px;"
           .value=${String(v)}
@@ -288,6 +304,8 @@ export class OscCustomizerPanel extends LitElement {
       return html`
         <input
           type="text"
+          id=${this._controlId(param)}
+          aria-labelledby=${labelId}
           style="min-width:100px;"
           .value=${String(v)}
           @input=${(e: Event) =>
@@ -300,7 +318,7 @@ export class OscCustomizerPanel extends LitElement {
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private _renderSlider(param: Parameter, value: any) {
+  private _renderSlider(param: Parameter, value: any, labelId: string) {
     if (
       !Array.isArray(param.initial) &&
       param.type === 'number' &&
@@ -312,6 +330,8 @@ export class OscCustomizerPanel extends LitElement {
         <div class="slider-row">
           <input
             type="range"
+            aria-labelledby=${labelId}
+            aria-valuetext=${String(v)}
             .value=${String(v)}
             min=${param.min}
             max=${(param as { max?: number }).max ?? 100}

@@ -403,12 +403,22 @@ export class OscEditorPanel extends LitElement {
 
       <div class="osc-editor-toolbar">
         <div class="osc-editor-toolbar-item">
-          <button class="toolbar-btn" @click=${this._toggleMenu} title="Editor menu">⋯</button>
+          <button
+            class="toolbar-btn"
+            @click=${this._toggleMenu}
+            title="Editor menu"
+            aria-label="Editor menu"
+            aria-haspopup="menu"
+            aria-expanded=${this._menuOpen ? 'true' : 'false'}
+          >
+            ⋯
+          </button>
           ${this._menuOpen
             ? html`
-                <div class="osc-editor-menu">
+                <div class="osc-editor-menu" role="menu" aria-label="Editor menu">
                   <a
                     href="#new-project"
+                    role="menuitem"
                     @click=${async (e: Event) => {
                       e.preventDefault();
                       window.open(
@@ -421,14 +431,15 @@ export class OscEditorPanel extends LitElement {
                     >New project</a
                   >
                   <hr />
-                  <button disabled>Share project</button>
+                  <button disabled role="menuitem">Share project</button>
                   <hr />
-                  <button disabled>New file</button>
-                  <button disabled>Copy to new file</button>
-                  <button disabled>Upload file(s)</button>
-                  <button disabled>Download sources</button>
+                  <button disabled role="menuitem">New file</button>
+                  <button disabled role="menuitem">Copy to new file</button>
+                  <button disabled role="menuitem">Upload file(s)</button>
+                  <button disabled role="menuitem">Download sources</button>
                   <hr />
                   <button
+                    role="menuitem"
                     @click=${() => {
                       this._editor?.trigger(activePath, 'editor.action.selectAll', null);
                       this._menuOpen = false;
@@ -438,6 +449,7 @@ export class OscEditorPanel extends LitElement {
                   </button>
                   <hr />
                   <button
+                    role="menuitem"
                     @click=${() => {
                       this._editor?.trigger(activePath, 'actions.find', null);
                       this._menuOpen = false;
@@ -453,6 +465,7 @@ export class OscEditorPanel extends LitElement {
         <select
           class="osc-editor-file-select"
           title="Open file"
+          aria-label="Open file"
           .value=${activePath}
           @change=${(e: Event) => {
             const key = (e.target as HTMLSelectElement).value;
@@ -505,6 +518,7 @@ export class OscEditorPanel extends LitElement {
           ? html`<div class="osc-editor-monaco"></div>`
           : html`<textarea
               class="osc-editor-textarea"
+              aria-label="OpenSCAD source editor"
               .value=${this._model?.source ?? ''}
               @input=${(e: Event) => {
                 this._model.source = (e.target as HTMLTextAreaElement).value;
@@ -512,7 +526,12 @@ export class OscEditorPanel extends LitElement {
             ></textarea>`}
       </div>
 
-      <div class="osc-editor-logs" style="display:${st.view.logs ? '' : 'none'};">
+      <div
+        class="osc-editor-logs"
+        role="log"
+        aria-label="Compile logs"
+        style="display:${st.view.logs ? '' : 'none'};"
+      >
         ${(st.currentRunLogs ?? []).map(([, text]) => html`<pre>${text}</pre>`)}
       </div>
     `;

@@ -208,12 +208,13 @@ export class OscMultimaterialDialog extends LitElement {
 
     return html`
       <dialog
+        aria-labelledby="mm-dialog-title"
         @cancel=${(e: Event) => {
           e.preventDefault();
           this._cancel();
         }}
       >
-        <div class="header">Multimaterial Color Picker</div>
+        <div class="header" id="mm-dialog-title">Multimaterial Color Picker</div>
         <div class="body">
           <p>
             To print on a multimaterial printer, we map the model's colors to the nearest extruder
@@ -225,12 +226,15 @@ export class OscMultimaterialDialog extends LitElement {
               <div class="color-row">
                 <input
                   type="color"
+                  aria-label=${`Extruder color ${i + 1}`}
                   .value=${chroma.valid(color) ? chroma(color).hex() : '#000000'}
                   @change=${(e: Event) =>
                     this._setColor(i, chroma((e.target as HTMLInputElement).value).name())}
                 />
                 <input
                   type="text"
+                  aria-label=${`Extruder color name ${i + 1}`}
+                  aria-invalid=${color.trim() !== '' && !chroma.valid(color) ? 'true' : 'false'}
                   class=${color.trim() !== '' && !chroma.valid(color) ? 'invalid' : ''}
                   .value=${color}
                   ?autofocus=${color === ''}
@@ -250,7 +254,13 @@ export class OscMultimaterialDialog extends LitElement {
                     this._setColor(i, v);
                   }}
                 />
-                <button class="remove" @click=${() => this._removeColor(i)}>✕</button>
+                <button
+                  class="remove"
+                  aria-label=${`Remove extruder color ${i + 1}`}
+                  @click=${() => this._removeColor(i)}
+                >
+                  ✕
+                </button>
               </div>
             `,
           )}

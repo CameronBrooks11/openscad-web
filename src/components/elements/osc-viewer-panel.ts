@@ -248,6 +248,8 @@ export class OscViewerPanel extends LitElement {
         ? html`
             <div
               data-testid="viewer-canvas"
+              role="img"
+              aria-label="3D preview viewport"
               style="flex:1;position:relative;width:100%;height:100%;"
             ></div>
           `
@@ -271,12 +273,14 @@ export class OscViewerPanel extends LitElement {
       ${shows3DViewer
         ? html`
             <div
+              aria-label="Viewer camera presets"
               style="position:absolute;bottom:8px;right:8px;display:flex;flex-direction:column;gap:2px;z-index:2;"
             >
               ${NAMED_POSITIONS.map(
                 ({ name }) => html`
                   <button
                     title="${name} view"
+                    aria-label=${`Set ${name} view`}
                     @click=${() => {
                       this._scene?.setCameraPosition(name);
                       this._showToast(`${name} view`);
