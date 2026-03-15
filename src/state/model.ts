@@ -649,10 +649,7 @@ export class Model extends EventTarget {
         setRendering(s, false);
         if (!isExpectedJobCancellation(err)) {
           if (!isUserFacingOperationError(err)) {
-            console.error(
-              'Error while doing ' + (isPreview ? 'preview' : 'rendering') + ':',
-              err,
-            );
+            console.error('Error while doing ' + (isPreview ? 'preview' : 'rendering') + ':', err);
           }
           this.applyUserFacingError(s, err, isPreview ? 'preview' : 'render');
         }
