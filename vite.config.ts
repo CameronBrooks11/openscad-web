@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 
 import { defineConfig } from 'vite';
+import { normalizeBasePath } from './src/runtime/base-path.ts';
 
 type PackageJsonShape = {
   homepage?: string;
@@ -18,22 +19,7 @@ function getPackageHomepagePath(): string {
   return new URL(packageJson.homepage).pathname;
 }
 
-function normalizeBasePath(rawBasePath: string): string {
-  if (/^[a-z]+:\/\//i.test(rawBasePath)) {
-    const url = new URL(rawBasePath);
-    return url.toString().endsWith('/') ? url.toString() : `${url.toString()}/`;
-  }
-
-  const trimmed = rawBasePath.trim();
-  if (trimmed === '' || trimmed === '.') {
-    return '/';
-  }
-
-  const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-  return withLeadingSlash.endsWith('/') ? withLeadingSlash : `${withLeadingSlash}/`;
-}
-
-export default defineConfig(({ command, mode }) => {
+export default defineConfig(({ command }) => {
   const base =
     command === 'serve'
       ? '/'
@@ -42,9 +28,6 @@ export default defineConfig(({ command, mode }) => {
   return {
     base,
     publicDir: 'public',
-    define: {
-      'process.env.NODE_ENV': JSON.stringify(mode === 'production' ? 'production' : 'development'),
-    },
     optimizeDeps: {
       entries: ['index.html'],
     },
@@ -55,11 +38,6 @@ export default defineConfig(({ command, mode }) => {
     server: {
       host: '127.0.0.1',
       port: 4000,
-      strictPort: true,
-    },
-    preview: {
-      host: '127.0.0.1',
-      port: 3000,
       strictPort: true,
     },
     worker: {

@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import workboxBuild from 'workbox-build';
 
@@ -7,8 +8,21 @@ const { generateSW } = workboxBuild;
 
 const distDir = path.resolve('dist');
 const swDest = path.join(distDir, 'sw.js');
+const obsoleteArtifacts = ['openscad.js', 'openscad.wasm'];
+
+async function removeObsoleteArtifacts() {
+  for (const artifact of obsoleteArtifacts) {
+    try {
+      await fs.rm(path.join(distDir, artifact), { force: true });
+    } catch {
+      /* ignore */
+    }
+  }
+}
 
 try {
+  await removeObsoleteArtifacts();
+
   const result = await generateSW({
     mode: 'production',
     globDirectory: distDir,

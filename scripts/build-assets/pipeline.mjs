@@ -310,16 +310,10 @@ export class OpenSCADBuildPipeline {
       zip.extractAllTo(path.resolve(wasmDir), true);
     }
 
-    await this.ensureDir('public');
-
-    const wasmTarget = 'public/openscad.wasm';
-
-    for (const target of [wasmTarget, this.srcWasmDir]) {
+    for (const target of [this.srcWasmDir]) {
       await fs.rm(target, { recursive: true, force: true });
     }
 
-    const wasmSrc = path.join(wasmDir, 'openscad.wasm');
-    await this.createSymlinkOrCopy(path.relative('public', wasmSrc), wasmTarget, wasmSrc);
     await this.createSymlinkOrCopy(path.relative('src', wasmDir), this.srcWasmDir, wasmDir);
 
     console.log('WASM setup completed');
@@ -482,7 +476,7 @@ export class OpenSCADBuildPipeline {
   async clean() {
     console.log('Cleaning build artifacts...');
 
-    const cleanPaths = [this.libsDir, 'public/openscad.wasm', this.publicLibsDir, this.srcWasmDir];
+    const cleanPaths = [this.libsDir, this.publicLibsDir, this.srcWasmDir];
 
     for (const cleanPath of cleanPaths) {
       try {

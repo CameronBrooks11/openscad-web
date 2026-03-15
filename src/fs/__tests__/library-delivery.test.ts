@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { openSCADWasmUrl } from '../../runner/openscad-asset-urls.ts';
 import {
   getBootstrapPrefetchSpecifiers,
   getPrefetchedArchives,
@@ -17,10 +18,11 @@ describe('library-delivery policy', () => {
   });
 
   it('builds bootstrap prefetch specifiers from core assets plus prefetched archives', () => {
-    const specifiers = getBootstrapPrefetchSpecifiers(zipArchives, 'workers/openscad-worker.js');
-    expect(specifiers).toContain('openscad.wasm');
+    const workerUrl = '/assets/runtime-worker.js';
+    const specifiers = getBootstrapPrefetchSpecifiers(zipArchives, workerUrl);
+    expect(specifiers).toContain(openSCADWasmUrl);
     expect(specifiers).toContain('libraries/fonts.zip');
-    expect(specifiers).toContain('workers/openscad-worker.js');
+    expect(specifiers).toContain(workerUrl);
     for (const archive of getPrefetchedArchives()) {
       expect(specifiers).toContain(archive.zipPath);
     }

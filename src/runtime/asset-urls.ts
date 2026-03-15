@@ -1,20 +1,7 @@
+import { normalizeBasePath } from './base-path.ts';
+
 function normalizeAssetSpecifier(assetSpecifier: string): string {
   return assetSpecifier.replace(/^\.\//, '');
-}
-
-function normalizeBasePath(basePath: string): string {
-  if (/^[a-z]+:\/\//i.test(basePath)) {
-    const url = new URL(basePath);
-    return url.toString().endsWith('/') ? url.toString() : `${url.toString()}/`;
-  }
-
-  const trimmed = basePath.trim();
-  if (trimmed === '' || trimmed === '.') {
-    return '/';
-  }
-
-  const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
-  return withLeadingSlash.endsWith('/') ? withLeadingSlash : `${withLeadingSlash}/`;
 }
 
 function getRuntimeOriginBaseUrl(): string {
