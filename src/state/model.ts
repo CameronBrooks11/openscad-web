@@ -24,7 +24,11 @@ import { is2DFormatExtension } from './formats.ts';
 import { parseOff } from '../io/import_off.ts';
 import { export3MF } from '../io/export_3mf.ts';
 import chroma from 'chroma-js';
-import { normalizeOperationFailure, UserFacingOperation } from '../user-facing-errors.ts';
+import {
+  isUserFacingOperationError,
+  normalizeOperationFailure,
+  UserFacingOperation,
+} from '../user-facing-errors.ts';
 
 export class Model extends EventTarget {
   constructor(
@@ -297,7 +301,9 @@ export class Model extends EventTarget {
       });
     } catch (err) {
       if (!isExpectedJobCancellation(err)) {
-        console.error('Error while checking syntax:', err);
+        if (!isUserFacingOperationError(err)) {
+          console.error('Error while checking syntax:', err);
+        }
         this.mutate((s) => {
           this.applyUserFacingError(s, err, 'syntax');
         });
@@ -420,7 +426,9 @@ export class Model extends EventTarget {
     } catch (err) {
       this.mutate((s) => {
         s.exporting = false;
-        console.error('Error while exporting:', err);
+        if (!isUserFacingOperationError(err)) {
+          console.error('Error while exporting:', err);
+        }
         this.applyUserFacingError(s, err, 'export');
       });
     }
@@ -640,7 +648,12 @@ export class Model extends EventTarget {
       this.mutate((s) => {
         setRendering(s, false);
         if (!isExpectedJobCancellation(err)) {
-          console.error('Error while doing ' + (isPreview ? 'preview' : 'rendering') + ':', err);
+          if (!isUserFacingOperationError(err)) {
+            console.error(
+              'Error while doing ' + (isPreview ? 'preview' : 'rendering') + ':',
+              err,
+            );
+          }
           this.applyUserFacingError(s, err, isPreview ? 'preview' : 'render');
         }
       });

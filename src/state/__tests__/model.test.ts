@@ -350,6 +350,7 @@ describe('Model — expected cancellation handling', () => {
   });
 
   it('preserves syntax markers when a render fails with parser errors', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
     mockRender.mockReturnValueOnce(
       vi.fn().mockRejectedValue(
         createOperationFailure('preview', 'OpenSCAD invocation failed: parser error', {
@@ -375,6 +376,8 @@ describe('Model — expected cancellation handling', () => {
     );
     expect(model.state.lastCheckerRun?.markers).toHaveLength(1);
     expect(model.state.lastCheckerRun?.logText).toContain('Parser error');
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   it('surfaces external source load failures through state.error', async () => {

@@ -19,6 +19,10 @@ export class UserFacingOperationError extends Error {
   }
 }
 
+export function isUserFacingOperationError(error: unknown): error is UserFacingOperationError {
+  return error instanceof UserFacingOperationError;
+}
+
 function getErrorText(error: unknown): string {
   if (error instanceof UserFacingOperationError) {
     return error.userFacingError.details ?? error.userFacingError.message;

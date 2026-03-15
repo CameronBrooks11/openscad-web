@@ -191,12 +191,14 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
       perf.workerJobMillis = elapsedMillis;
 
       const outputs: [string, Uint8Array][] = [];
-      for (const outPath of outputPaths ?? []) {
-        try {
-          outputs.push([outPath, rt.readFile(outPath)]);
-        } catch (err) {
-          console.trace(err);
-          throw new Error(`Failed to read output file ${outPath}: ${err}`);
+      if (exitCode === 0) {
+        for (const outPath of outputPaths ?? []) {
+          try {
+            outputs.push([outPath, rt.readFile(outPath)]);
+          } catch (err) {
+            console.trace(err);
+            throw new Error(`Failed to read output file ${outPath}: ${err}`);
+          }
         }
       }
 
