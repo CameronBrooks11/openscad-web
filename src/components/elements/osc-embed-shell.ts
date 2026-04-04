@@ -120,7 +120,7 @@ export class OscEmbedShell extends LitElement {
       this._notifyHost('varsChanged', { vars: getVarsSnapshot(st) });
     }
 
-    if (st.parameterSet && prev?.parameterSet !== st.parameterSet) {
+    if (this._readyNotified && st.parameterSet && prev?.parameterSet !== st.parameterSet) {
       this._notifyHost('parameterSetLoaded', { parameterSet: st.parameterSet });
     }
 

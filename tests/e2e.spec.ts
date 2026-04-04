@@ -640,9 +640,36 @@ test.describe('embed mode', () => {
     expect(messages.some((message) => message.data?.type === 'varsChanged')).toBe(false);
     expect(vars).toBeNull();
   });
-});
 
-test.describe('conformance — geometry primitives', () => {
+  test('setModel replaces the model source and triggers a re-render', async ({ page }) => {
+    const initialSource = 'cube(10);';
+    const replacedSource = 'sphere(5, $fn=8);';
+
+    await loadEmbedHost(page, buildEmbedUrl({ source: initialSource, parentOrigin: appOrigin }));
+    const frame = await getEmbedFrame(page);
+
+    await waitForEmbedViewer(frame);
+    await waitForEmbedMessage(page, 'ready');
+    await waitForEmbedMessage(page, 'renderComplete');
+
+    const firstMessages = await getEmbedMessages(page);
+    const firstComplete = firstMessages.filter((m) => m.data?.type === 'renderComplete');
+    expect(firstComplete).toHaveLength(1);
+
+    await page.evaluate((src) => {
+      const iframe = document.getElementById('embed-frame') as HTMLIFrameElement | null;
+      iframe?.contentWindow?.postMessage(
+        { type: 'setModel', source: src },
+        window.location.origin,
+      );
+    }, replacedSource);
+
+    await waitForEmbedMessageCount(page, 'renderComplete', 2);
+
+    const allMessages = await getEmbedMessages(page);
+    expect(allMessages.filter((m) => m.data?.type === 'renderComplete')).toHaveLength(2);
+  });
+});
   test('cube(10) produces a PolySet', async ({ page }) => {
     await loadSrc(page, 'cube(10);');
     await waitForViewer(page);
