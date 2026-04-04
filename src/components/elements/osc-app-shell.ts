@@ -167,6 +167,8 @@ export class OscAppShell extends LitElement {
         <div class="panels-single">
           <osc-editor-panel
             id="panel-editor"
+            role="tabpanel"
+            aria-label="Editor panel"
             class="absolute-fill opacity-animated ${focus !== 'editor' ? 'opacity-0' : ''}"
             style="z-index:${zOf('editor')};"
             ?inert=${focus !== 'editor'}
@@ -174,6 +176,8 @@ export class OscAppShell extends LitElement {
           ></osc-editor-panel>
           <osc-viewer-panel
             id="panel-viewer"
+            role="tabpanel"
+            aria-label="Viewer panel"
             class="absolute-fill"
             style="z-index:${zOf('viewer')};"
             ?inert=${focus !== 'viewer'}
@@ -181,6 +185,8 @@ export class OscAppShell extends LitElement {
           ></osc-viewer-panel>
           <osc-customizer-panel
             id="panel-customizer"
+            role="tabpanel"
+            aria-label="Customizer panel"
             class="absolute-fill opacity-animated ${focus !== 'customizer' ? 'opacity-0' : ''}"
             style="z-index:${zOf('customizer')};overflow-y:auto;"
             ?inert=${focus !== 'customizer'}

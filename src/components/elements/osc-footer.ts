@@ -208,7 +208,13 @@ export class OscFooter extends LitElement {
             </div>
           `
         : ''}
-      <div class="progress-bar-track" style="visibility:${busy ? 'visible' : 'hidden'};">
+      <div
+        class="progress-bar-track"
+        style="visibility:${busy ? 'visible' : 'hidden'};"
+        role="status"
+        aria-live="polite"
+        aria-label=${busy ? 'Working…' : 'Idle'}
+      >
         <div class="progress-bar-indeterminate"></div>
       </div>
       <div class="footer-row">
@@ -237,6 +243,8 @@ export class OscFooter extends LitElement {
                     ? 'warning'
                     : ''}"
                 title="Toggle log output"
+                aria-label="Toggle log output"
+                aria-pressed=${st.view.logs ? 'true' : 'false'}
                 @click=${() => {
                   this._model.logsVisible = !st.view.logs;
                 }}

@@ -458,34 +458,40 @@ export class Model extends EventTarget {
 
   /** F6: Extracts a ZIP archive into /home/ and activates the entry .scad. */
   async importProjectZip(zipBuffer: ArrayBuffer): Promise<void> {
-    const zip = await JSZip.loadAsync(zipBuffer);
-    const files: [string, string][] = [];
-    for (const [relPath, zipObj] of Object.entries(zip.files)) {
-      if (!zipObj.dir) {
-        files.push([relPath, await zipObj.async('string')]);
+    try {
+      const zip = await JSZip.loadAsync(zipBuffer);
+      const files: [string, string][] = [];
+      for (const [relPath, zipObj] of Object.entries(zip.files)) {
+        if (!zipObj.dir) {
+          files.push([relPath, await zipObj.async('string')]);
+        }
       }
-    }
-    for (const [relPath, content] of files) {
-      try {
-        this.fs.writeFile(`/home/${relPath}`, content);
-      } catch {
-        /* ignore */
+      for (const [relPath, content] of files) {
+        try {
+          this.fs.writeFile(`/home/${relPath}`, content);
+        } catch {
+          /* ignore */
+        }
       }
-    }
-    const entryRel = (files.find(([p]) => p === 'main.scad') ??
-      files.find(([p]) => p.endsWith('.scad')) ??
-      files[0])?.[0];
-    if (entryRel) {
-      const fullEntry = `/home/${entryRel}`;
+      const entryRel = (files.find(([p]) => p === 'main.scad') ??
+        files.find(([p]) => p.endsWith('.scad')) ??
+        files[0])?.[0];
+      if (entryRel) {
+        const fullEntry = `/home/${entryRel}`;
+        this.mutate((s) => {
+          s.params.sources = files.map(([p, content]) => ({ path: `/home/${p}`, content }));
+          s.params.activePath = fullEntry;
+          s.lastCheckerRun = undefined;
+          s.output = undefined;
+          s.error = undefined;
+          s.errorDetails = undefined;
+        });
+        this.processSource();
+      }
+    } catch (err) {
       this.mutate((s) => {
-        s.params.sources = files.map(([p, content]) => ({ path: `/home/${p}`, content }));
-        s.params.activePath = fullEntry;
-        s.lastCheckerRun = undefined;
-        s.output = undefined;
-        s.error = undefined;
-        s.errorDetails = undefined;
+        this.applyUserFacingError(s, err, 'model');
       });
-      this.processSource();
     }
   }
 
@@ -526,18 +532,23 @@ export class Model extends EventTarget {
       const file = new File([blob], this.state.params.activePath.split('/').pop()!);
       downloadUrl(URL.createObjectURL(file), file.name);
     } else {
-      const zip = new JSZip();
-      for (const source of this.state.params.sources) {
-        let path = source.path;
-        if (path.startsWith('/')) {
-          path = path.substring(1);
+      try {
+        const zip = new JSZip();
+        for (const source of this.state.params.sources) {
+          let path = source.path;
+          if (path.startsWith('/')) {
+            path = path.substring(1);
+          }
+          zip.file(path, await fetchSource(this.fs, source));
         }
-        zip.file(path, await fetchSource(this.fs, source));
-      }
-      zip.generateAsync({ type: 'blob' }).then((blob) => {
+        const blob = await zip.generateAsync({ type: 'blob' });
         const file = new File([blob], 'project.zip');
         downloadUrl(URL.createObjectURL(file), file.name);
-      });
+      } catch (err) {
+        this.mutate((s) => {
+          this.applyUserFacingError(s, err, 'model');
+        });
+      }
     }
   }
 
