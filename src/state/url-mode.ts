@@ -14,6 +14,7 @@ export type AppMode = 'editor' | 'customizer' | 'embed';
 export interface UrlModeParams {
   mode: AppMode;
   modelUrl: string | null;
+  parentOrigin: string | null;
   prePopulatedVars: Record<string, string>;
   embedControls: boolean;
   embedDownload: boolean;
@@ -29,6 +30,7 @@ export interface UrlModeParams {
 const KNOWN_PARAMS = new Set([
   'mode',
   'model',
+  'parentOrigin',
   'controls',
   'download',
   'showAxes',
@@ -45,6 +47,21 @@ export function isAllowedModelUrl(modelUrl: string): boolean {
     allowCrossOriginHttps: true,
     baseUrl: window.location.href,
   });
+}
+
+function normalizeParentOrigin(parentOrigin: string): string | null {
+  const value = parentOrigin.trim();
+  if (value === '') return null;
+
+  try {
+    const parsed = new URL(value);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return null;
+    }
+    return parsed.origin;
+  } catch {
+    return null;
+  }
 }
 
 /** Parse `window.location.search` into a UrlModeParams object.
@@ -64,6 +81,15 @@ export function parseUrlMode(search: string): UrlModeParams | { error: string } 
     };
   }
 
+  const rawParentOrigin = params.get('parentOrigin');
+  const parentOrigin =
+    rawParentOrigin === null ? null : normalizeParentOrigin(rawParentOrigin);
+  if (rawParentOrigin !== null && parentOrigin === null) {
+    return {
+      error: `parentOrigin must be an absolute http(s) origin. Got: ${rawParentOrigin.slice(0, 40)}`,
+    };
+  }
+
   const prePopulatedVars: Record<string, string> = {};
   for (const [key, value] of params.entries()) {
     if (!KNOWN_PARAMS.has(key)) {
@@ -74,6 +100,7 @@ export function parseUrlMode(search: string): UrlModeParams | { error: string } 
   return {
     mode,
     modelUrl,
+    parentOrigin,
     prePopulatedVars,
     embedControls: params.get('controls') === 'true',
     embedDownload: params.get('download') === 'true',

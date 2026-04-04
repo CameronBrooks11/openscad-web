@@ -4,6 +4,8 @@ OpenSCAD Web is a static browser application. It does not ship a server-side API
 
 This document records the current production security model and the deployment assumptions that follow from it.
 
+For the iframe `postMessage` contract and integration examples, see [docs/EMBED.md](./EMBED.md).
+
 ## Current Security Model
 
 The current app enforces these runtime constraints:
@@ -49,8 +51,9 @@ This avoids silent background fetches to arbitrary origins when a fragment link 
 
 `?mode=embed` is designed to be hosted inside another page and exposes a small `postMessage` API to the parent frame. The embedding page is therefore a trust boundary:
 
-- the parent page can send `setModel` and `setVar` messages to the iframe
-- the iframe sends render lifecycle messages back to `window.parent`
+- the parent page can send `setModel`, `setVar`, and `getVars` messages to the iframe
+- the iframe sends lifecycle and render messages back to `window.parent`
+- when `parentOrigin` is configured, the iframe narrows both outbound `targetOrigin` and inbound origin acceptance to that specific origin
 
 If you deploy the embed mode on the open web, use host-side `frame-ancestors` restrictions to limit who can embed it.
 

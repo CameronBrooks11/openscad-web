@@ -15,11 +15,12 @@ import './osc-customizer-panel.ts';
 // ---------------------------------------------------------------------------
 type SetModelMsg = { type: 'setModel'; source: string };
 type SetVarMsg = { type: 'setVar'; name: string; value: unknown };
-type InboundMsg = SetModelMsg | SetVarMsg;
+type GetVarsMsg = { type: 'getVars'; requestId?: string };
+type InboundMsg = SetModelMsg | SetVarMsg | GetVarsMsg;
 
-function notifyHost(type: string, payload?: Record<string, unknown>) {
+function notifyHost(type: string, targetOrigin: string, payload?: Record<string, unknown>) {
   if (window.parent !== window) {
-    window.parent.postMessage({ type, ...payload }, '*');
+    window.parent.postMessage({ type, ...payload }, targetOrigin);
   }
 }
 
@@ -34,6 +35,13 @@ function coerceUrlVars(vars: Record<string, string>): Record<string, unknown> {
     }
   }
   return result;
+}
+
+function getVarsSnapshot(st: State): Record<string, unknown> {
+  const defaults = Object.fromEntries(
+    (st.parameterSet?.parameters ?? []).map((parameter) => [parameter.name, parameter.initial]),
+  );
+  return { ...defaults, ...(st.params.vars ?? {}) };
 }
 
 @customElement('osc-embed-shell')
@@ -74,19 +82,57 @@ export class OscEmbedShell extends LitElement {
   @state() private _st: State | null = null;
   @state() private _loadError: string | null = null;
   private _model!: Model;
+  private _readyNotified = false;
+  private _targetOrigin() {
+    return this.urlParams?.parentOrigin ?? '*';
+  }
+  private _notifyHost(type: string, payload?: Record<string, unknown>) {
+    notifyHost(type, this._targetOrigin(), payload);
+  }
+  private _acceptsMessage(event: MessageEvent) {
+    if (event.source !== window.parent) return false;
+    const expectedOrigin = this.urlParams?.parentOrigin;
+    return expectedOrigin == null || event.origin === expectedOrigin;
+  }
+  private _maybeNotifyReady(st: State) {
+    if (this._readyNotified) return;
+    if (st.previewing || st.rendering) return;
+    if (!st.output && !st.parameterSet && !st.error) return;
+
+    this._readyNotified = true;
+    this._notifyHost('ready', {
+      vars: getVarsSnapshot(st),
+      ...(st.parameterSet ? { parameterSet: st.parameterSet } : {}),
+    });
+  }
   private _onState = (e: Event) => {
     const prev = this._st;
     const st = (e as CustomEvent<State>).detail;
     this._st = st;
+
+    this._maybeNotifyReady(st);
+
+    if (
+      this._readyNotified &&
+      prev != null &&
+      prev.params.vars !== st.params.vars
+    ) {
+      this._notifyHost('varsChanged', { vars: getVarsSnapshot(st) });
+    }
+
+    if (st.parameterSet && prev?.parameterSet !== st.parameterSet) {
+      this._notifyHost('parameterSetLoaded', { parameterSet: st.parameterSet });
+    }
+
     if (st.output && !st.rendering && !st.previewing) {
       if (!prev?.output || prev.output.outFileURL !== st.output.outFileURL) {
-        notifyHost('renderComplete', { outFileURL: st.output.outFileURL });
+        this._notifyHost('renderComplete', { outFileURL: st.output.outFileURL });
       }
     }
   };
 
   private _messageHandler = (event: MessageEvent) => {
-    if (event.source !== window.parent) return;
+    if (!this._acceptsMessage(event)) return;
     const msg = event.data as InboundMsg;
     if (!msg || typeof msg.type !== 'string') return;
     if (msg.type === 'setModel') {
@@ -95,6 +141,12 @@ export class OscEmbedShell extends LitElement {
     } else if (msg.type === 'setVar') {
       const m = msg as SetVarMsg;
       if (typeof m.name === 'string') this._model.setVar(m.name, m.value as never);
+    } else if (msg.type === 'getVars') {
+      const m = msg as GetVarsMsg;
+      this._notifyHost('varsSnapshot', {
+        vars: getVarsSnapshot(this._model.state),
+        ...(typeof m.requestId === 'string' ? { requestId: m.requestId } : {}),
+      });
     }
   };
 
@@ -137,7 +189,7 @@ export class OscEmbedShell extends LitElement {
       const result = await fetchExternalModel(params.modelUrl!);
       if (typeof result === 'object' && 'error' in result) {
         this._loadError = result.error;
-        notifyHost('stateChange', { error: result.error });
+        this._notifyHost('stateChange', { error: result.error });
         return;
       }
       const preVars = params.prePopulatedVars;

@@ -1,4 +1,4 @@
-import { expect, test, type ConsoleMessage, type Page } from '@playwright/test';
+import { expect, test, type ConsoleMessage, type Frame, type Page } from '@playwright/test';
 
 type LoggedMessage = {
   type: string;
@@ -29,6 +29,28 @@ function buildAppUrl(relativePath = ''): string {
   return new URL(relativePath, appBaseUrl).toString();
 }
 
+function buildEmbedUrl({
+  source,
+  controls = true,
+  download = false,
+  parentOrigin = appOrigin,
+}: {
+  source?: string;
+  controls?: boolean;
+  download?: boolean;
+  parentOrigin?: string;
+} = {}): string {
+  const url = new URL(appBaseUrl);
+  url.searchParams.set('mode', 'embed');
+  if (controls) url.searchParams.set('controls', 'true');
+  if (download) url.searchParams.set('download', 'true');
+  if (parentOrigin) url.searchParams.set('parentOrigin', parentOrigin);
+  if (source != null) {
+    url.hash = `src=${encodeURIComponent(source)}`;
+  }
+  return url.toString();
+}
+
 async function loadWithHash(page: Page, fragment: string): Promise<void> {
   const url = new URL(appBaseUrl);
   url.hash = fragment;
@@ -45,6 +67,76 @@ async function loadPath(page: Page, path: string): Promise<void> {
 
 async function loadUrl(page: Page, url: string): Promise<void> {
   await loadWithHash(page, `url=${encodeURIComponent(url)}`);
+}
+
+async function loadEmbedHost(page: Page, iframeUrl: string): Promise<void> {
+  await page.goto(buildAppUrl('test-host.html'));
+  await page.evaluate((src) => {
+    (window as Window & { __embedMessages?: unknown[] }).__embedMessages = [];
+    window.addEventListener('message', (event) => {
+      (window as Window & { __embedMessages?: unknown[] }).__embedMessages?.push({
+        origin: event.origin,
+        data: event.data,
+      });
+    });
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'embed-frame';
+    iframe.src = src;
+    iframe.width = '1000';
+    iframe.height = '800';
+    document.body.replaceChildren(iframe);
+  }, iframeUrl);
+}
+
+async function getEmbedFrame(page: Page): Promise<Frame> {
+  await page.waitForSelector('#embed-frame', { timeout: renderTimeoutMs });
+  const handle = await page.locator('#embed-frame').elementHandle();
+  const frame = await handle?.contentFrame();
+  if (!frame) {
+    throw new Error('Failed to resolve the embed iframe frame.');
+  }
+  return frame;
+}
+
+async function getEmbedMessages(page: Page) {
+  return page.evaluate(() => {
+    return ((window as Window & { __embedMessages?: unknown[] }).__embedMessages ?? []) as Array<{
+      origin: string;
+      data: Record<string, unknown>;
+    }>;
+  });
+}
+
+async function waitForEmbedMessage(page: Page, type: string, timeout = renderTimeoutMs): Promise<void> {
+  await page.waitForFunction(
+    (expectedType) => {
+      const messages = (window as Window & { __embedMessages?: Array<{ data?: { type?: string } }> })
+        .__embedMessages;
+      return Boolean(messages?.some((message) => message?.data?.type === expectedType));
+    },
+    type,
+    { timeout },
+  );
+}
+
+async function waitForEmbedMessageCount(
+  page: Page,
+  type: string,
+  count: number,
+  timeout = renderTimeoutMs,
+): Promise<void> {
+  await page.waitForFunction(
+    ([expectedType, expectedCount]) => {
+      const messages = (window as Window & { __embedMessages?: Array<{ data?: { type?: string } }> })
+        .__embedMessages;
+      const actualCount =
+        messages?.filter((message) => message?.data?.type === expectedType).length ?? 0;
+      return actualCount >= expectedCount;
+    },
+    [type, count],
+    { timeout },
+  );
 }
 
 async function getAppShellState(page: Page) {
@@ -182,6 +274,58 @@ async function waitForViewer(page: Page): Promise<void> {
     { timeout: renderTimeoutMs },
   );
   await waitForRenderState(page);
+}
+
+async function waitForEmbedViewer(frame: Frame): Promise<void> {
+  await frame.waitForSelector('[data-testid="viewer-canvas"] canvas', { timeout: renderTimeoutMs });
+  await frame.waitForFunction(
+    () => {
+      const container = document.querySelector(
+        '[data-testid="viewer-canvas"]',
+      ) as HTMLElement | null;
+      return Boolean(container && container.dataset.geometryLoaded === 'true');
+    },
+    null,
+    { timeout: renderTimeoutMs },
+  );
+  await frame.waitForFunction(
+    () => {
+      const shell = document.querySelector('osc-embed-shell') as (Element & { _st?: unknown }) | null;
+      const state =
+        shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
+      const output =
+        state && typeof state === 'object' && 'output' in state
+          ? (state.output as Record<string, unknown> | undefined)
+          : undefined;
+      return Boolean(state && !state.rendering && !state.previewing && output);
+    },
+    null,
+    { timeout: renderTimeoutMs },
+  );
+}
+
+async function waitForEmbedParameter(frame: Frame, name: string, timeout = 45_000): Promise<void> {
+  await frame.waitForFunction(
+    (expectedName) => {
+      const shell = document.querySelector('osc-embed-shell') as (Element & { _st?: unknown }) | null;
+      const state =
+        shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
+      const parameterSet =
+        state && typeof state === 'object' && 'parameterSet' in state
+          ? (state.parameterSet as Record<string, unknown> | undefined)
+          : undefined;
+      const parameters =
+        parameterSet && typeof parameterSet === 'object' && 'parameters' in parameterSet
+          ? (parameterSet.parameters as Array<Record<string, unknown>> | undefined)
+          : undefined;
+      return (
+        Array.isArray(parameters) &&
+        parameters.some((parameter) => parameter?.name === expectedName)
+      );
+    },
+    name,
+    { timeout },
+  );
 }
 
 async function waitForParameter(page: Page, name: string, timeout = 45_000): Promise<void> {
@@ -393,6 +537,108 @@ test.describe('worker integration', () => {
     await expect(page.locator('[data-testid="error-banner"]')).toContainText(
       'OpenSCAD reported syntax errors',
     );
+  });
+});
+
+test.describe('embed mode', () => {
+  test('supports host messaging and emits the documented lifecycle events', async ({ page }) => {
+    const source = 'myVar = 10;\ncube(myVar);';
+
+    await loadEmbedHost(page, buildEmbedUrl({ source, parentOrigin: appOrigin }));
+    const frame = await getEmbedFrame(page);
+
+    await waitForEmbedViewer(frame);
+    await waitForEmbedMessage(page, 'ready');
+    await waitForEmbedMessage(page, 'parameterSetLoaded');
+    await waitForEmbedMessage(page, 'renderComplete');
+    await waitForEmbedParameter(frame, 'myVar');
+
+    await page.evaluate(() => {
+      const iframe = document.getElementById('embed-frame') as HTMLIFrameElement | null;
+      iframe?.contentWindow?.postMessage(
+        { type: 'setVar', name: 'myVar', value: 20 },
+        window.location.origin,
+      );
+    });
+
+    await waitForEmbedMessage(page, 'varsChanged');
+    await waitForEmbedMessageCount(page, 'renderComplete', 2);
+    await frame.waitForFunction(
+      () => {
+        const shell = document.querySelector('osc-embed-shell') as (Element & { _st?: unknown }) | null;
+        const state =
+          shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
+        return state?.params && (state.params as { vars?: Record<string, unknown> }).vars?.myVar === 20;
+      },
+      null,
+      { timeout: renderTimeoutMs },
+    );
+
+    await page.evaluate(() => {
+      const iframe = document.getElementById('embed-frame') as HTMLIFrameElement | null;
+      iframe?.contentWindow?.postMessage(
+        { type: 'getVars', requestId: 'checkout' },
+        window.location.origin,
+      );
+    });
+
+    await waitForEmbedMessage(page, 'varsSnapshot');
+
+    const messages = await getEmbedMessages(page);
+    const readyMessage = messages.find((message) => message.data?.type === 'ready');
+    const parameterSetMessage = messages.find((message) => message.data?.type === 'parameterSetLoaded');
+    const varsChangedMessage = messages
+      .filter((message) => message.data?.type === 'varsChanged')
+      .at(-1);
+    const varsSnapshotMessage = messages
+      .filter((message) => message.data?.type === 'varsSnapshot')
+      .at(-1);
+
+    expect(readyMessage).toBeDefined();
+    expect(readyMessage?.data?.vars).toEqual(expect.any(Object));
+    expect(parameterSetMessage).toBeDefined();
+    expect(
+      (parameterSetMessage?.data?.parameterSet as { parameters?: Array<{ name?: string }> } | undefined)
+        ?.parameters
+        ?.some((parameter) => parameter?.name === 'myVar'),
+    ).toBe(true);
+    expect(varsChangedMessage?.data?.vars).toMatchObject({ myVar: 20 });
+    expect(varsSnapshotMessage?.data?.requestId).toBe('checkout');
+    expect(varsSnapshotMessage?.data?.vars).toMatchObject({ myVar: 20 });
+  });
+
+  test('rejects host messages when parentOrigin does not match the real parent origin', async ({
+    page,
+  }) => {
+    const source = 'myVar = 10;\ncube(myVar);';
+
+    await loadEmbedHost(page, buildEmbedUrl({ source, parentOrigin: 'https://example.com' }));
+    const frame = await getEmbedFrame(page);
+
+    await waitForEmbedViewer(frame);
+    await page.waitForTimeout(500);
+
+    await page.evaluate(() => {
+      const iframe = document.getElementById('embed-frame') as HTMLIFrameElement | null;
+      iframe?.contentWindow?.postMessage(
+        { type: 'setVar', name: 'myVar', value: 30 },
+        window.location.origin,
+      );
+    });
+
+    await page.waitForTimeout(500);
+
+    const messages = await getEmbedMessages(page);
+    const vars = await frame.evaluate(() => {
+      const shell = document.querySelector('osc-embed-shell') as (Element & { _st?: unknown }) | null;
+      const state =
+        shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
+      return (state?.params as { vars?: Record<string, unknown> } | undefined)?.vars ?? null;
+    });
+
+    expect(messages.some((message) => message.data?.type === 'ready')).toBe(false);
+    expect(messages.some((message) => message.data?.type === 'varsChanged')).toBe(false);
+    expect(vars).toBeNull();
   });
 });
 

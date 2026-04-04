@@ -65,6 +65,20 @@ describe('parseUrlMode — mode routing', () => {
     expect(result.embedDownload).toBe(true);
   });
 
+  it('parses and canonicalizes parentOrigin', () => {
+    const result = parseUrlMode(
+      '?mode=embed&parentOrigin=https%3A%2F%2Fstore.example.com%2Fcheckout',
+    );
+    expect('error' in result).toBe(false);
+    if ('error' in result) return;
+    expect(result.parentOrigin).toBe('https://store.example.com');
+  });
+
+  it('rejects invalid parentOrigin values', () => {
+    const result = parseUrlMode('?mode=embed&parentOrigin=javascript:alert(1)');
+    expect('error' in result).toBe(true);
+  });
+
   it('collects unknown params as prePopulatedVars', () => {
     const result = parseUrlMode('?mode=customizer&model=https://x.com/m.scad&teeth=30&height=5');
     expect('error' in result).toBe(false);
