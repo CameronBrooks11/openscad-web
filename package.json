@@ -26,7 +26,7 @@
     "test:e2e:dev": "cross-env E2E_SERVER_MODE=dev NODE_ENV=development playwright test",
     "test:e2e:publish": "node ./scripts/run-publish-e2e.mjs",
     "test:e2e:publish:skip-build": "cross-env E2E_PUBLISH_SKIP_BUILD=true node ./scripts/run-publish-e2e.mjs",
-    "test:assembly": "vitest run scripts/__tests__",
+    "test:assembly": "vitest run scripts/__tests__ --coverage=false",
     "test:unit": "vitest run",
     "start:development": "cross-env NODE_ENV=development vite",
     "start:production": "cross-env PUBLIC_URL=/dist/ npm run build && serve -l 3000 .",
