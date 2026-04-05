@@ -8,7 +8,6 @@ import {
 } from './fs/library-delivery.ts';
 import { ensureBrowserFSLoaded, getBrowserFS } from './runtime/browserfs-runtime.ts';
 import { loadBootConfig, mergeConfigIntoSearch } from './runtime/boot-config.ts';
-import { isProductionBuild } from './runtime/build-env.ts';
 import { registerAppServiceWorker } from './runtime/service-worker.ts';
 import { readStateFromFragment, writeStateInFragment } from './state/fragment-state.ts';
 import { createInitialState } from './state/initial-state.ts';
@@ -33,7 +32,7 @@ import './components/elements/osc-customizer-shell.ts';
 
 const log = debug('app:log');
 
-if (!isProductionBuild()) {
+if (!import.meta.env.PROD) {
   debug.enable('*');
   log('Logging is enabled!');
 } else {
