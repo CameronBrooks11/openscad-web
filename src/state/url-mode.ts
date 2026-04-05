@@ -82,8 +82,7 @@ export function parseUrlMode(search: string): UrlModeParams | { error: string } 
   }
 
   const rawParentOrigin = params.get('parentOrigin');
-  const parentOrigin =
-    rawParentOrigin === null ? null : normalizeParentOrigin(rawParentOrigin);
+  const parentOrigin = rawParentOrigin === null ? null : normalizeParentOrigin(rawParentOrigin);
   if (rawParentOrigin !== null && parentOrigin === null) {
     return {
       error: `parentOrigin must be an absolute http(s) origin. Got: ${rawParentOrigin.slice(0, 40)}`,

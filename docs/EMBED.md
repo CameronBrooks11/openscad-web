@@ -25,11 +25,11 @@ Supported embed-specific query parameters:
 
 ### Host → iframe
 
-| Type | Payload | Description |
-|---|---|---|
-| `setModel` | `{ type: 'setModel', source: string }` | Replace the current model with raw source text |
-| `setVar` | `{ type: 'setVar', name: string, value: unknown }` | Set one customizer variable |
-| `getVars` | `{ type: 'getVars', requestId?: string }` | Request the current effective variable map |
+| Type       | Payload                                            | Description                                    |
+| ---------- | -------------------------------------------------- | ---------------------------------------------- |
+| `setModel` | `{ type: 'setModel', source: string }`             | Replace the current model with raw source text |
+| `setVar`   | `{ type: 'setVar', name: string, value: unknown }` | Set one customizer variable                    |
+| `getVars`  | `{ type: 'getVars', requestId?: string }`          | Request the current effective variable map     |
 
 Notes:
 
@@ -38,14 +38,14 @@ Notes:
 
 ### iframe → host
 
-| Type | Payload | Description |
-|---|---|---|
-| `ready` | `{ type: 'ready', vars, parameterSet? }` | Initial embed state is ready for host interaction |
-| `varsChanged` | `{ type: 'varsChanged', vars }` | Effective variable map changed |
-| `parameterSetLoaded` | `{ type: 'parameterSetLoaded', parameterSet }` | Parameter metadata is available |
-| `varsSnapshot` | `{ type: 'varsSnapshot', vars, requestId? }` | Response to `getVars` |
-| `renderComplete` | `{ type: 'renderComplete', outFileURL }` | A render finished and produced a new output blob URL |
-| `stateChange` | `{ type: 'stateChange', error }` | Legacy error event used for external model-load failures |
+| Type                 | Payload                                        | Description                                              |
+| -------------------- | ---------------------------------------------- | -------------------------------------------------------- |
+| `ready`              | `{ type: 'ready', vars, parameterSet? }`       | Initial embed state is ready for host interaction        |
+| `varsChanged`        | `{ type: 'varsChanged', vars }`                | Effective variable map changed                           |
+| `parameterSetLoaded` | `{ type: 'parameterSetLoaded', parameterSet }` | Parameter metadata is available                          |
+| `varsSnapshot`       | `{ type: 'varsSnapshot', vars, requestId? }`   | Response to `getVars`                                    |
+| `renderComplete`     | `{ type: 'renderComplete', outFileURL }`       | A render finished and produced a new output blob URL     |
+| `stateChange`        | `{ type: 'stateChange', error }`               | Legacy error event used for external model-load failures |
 
 Notes:
 
@@ -135,7 +135,10 @@ See [docs/SECURITY.md](./SECURITY.md) for the current baseline CSP guidance.
   }
 
   function refreshVars() {
-    iframe.contentWindow.postMessage({ type: 'getVars', requestId: 'checkout' }, 'https://example.com');
+    iframe.contentWindow.postMessage(
+      { type: 'getVars', requestId: 'checkout' },
+      'https://example.com',
+    );
   }
 </script>
 ```

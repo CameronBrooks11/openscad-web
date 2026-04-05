@@ -108,12 +108,17 @@ async function getEmbedMessages(page: Page) {
   });
 }
 
-async function waitForEmbedMessage(page: Page, type: string, timeout = renderTimeoutMs): Promise<void> {
+async function waitForEmbedMessage(
+  page: Page,
+  type: string,
+  timeout = renderTimeoutMs,
+): Promise<void> {
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const found = await page.evaluate((expectedType) => {
-      const messages = (window as Window & { __embedMessages?: Array<{ data?: { type?: string } }> })
-        .__embedMessages;
+      const messages = (
+        window as Window & { __embedMessages?: Array<{ data?: { type?: string } }> }
+      ).__embedMessages;
       return Boolean(messages?.some((message) => message?.data?.type === expectedType));
     }, type);
     if (found) return;
@@ -132,9 +137,13 @@ async function waitForEmbedMessageCount(
   while (Date.now() < deadline) {
     const actualCount = await page.evaluate(
       ([expectedType, expectedCount]) => {
-        const messages = (window as Window & { __embedMessages?: Array<{ data?: { type?: string } }> })
-          .__embedMessages;
-        return messages?.filter((message) => message?.data?.type === (expectedType as string)).length ?? 0;
+        const messages = (
+          window as Window & { __embedMessages?: Array<{ data?: { type?: string } }> }
+        ).__embedMessages;
+        return (
+          messages?.filter((message) => message?.data?.type === (expectedType as string)).length ??
+          0
+        );
       },
       [type, count] as [string, number],
     );
@@ -297,7 +306,9 @@ async function waitForEmbedViewer(frame: Frame): Promise<void> {
   );
   await frame.waitForFunction(
     () => {
-      const shell = document.querySelector('osc-embed-shell') as (Element & { _st?: unknown }) | null;
+      const shell = document.querySelector('osc-embed-shell') as
+        | (Element & { _st?: unknown })
+        | null;
       const state =
         shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
       const output =
@@ -314,7 +325,9 @@ async function waitForEmbedViewer(frame: Frame): Promise<void> {
 async function waitForEmbedParameter(frame: Frame, name: string, timeout = 45_000): Promise<void> {
   await frame.waitForFunction(
     (expectedName) => {
-      const shell = document.querySelector('osc-embed-shell') as (Element & { _st?: unknown }) | null;
+      const shell = document.querySelector('osc-embed-shell') as
+        | (Element & { _st?: unknown })
+        | null;
       const state =
         shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
       const parameterSet =
@@ -572,10 +585,14 @@ test.describe('embed mode', () => {
     await waitForEmbedMessageCount(page, 'renderComplete', 2);
     await frame.waitForFunction(
       () => {
-        const shell = document.querySelector('osc-embed-shell') as (Element & { _st?: unknown }) | null;
+        const shell = document.querySelector('osc-embed-shell') as
+          | (Element & { _st?: unknown })
+          | null;
         const state =
           shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
-        return state?.params && (state.params as { vars?: Record<string, unknown> }).vars?.myVar === 20;
+        return (
+          state?.params && (state.params as { vars?: Record<string, unknown> }).vars?.myVar === 20
+        );
       },
       null,
       { timeout: renderTimeoutMs },
@@ -593,7 +610,9 @@ test.describe('embed mode', () => {
 
     const messages = await getEmbedMessages(page);
     const readyMessage = messages.find((message) => message.data?.type === 'ready');
-    const parameterSetMessage = messages.find((message) => message.data?.type === 'parameterSetLoaded');
+    const parameterSetMessage = messages.find(
+      (message) => message.data?.type === 'parameterSetLoaded',
+    );
     const varsChangedMessage = messages
       .filter((message) => message.data?.type === 'varsChanged')
       .at(-1);
@@ -605,9 +624,11 @@ test.describe('embed mode', () => {
     expect(readyMessage?.data?.vars).toEqual(expect.any(Object));
     expect(parameterSetMessage).toBeDefined();
     expect(
-      (parameterSetMessage?.data?.parameterSet as { parameters?: Array<{ name?: string }> } | undefined)
-        ?.parameters
-        ?.some((parameter) => parameter?.name === 'myVar'),
+      (
+        parameterSetMessage?.data?.parameterSet as
+          | { parameters?: Array<{ name?: string }> }
+          | undefined
+      )?.parameters?.some((parameter) => parameter?.name === 'myVar'),
     ).toBe(true);
     expect(varsChangedMessage?.data?.vars).toMatchObject({ myVar: 20 });
     expect(varsSnapshotMessage?.data?.requestId).toBe('checkout');
@@ -637,7 +658,9 @@ test.describe('embed mode', () => {
 
     const messages = await getEmbedMessages(page);
     const vars = await frame.evaluate(() => {
-      const shell = document.querySelector('osc-embed-shell') as (Element & { _st?: unknown }) | null;
+      const shell = document.querySelector('osc-embed-shell') as
+        | (Element & { _st?: unknown })
+        | null;
       const state =
         shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
       return (state?.params as { vars?: Record<string, unknown> } | undefined)?.vars ?? null;
@@ -666,10 +689,7 @@ test.describe('embed mode', () => {
 
     await page.evaluate((src) => {
       const iframe = document.getElementById('embed-frame') as HTMLIFrameElement | null;
-      iframe?.contentWindow?.postMessage(
-        { type: 'setModel', source: src },
-        window.location.origin,
-      );
+      iframe?.contentWindow?.postMessage({ type: 'setModel', source: src }, window.location.origin);
     }, replacedSource);
 
     await waitForEmbedMessageCount(page, 'renderComplete', 2);
