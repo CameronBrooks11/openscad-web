@@ -36,6 +36,7 @@ ehthumbs.db
 
 # VS Code
 .vscode/
+.codex
 
 # Personal working directories
 working/
