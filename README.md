@@ -103,6 +103,7 @@ npm run build:all
 The app is deployed as a static `dist/` directory. The build path is controlled by `PUBLIC_URL`, and the checked-in default deployment root is also reflected in `package.json#homepage`.
 
 For deployment details, self-hosting notes, and GitHub Pages behavior, see [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md).
+For publishing OpenSCAD projects into GitHub Pages or another static-site tree, see [docs/PUBLISHING.md](./docs/PUBLISHING.md).
 
 Security assumptions, CSP guidance, and external-source loading policy are documented in [docs/SECURITY.md](./docs/SECURITY.md).
 
