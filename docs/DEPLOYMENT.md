@@ -3,6 +3,7 @@
 OpenSCAD Web deploys as a static `dist/` directory produced by Vite plus a post-build Workbox service worker step.
 
 Security headers, CSP guidance, and external-source loading assumptions are documented in [docs/SECURITY.md](./SECURITY.md).
+For iframe embed deployments and the `postMessage` API contract, see [docs/EMBED.md](./EMBED.md).
 
 ## Deployment Model
 
