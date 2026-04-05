@@ -30,7 +30,7 @@ export default defineConfig({
       },
     },
     setupFiles: ['./vitest.setup.ts'],
-    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx', 'scripts/**/*.test.mjs'],
     coverage: {
       provider: 'v8',
       enabled: process.env.CI === 'true',

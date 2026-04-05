@@ -1,0 +1,173 @@
+name: Assemble OpenSCAD Site
+description: Download the relocatable publish artifact and assemble a static site tree for publishing.
+
+inputs:
+  config:
+    description: Path to openscad-publish.yml in the consumer repository.
+    required: false
+  source:
+    description: Path to a single .scad file to publish.
+    required: false
+  project-root:
+    description: Path to the project root directory for a multi-file OpenSCAD project.
+    required: false
+  entry:
+    description: Entry file inside project-root.
+    required: false
+  surface:
+    description: Publishing surface preset. One of viewer, customizer, or editor.
+    required: false
+  mount-path:
+    description: Mount path inside the published site tree, for example / or /model/.
+    required: false
+  version:
+    description: Publish artifact version to download. Defaults to the action tag, including major aliases like v0.
+    required: false
+  output-dir:
+    description: Final assembled site directory. Overrides site.outDir from config when provided.
+    required: false
+
+outputs:
+  site-dir:
+    description: Absolute path to the assembled static site tree.
+    value: ${{ steps.assemble.outputs.site-dir }}
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Node 24
+      uses: actions/setup-node@v6
+      with:
+        node-version: '24'
+
+    - name: Validate inputs
+      shell: bash
+      env:
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_SOURCE: ${{ inputs.source }}
+        INPUT_PROJECT_ROOT: ${{ inputs.project-root }}
+        INPUT_ENTRY: ${{ inputs.entry }}
+        INPUT_SURFACE: ${{ inputs.surface }}
+        INPUT_MOUNT_PATH: ${{ inputs.mount-path }}
+      run: |
+        set -euo pipefail
+
+        if [[ -n "${INPUT_CONFIG}" ]]; then
+          if [[ -n "${INPUT_SOURCE}${INPUT_PROJECT_ROOT}${INPUT_ENTRY}${INPUT_SURFACE}${INPUT_MOUNT_PATH}" ]]; then
+            echo "When config is set, do not also pass source, project-root, entry, surface, or mount-path." >&2
+            exit 1
+          fi
+          exit 0
+        fi
+
+        if [[ -n "${INPUT_SOURCE}" ]]; then
+          if [[ -n "${INPUT_PROJECT_ROOT}${INPUT_ENTRY}" ]]; then
+            echo "Use source by itself, or project-root plus entry. Do not mix them." >&2
+            exit 1
+          fi
+        else
+          if [[ -z "${INPUT_PROJECT_ROOT}" || -z "${INPUT_ENTRY}" ]]; then
+            echo "Provide either config, or source, or project-root plus entry." >&2
+            exit 1
+          fi
+        fi
+
+        if [[ -z "${INPUT_SURFACE}" || -z "${INPUT_MOUNT_PATH}" ]]; then
+          echo "surface and mount-path are required when not using config." >&2
+          exit 1
+        fi
+
+    - name: Resolve publish artifact version
+      id: version
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        ACTION_REF: ${{ github.action_ref }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+
+        requested_ref="${INPUT_VERSION}"
+        if [[ -z "${requested_ref}" ]]; then
+          requested_ref="${ACTION_REF}"
+        fi
+
+        if [[ -z "${requested_ref}" ]]; then
+          echo "Could not determine an artifact version. Pass the version input explicitly." >&2
+          exit 1
+        fi
+
+        resolved_version="$(
+          node "${GITHUB_ACTION_PATH}/scripts/resolve-release-version.mjs" \
+            --requested-ref "${requested_ref}" \
+            --repo "CameronBrooks11/openscad-web"
+        )"
+
+        echo "resolved-version=${resolved_version}" >> "${GITHUB_OUTPUT}"
+
+    - name: Install action runtime dependencies
+      shell: bash
+      run: |
+        set -euo pipefail
+        npm install --ignore-scripts --no-package-lock --no-save --prefix "${GITHUB_ACTION_PATH}" adm-zip@0.5.16 js-yaml@4.1.1
+
+    - name: Download publish artifact
+      id: download
+      shell: bash
+      env:
+        RESOLVED_VERSION: ${{ steps.version.outputs.resolved-version }}
+      run: |
+        set -euo pipefail
+
+        artifact_path="${RUNNER_TEMP}/openscad-web-publish.zip"
+        artifact_url="https://github.com/CameronBrooks11/openscad-web/releases/download/${RESOLVED_VERSION}/openscad-web-publish.zip"
+
+        curl -fL "${artifact_url}" -o "${artifact_path}"
+
+        echo "artifact-path=${artifact_path}" >> "${GITHUB_OUTPUT}"
+
+    - name: Assemble site tree
+      id: assemble
+      shell: bash
+      env:
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_SOURCE: ${{ inputs.source }}
+        INPUT_PROJECT_ROOT: ${{ inputs.project-root }}
+        INPUT_ENTRY: ${{ inputs.entry }}
+        INPUT_SURFACE: ${{ inputs.surface }}
+        INPUT_MOUNT_PATH: ${{ inputs.mount-path }}
+        INPUT_OUTPUT_DIR: ${{ inputs.output-dir }}
+        ARTIFACT_PATH: ${{ steps.download.outputs.artifact-path }}
+        ARTIFACT_VERSION: ${{ steps.version.outputs.resolved-version }}
+      run: |
+        set -euo pipefail
+
+        args=( "${GITHUB_ACTION_PATH}/scripts/deploy-configure.mjs" "--artifact-path" "${ARTIFACT_PATH}" "--artifact-version" "${ARTIFACT_VERSION}" "--json" )
+
+        if [[ -n "${INPUT_CONFIG}" ]]; then
+          args+=( "--config" "${INPUT_CONFIG}" )
+        else
+          if [[ -n "${INPUT_SOURCE}" ]]; then
+            args+=( "--source" "${INPUT_SOURCE}" )
+          else
+            args+=( "--project-root" "${INPUT_PROJECT_ROOT}" "--entry" "${INPUT_ENTRY}" )
+          fi
+
+          args+=( "--surface" "${INPUT_SURFACE}" "--mount-path" "${INPUT_MOUNT_PATH}" )
+        fi
+
+        if [[ -n "${INPUT_OUTPUT_DIR}" ]]; then
+          args+=( "--output-dir" "${INPUT_OUTPUT_DIR}" )
+        fi
+
+        result_json="$(
+          cd "${GITHUB_WORKSPACE}" &&
+            node "${args[@]}"
+        )"
+
+        site_dir="$(
+          printf '%s' "${result_json}" |
+            node -e "const fs = require('node:fs'); const payload = JSON.parse(fs.readFileSync(0, 'utf8')); console.log(payload.outputDirPath);"
+        )"
+
+        echo "site-dir=${site_dir}" >> "${GITHUB_OUTPUT}"
