@@ -5,6 +5,13 @@ on:
   schedule:
     - cron: '0 8 * * 1'
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -35,7 +42,7 @@ jobs:
             libs/
             src/wasm/
             public/libraries/
-          key: v2-libs-${{ hashFiles('libs-config.json') }}
+          key: v3-libs-${{ hashFiles('libs-config.json', 'fonts.conf', 'scripts/build-assets/**', 'package-lock.json') }}
 
       - name: Build libs (if cache miss)
         if: steps.cache-libs.outputs.cache-hit != 'true'

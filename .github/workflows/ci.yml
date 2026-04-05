@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-test:
     runs-on: ubuntu-24.04
@@ -47,7 +54,7 @@ jobs:
             libs/
             src/wasm/
             public/libraries/
-          key: v2-libs-${{ hashFiles('libs-config.json') }}
+          key: v3-libs-${{ hashFiles('libs-config.json', 'fonts.conf', 'scripts/build-assets/**', 'package-lock.json') }}
 
       - name: Build libs (WASM + fonts)
         if: steps.cache-libs.outputs.cache-hit != 'true'
@@ -88,7 +95,7 @@ jobs:
             libs/
             src/wasm/
             public/libraries/
-          key: v2-libs-${{ hashFiles('libs-config.json') }}
+          key: v3-libs-${{ hashFiles('libs-config.json', 'fonts.conf', 'scripts/build-assets/**', 'package-lock.json') }}
 
       - name: Build libs (WASM + fonts)
         if: steps.cache-libs.outputs.cache-hit != 'true'
@@ -128,7 +135,7 @@ jobs:
             libs/
             src/wasm/
             public/libraries/
-          key: v2-libs-${{ hashFiles('libs-config.json') }}
+          key: v3-libs-${{ hashFiles('libs-config.json', 'fonts.conf', 'scripts/build-assets/**', 'package-lock.json') }}
 
       - name: Build libs (WASM + fonts)
         if: steps.cache-libs.outputs.cache-hit != 'true'
@@ -175,7 +182,7 @@ jobs:
             libs/
             src/wasm/
             public/libraries/
-          key: v2-libs-${{ hashFiles('libs-config.json') }}
+          key: v3-libs-${{ hashFiles('libs-config.json', 'fonts.conf', 'scripts/build-assets/**', 'package-lock.json') }}
 
       - name: Build libs (WASM + fonts)
         if: steps.cache-libs.outputs.cache-hit != 'true'
@@ -219,7 +226,7 @@ jobs:
             libs/
             src/wasm/
             public/libraries/
-          key: v2-libs-${{ hashFiles('libs-config.json') }}
+          key: v3-libs-${{ hashFiles('libs-config.json', 'fonts.conf', 'scripts/build-assets/**', 'package-lock.json') }}
 
       - name: Build libs (WASM + fonts)
         if: steps.cache-libs.outputs.cache-hit != 'true'

@@ -103,7 +103,7 @@ The checked-in deploy workflow builds with:
 PUBLIC_URL=/openscad-web/
 ```
 
-and publishes `./dist` to GitHub Pages.
+and uploads `./dist` to GitHub Pages through the official Pages artifact/deploy actions.
 
 If the deployment target changes, update:
 

@@ -5,11 +5,16 @@ on:
     tags:
       - 'v*.*.*'
 
+permissions:
+  contents: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     env:
       CI: 'true'
 
@@ -37,7 +42,7 @@ jobs:
             libs/
             src/wasm/
             public/libraries/
-          key: v2-libs-${{ hashFiles('libs-config.json') }}
+          key: v3-libs-${{ hashFiles('libs-config.json', 'fonts.conf', 'scripts/build-assets/**', 'package-lock.json') }}
 
       - name: Build libs
         if: steps.cache-libs.outputs.cache-hit != 'true'
