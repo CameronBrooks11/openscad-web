@@ -109,18 +109,18 @@ Then call the action with:
 
 Field reference:
 
-| Field | Meaning |
-|---|---|
-| `site.outDir` | Final output directory. Resolved relative to the config file. |
-| `targets[].source` | Single-file shorthand. |
-| `targets[].projectRoot` | Publish boundary for a multi-file project. Everything under this directory becomes public. |
-| `targets[].entry` | Entry `.scad` file inside `projectRoot`. Resolved relative to `projectRoot`. |
-| `targets[].mountPath` | Mount path inside the final site tree, such as `/` or `/model/`. |
-| `targets[].surface` | One of `viewer`, `customizer`, or `editor`. |
-| `targets[].controls` | Optional default for embed/customizer controls. |
-| `targets[].download` | Optional default for download UI. |
-| `targets[].title` | Optional page title. |
-| `targets[].parentOrigin` | Optional embed security setting for trusted iframe parents. |
+| Field                    | Meaning                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------ |
+| `site.outDir`            | Final output directory. Resolved relative to the config file.                              |
+| `targets[].source`       | Single-file shorthand.                                                                     |
+| `targets[].projectRoot`  | Publish boundary for a multi-file project. Everything under this directory becomes public. |
+| `targets[].entry`        | Entry `.scad` file inside `projectRoot`. Resolved relative to `projectRoot`.               |
+| `targets[].mountPath`    | Mount path inside the final site tree, such as `/` or `/model/`.                           |
+| `targets[].surface`      | One of `viewer`, `customizer`, or `editor`.                                                |
+| `targets[].controls`     | Optional default for embed/customizer controls.                                            |
+| `targets[].download`     | Optional default for download UI.                                                          |
+| `targets[].title`        | Optional page title.                                                                       |
+| `targets[].parentOrigin` | Optional embed security setting for trusted iframe parents.                                |
 
 Important v1 limits:
 

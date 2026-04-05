@@ -77,9 +77,12 @@ export async function fetchGitHubReleases(repoFullName, token, fetchImpl = fetch
     headers.Authorization = `Bearer ${token}`;
   }
 
-  const response = await fetchImpl(`https://api.github.com/repos/${repoFullName}/releases?per_page=100`, {
-    headers,
-  });
+  const response = await fetchImpl(
+    `https://api.github.com/repos/${repoFullName}/releases?per_page=100`,
+    {
+      headers,
+    },
+  );
 
   if (!response.ok) {
     throw new Error(

@@ -38,7 +38,9 @@ async function readJson(filePath) {
 }
 
 afterEach(async () => {
-  await Promise.all(tempDirPaths.splice(0).map((tempDirPath) => rm(tempDirPath, { recursive: true, force: true })));
+  await Promise.all(
+    tempDirPaths.splice(0).map((tempDirPath) => rm(tempDirPath, { recursive: true, force: true })),
+  );
 });
 
 describe('runDeployConfigure', () => {
@@ -69,14 +71,18 @@ describe('runDeployConfigure', () => {
       },
     );
 
-    await expect(readFile(path.join(cwd, 'site', 'model', 'project', 'widget.scad'), 'utf8')).resolves.toBe(
-      'cube(10);',
-    );
-    await expect(readJson(path.join(cwd, 'site', 'model', 'openscad-web.config.json'))).resolves.toEqual({
+    await expect(
+      readFile(path.join(cwd, 'site', 'model', 'project', 'widget.scad'), 'utf8'),
+    ).resolves.toBe('cube(10);');
+    await expect(
+      readJson(path.join(cwd, 'site', 'model', 'openscad-web.config.json')),
+    ).resolves.toEqual({
       mode: 'embed',
       model: './project/widget.scad',
     });
-    await expect(readJson(path.join(cwd, 'site', 'model', OWNERSHIP_MARKER_FILENAME))).resolves.toEqual({
+    await expect(
+      readJson(path.join(cwd, 'site', 'model', OWNERSHIP_MARKER_FILENAME)),
+    ).resolves.toEqual({
       version: 'v0.1.0',
       assembledAt: '2026-04-05T12:00:00.000Z',
     });
@@ -87,8 +93,14 @@ describe('runDeployConfigure', () => {
     const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
     const logger = { log() {}, warn() {}, error() {} };
     await createPublishArtifact(artifactPath);
-    await writeTextFile(path.join(cwd, 'publish', 'models', 'assembly', 'main.scad'), 'include <parts/bracket.scad>;');
-    await writeTextFile(path.join(cwd, 'publish', 'models', 'assembly', 'parts', 'bracket.scad'), 'cube(5);');
+    await writeTextFile(
+      path.join(cwd, 'publish', 'models', 'assembly', 'main.scad'),
+      'include <parts/bracket.scad>;',
+    );
+    await writeTextFile(
+      path.join(cwd, 'publish', 'models', 'assembly', 'parts', 'bracket.scad'),
+      'cube(5);',
+    );
     await writeTextFile(
       path.join(cwd, 'publish', 'openscad-publish.yml'),
       `site:
@@ -108,7 +120,12 @@ targets:
     );
 
     await runDeployConfigure(
-      ['--config', './publish/openscad-publish.yml', '--artifact-path', './openscad-web-publish.zip'],
+      [
+        '--config',
+        './publish/openscad-publish.yml',
+        '--artifact-path',
+        './openscad-web-publish.zip',
+      ],
       {
         cwd,
         logger,
@@ -116,7 +133,10 @@ targets:
     );
 
     await expect(
-      readFile(path.join(cwd, 'publish', 'assembled-site', 'assembly', 'project', 'parts', 'bracket.scad'), 'utf8'),
+      readFile(
+        path.join(cwd, 'publish', 'assembled-site', 'assembly', 'project', 'parts', 'bracket.scad'),
+        'utf8',
+      ),
     ).resolves.toBe('cube(5);');
     await expect(
       readJson(path.join(cwd, 'publish', 'assembled-site', 'assembly', 'openscad-web.config.json')),
@@ -158,8 +178,12 @@ targets:
       { cwd },
     );
 
-    await expect(readFile(path.join(cwd, 'site', 'index.html'), 'utf8')).resolves.toContain('<div id="root"></div>');
-    await expect(readFile(path.join(cwd, 'site', 'project', 'widget.scad'), 'utf8')).resolves.toBe('sphere(10);');
+    await expect(readFile(path.join(cwd, 'site', 'index.html'), 'utf8')).resolves.toContain(
+      '<div id="root"></div>',
+    );
+    await expect(readFile(path.join(cwd, 'site', 'project', 'widget.scad'), 'utf8')).resolves.toBe(
+      'sphere(10);',
+    );
   });
 
   it('refuses to overwrite a non-empty unowned mount directory', async () => {
@@ -217,10 +241,12 @@ targets:
     );
 
     await expect(readFile(path.join(cwd, 'site', 'README.md'), 'utf8')).resolves.toBe('keep me');
-    await expect(readFile(path.join(cwd, 'site', 'model', 'project', 'widget.scad'), 'utf8')).resolves.toBe(
-      'cylinder(h=10, r=2);',
-    );
-    await expect(readFile(path.join(cwd, 'site', 'model', 'stale.txt'), 'utf8')).rejects.toMatchObject({
+    await expect(
+      readFile(path.join(cwd, 'site', 'model', 'project', 'widget.scad'), 'utf8'),
+    ).resolves.toBe('cylinder(h=10, r=2);');
+    await expect(
+      readFile(path.join(cwd, 'site', 'model', 'stale.txt'), 'utf8'),
+    ).rejects.toMatchObject({
       code: 'ENOENT',
     });
   });
@@ -245,7 +271,14 @@ targets:
     );
 
     await runDeployConfigure(
-      ['--config', './openscad-publish.yml', '--artifact-path', './openscad-web-publish.zip', '--output-dir', './site'],
+      [
+        '--config',
+        './openscad-publish.yml',
+        '--artifact-path',
+        './openscad-web-publish.zip',
+        '--output-dir',
+        './site',
+      ],
       {
         cwd,
         logger: {
@@ -260,8 +293,12 @@ targets:
 
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toMatch(/Multiple targets are not supported in v1/i);
-    await expect(readFile(path.join(cwd, 'site', 'one', 'project', 'one.scad'), 'utf8')).resolves.toBe('cube(1);');
-    await expect(readFile(path.join(cwd, 'site', 'two', 'project', 'two.scad'), 'utf8')).rejects.toMatchObject({
+    await expect(
+      readFile(path.join(cwd, 'site', 'one', 'project', 'one.scad'), 'utf8'),
+    ).resolves.toBe('cube(1);');
+    await expect(
+      readFile(path.join(cwd, 'site', 'two', 'project', 'two.scad'), 'utf8'),
+    ).rejects.toMatchObject({
       code: 'ENOENT',
     });
   });
@@ -295,10 +332,12 @@ targets:
       { cwd },
     );
 
-    await expect(readFile(path.join(cwd, 'site', 'model', 'project', 'widget.scad'), 'utf8')).resolves.toBe(
-      'cube(4);',
-    );
-    await expect(readFile(path.join(cwd, 'ignored-site', 'model', 'project', 'widget.scad'), 'utf8')).rejects.toMatchObject({
+    await expect(
+      readFile(path.join(cwd, 'site', 'model', 'project', 'widget.scad'), 'utf8'),
+    ).resolves.toBe('cube(4);');
+    await expect(
+      readFile(path.join(cwd, 'ignored-site', 'model', 'project', 'widget.scad'), 'utf8'),
+    ).rejects.toMatchObject({
       code: 'ENOENT',
     });
   });
@@ -321,9 +360,12 @@ targets:
     );
 
     await expect(
-      runDeployConfigure(['--config', './openscad-publish.yml', '--artifact-path', './openscad-web-publish.zip'], {
-        cwd,
-      }),
+      runDeployConfigure(
+        ['--config', './openscad-publish.yml', '--artifact-path', './openscad-web-publish.zip'],
+        {
+          cwd,
+        },
+      ),
     ).rejects.toThrow(/site\.outDir as a non-empty string/i);
   });
 });

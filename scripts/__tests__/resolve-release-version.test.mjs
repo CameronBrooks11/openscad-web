@@ -2,10 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  parseSemverTag,
-  resolveRequestedReleaseTag,
-} from '../resolve-release-version.mjs';
+import { parseSemverTag, resolveRequestedReleaseTag } from '../resolve-release-version.mjs';
 
 describe('parseSemverTag', () => {
   it('parses semver tags', () => {

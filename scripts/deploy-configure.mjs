@@ -80,7 +80,12 @@ function normalizeProjectRelativePath(rawPath, fieldName) {
   }
 
   const normalized = path.posix.normalize(posixPath).replace(/^\.\/+/, '');
-  if (normalized === '' || normalized === '.' || normalized === '..' || normalized.startsWith('../')) {
+  if (
+    normalized === '' ||
+    normalized === '.' ||
+    normalized === '..' ||
+    normalized.startsWith('../')
+  ) {
     throw new Error(`${fieldName} must stay within projectRoot. Got: ${value}`);
   }
 
@@ -199,7 +204,9 @@ async function resolveTargetFromConfig(configPath, logger) {
   const configText = await readFile(configFilePath, 'utf8');
   const parsedConfig = parseYamlConfig(configText, configFilePath);
   if (parsedConfig.site !== undefined && !isRecord(parsedConfig.site)) {
-    throw new Error(`Publish config ${configFilePath} must define site as an object when provided.`);
+    throw new Error(
+      `Publish config ${configFilePath} must define site as an object when provided.`,
+    );
   }
 
   const site = isRecord(parsedConfig.site) ? parsedConfig.site : {};
@@ -216,13 +223,17 @@ async function resolveTargetFromConfig(configPath, logger) {
   }
 
   if (site.outDir !== undefined && getString(site.outDir) == null) {
-    throw new Error(`Publish config ${configFilePath} must define site.outDir as a non-empty string when provided.`);
+    throw new Error(
+      `Publish config ${configFilePath} must define site.outDir as a non-empty string when provided.`,
+    );
   }
 
   return {
     baseDirPath: configDirPath,
     outputDirPath:
-      getString(site.outDir) == null ? null : path.resolve(configDirPath, /** @type {string} */ (site.outDir)),
+      getString(site.outDir) == null
+        ? null
+        : path.resolve(configDirPath, /** @type {string} */ (site.outDir)),
     rawTarget: targets[0],
   };
 }
@@ -256,7 +267,9 @@ async function validateAndResolveTarget(rawTarget, baseDirPath) {
   if (surface == null) {
     errors.push('surface is required.');
   } else if (!(surface in SURFACE_TO_MODE)) {
-    errors.push(`surface must be one of ${Object.keys(SURFACE_TO_MODE).join(', ')}. Got: ${surface}`);
+    errors.push(
+      `surface must be one of ${Object.keys(SURFACE_TO_MODE).join(', ')}. Got: ${surface}`,
+    );
   }
 
   let normalizedMountPath = null;
@@ -434,7 +447,8 @@ function buildBootConfig(target, modelPath) {
 
   if (typeof target.controls === 'boolean') bootConfig.controls = target.controls;
   if (typeof target.download === 'boolean') bootConfig.download = target.download;
-  if (typeof target.title === 'string' && target.title.trim() !== '') bootConfig.title = target.title;
+  if (typeof target.title === 'string' && target.title.trim() !== '')
+    bootConfig.title = target.title;
   if (typeof target.parentOrigin === 'string') bootConfig.parentOrigin = target.parentOrigin;
 
   return bootConfig;
@@ -457,11 +471,7 @@ async function writeOwnershipMarker(targetDirPath, artifactVersion, now) {
 
 export async function runDeployConfigure(
   argv = process.argv.slice(2),
-  {
-    cwd = process.cwd(),
-    logger = console,
-    now = new Date(),
-  } = {},
+  { cwd = process.cwd(), logger = console, now = new Date() } = {},
 ) {
   const args = parseCliArgs(argv);
   if (args.help) {
@@ -506,7 +516,7 @@ export async function runDeployConfigure(
   const outputDirPath =
     getString(args.outputDir) != null
       ? path.resolve(cwd, args.outputDir)
-      : resolvedInput.outputDirPath ?? path.resolve(cwd, DEFAULT_OUTPUT_DIR);
+      : (resolvedInput.outputDirPath ?? path.resolve(cwd, DEFAULT_OUTPUT_DIR));
 
   const target = await validateAndResolveTarget(resolvedInput.rawTarget, resolvedInput.baseDirPath);
 
