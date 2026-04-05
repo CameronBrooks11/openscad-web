@@ -249,3 +249,17 @@ jobs:
         with:
           name: perf-baseline-candidate
           path: coverage/perf/
+
+  ci:
+    runs-on: ubuntu-24.04
+    needs: [build-and-test, publish-artifact, e2e, publish-e2e, performance]
+    if: always()
+    steps:
+      - name: All CI checks passed
+        run: |
+          results='${{ toJSON(needs) }}'
+          if echo "$results" | grep -q '"result": "failure"\|"result": "cancelled"'; then
+            echo "One or more required jobs failed or were cancelled."
+            exit 1
+          fi
+          echo "All required jobs succeeded."
