@@ -18,11 +18,7 @@
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "allowImportingTsExtensions": true,
-    "declaration": true,
-    "baseUrl": "src",
-    "paths": {
-      "*": ["*"]
-    }
+    "declaration": true
   },
   "include": ["src/**/*.ts", "src/**/*.js"],
   "exclude": ["node_modules", "src/wasm/*.js", "src/runner/openscad-worker.ts"]
