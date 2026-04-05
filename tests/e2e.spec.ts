@@ -109,15 +109,17 @@ async function getEmbedMessages(page: Page) {
 }
 
 async function waitForEmbedMessage(page: Page, type: string, timeout = renderTimeoutMs): Promise<void> {
-  await page.waitForFunction(
-    (expectedType) => {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const found = await page.evaluate((expectedType) => {
       const messages = (window as Window & { __embedMessages?: Array<{ data?: { type?: string } }> })
         .__embedMessages;
       return Boolean(messages?.some((message) => message?.data?.type === expectedType));
-    },
-    type,
-    { timeout },
-  );
+    }, type);
+    if (found) return;
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`Timeout ${timeout}ms waiting for embed message of type '${type}'`);
 }
 
 async function waitForEmbedMessageCount(
@@ -126,17 +128,20 @@ async function waitForEmbedMessageCount(
   count: number,
   timeout = renderTimeoutMs,
 ): Promise<void> {
-  await page.waitForFunction(
-    ([expectedType, expectedCount]) => {
-      const messages = (window as Window & { __embedMessages?: Array<{ data?: { type?: string } }> })
-        .__embedMessages;
-      const actualCount =
-        messages?.filter((message) => message?.data?.type === expectedType).length ?? 0;
-      return actualCount >= expectedCount;
-    },
-    [type, count],
-    { timeout },
-  );
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    const actualCount = await page.evaluate(
+      ([expectedType, expectedCount]) => {
+        const messages = (window as Window & { __embedMessages?: Array<{ data?: { type?: string } }> })
+          .__embedMessages;
+        return messages?.filter((message) => message?.data?.type === (expectedType as string)).length ?? 0;
+      },
+      [type, count] as [string, number],
+    );
+    if (actualCount >= count) return;
+    await page.waitForTimeout(100);
+  }
+  throw new Error(`Timeout ${timeout}ms waiting for ${count}x embed message(s) of type '${type}'`);
 }
 
 async function getAppShellState(page: Page) {
@@ -277,13 +282,15 @@ async function waitForViewer(page: Page): Promise<void> {
 }
 
 async function waitForEmbedViewer(frame: Frame): Promise<void> {
+  // Playwright locators pierce shadow DOM; waitForSelector does as well.
   await frame.waitForSelector('[data-testid="viewer-canvas"] canvas', { timeout: renderTimeoutMs });
   await frame.waitForFunction(
     () => {
-      const container = document.querySelector(
-        '[data-testid="viewer-canvas"]',
-      ) as HTMLElement | null;
-      return Boolean(container && container.dataset.geometryLoaded === 'true');
+      // osc-embed-shell uses shadow DOM; reach through it to find the viewer container.
+      const shell = document.querySelector('osc-embed-shell');
+      const root = shell?.shadowRoot ?? shell;
+      const container = root?.querySelector('[data-testid="viewer-canvas"]') as HTMLElement | null;
+      return Boolean(container?.dataset.geometryLoaded === 'true');
     },
     null,
     { timeout: renderTimeoutMs },
@@ -649,6 +656,7 @@ test.describe('embed mode', () => {
     const frame = await getEmbedFrame(page);
 
     await waitForEmbedViewer(frame);
+
     await waitForEmbedMessage(page, 'ready');
     await waitForEmbedMessage(page, 'renderComplete');
 
@@ -670,6 +678,8 @@ test.describe('embed mode', () => {
     expect(allMessages.filter((m) => m.data?.type === 'renderComplete')).toHaveLength(2);
   });
 });
+
+test.describe('conformance — geometry primitives', () => {
   test('cube(10) produces a PolySet', async ({ page }) => {
     await loadSrc(page, 'cube(10);');
     await waitForViewer(page);

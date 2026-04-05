@@ -83,6 +83,9 @@ export class OscEmbedShell extends LitElement {
   @state() private _loadError: string | null = null;
   private _model!: Model;
   private _readyNotified = false;
+  private _lastSentParamSet: object | null = null;
+  private _lastSentRenderURL: string | null = null;
+  private _lastSentVars: Record<string, unknown> | null | undefined = undefined;
   private _targetOrigin() {
     return this.urlParams?.parentOrigin ?? '*';
   }
@@ -100,32 +103,31 @@ export class OscEmbedShell extends LitElement {
     if (!st.output && !st.parameterSet && !st.error) return;
 
     this._readyNotified = true;
+    this._lastSentVars = st.params.vars;
     this._notifyHost('ready', {
       vars: getVarsSnapshot(st),
       ...(st.parameterSet ? { parameterSet: st.parameterSet } : {}),
     });
   }
   private _onState = (e: Event) => {
-    const prev = this._st;
     const st = (e as CustomEvent<State>).detail;
     this._st = st;
 
     this._maybeNotifyReady(st);
 
-    if (
-      this._readyNotified &&
-      prev != null &&
-      prev.params.vars !== st.params.vars
-    ) {
+    if (this._readyNotified && st.params.vars !== this._lastSentVars) {
+      this._lastSentVars = st.params.vars;
       this._notifyHost('varsChanged', { vars: getVarsSnapshot(st) });
     }
 
-    if (this._readyNotified && st.parameterSet && prev?.parameterSet !== st.parameterSet) {
+    if (this._readyNotified && st.parameterSet && st.parameterSet !== this._lastSentParamSet) {
+      this._lastSentParamSet = st.parameterSet;
       this._notifyHost('parameterSetLoaded', { parameterSet: st.parameterSet });
     }
 
     if (st.output && !st.rendering && !st.previewing) {
-      if (!prev?.output || prev.output.outFileURL !== st.output.outFileURL) {
+      if (st.output.outFileURL !== this._lastSentRenderURL) {
+        this._lastSentRenderURL = st.output.outFileURL;
         this._notifyHost('renderComplete', { outFileURL: st.output.outFileURL });
       }
     }
