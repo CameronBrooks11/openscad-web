@@ -17,8 +17,7 @@
     "noEmit": true,
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
-    "allowImportingTsExtensions": true,
-    "declaration": true
+    "allowImportingTsExtensions": true
   },
   "include": ["src/**/*.ts", "src/**/*.js"],
   "exclude": ["node_modules", "src/wasm/*.js", "src/runner/openscad-worker.ts"]
