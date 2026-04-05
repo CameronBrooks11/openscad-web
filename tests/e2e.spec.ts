@@ -143,7 +143,7 @@ async function waitForEmbedMessageCount(
   const deadline = Date.now() + timeout;
   while (Date.now() < deadline) {
     const actualCount = await page.evaluate(
-      ([expectedType, expectedCount]) => {
+      ([expectedType, _expectedCount]) => {
         const messages = (
           window as Window & { __embedMessages?: Array<{ data?: { type?: string } }> }
         ).__embedMessages;
