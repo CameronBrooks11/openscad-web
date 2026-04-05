@@ -61,6 +61,45 @@ jobs:
         env:
           PUBLIC_URL: /openscad-web/
 
+  publish-artifact:
+    runs-on: ubuntu-24.04
+    env:
+      CI: 'true'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Assembly tests
+        run: npm run test:assembly
+
+      - name: Cache build libs
+        id: cache-libs
+        uses: actions/cache@v4
+        with:
+          path: |
+            libs/
+            src/wasm/
+            public/libraries/
+          key: v2-libs-${{ hashFiles('libs-config.json') }}
+
+      - name: Build libs (WASM + fonts)
+        if: steps.cache-libs.outputs.cache-hit != 'true'
+        run: npm run build:libs
+
+      - name: Build publish artifact
+        run: npm run build:publish
+
+      - name: Verify publish archive
+        run: npm run verify:publish-archive
+
   e2e:
     runs-on: ubuntu-24.04
     needs: build-and-test
