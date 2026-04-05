@@ -37,8 +37,7 @@ describe('resolveDefaultRuntimeBaseUrl', () => {
     expect(
       resolveDefaultRuntimeBaseUrl('./', {
         documentBaseURI: null,
-        workerHref:
-          'https://example.com/openscad-web/assets/openscad-worker-D3It6O_Y.js',
+        workerHref: 'https://example.com/openscad-web/assets/openscad-worker-D3It6O_Y.js',
       }),
     ).toBe('https://example.com/openscad-web/');
   });

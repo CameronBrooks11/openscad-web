@@ -24,13 +24,12 @@ export function resolveDefaultRuntimeBaseUrl(
     runtimeOrigin = typeof self === 'object' && 'location' in self && self.location?.origin
       ? self.location.origin
       : null,
-    workerHref =
-      typeof document !== 'object' &&
-      typeof self === 'object' &&
-      'location' in self &&
-      (self as { location?: { href?: string } }).location?.href
-        ? (self as { location?: { href?: string } }).location!.href!
-        : null,
+    workerHref = typeof document !== 'object' &&
+    typeof self === 'object' &&
+    'location' in self &&
+    (self as { location?: { href?: string } }).location?.href
+      ? (self as { location?: { href?: string } }).location!.href!
+      : null,
   }: {
     documentBaseURI?: string | null;
     runtimeOrigin?: string | null;
