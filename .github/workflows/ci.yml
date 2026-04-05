@@ -147,6 +147,53 @@ jobs:
             test-results/
           if-no-files-found: ignore
 
+  publish-e2e:
+    runs-on: ubuntu-24.04
+    needs: publish-artifact
+    env:
+      CI: 'true'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Cache build libs
+        id: cache-libs
+        uses: actions/cache@v4
+        with:
+          path: |
+            libs/
+            src/wasm/
+            public/libraries/
+          key: v2-libs-${{ hashFiles('libs-config.json') }}
+
+      - name: Build libs (WASM + fonts)
+        if: steps.cache-libs.outputs.cache-hit != 'true'
+        run: npm run build:libs
+
+      - name: Browser E2E (publish artifact)
+        run: npm run test:e2e:publish
+
+      - name: Upload publish Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-artifacts-publish
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+
   performance:
     runs-on: ubuntu-24.04
     needs: [build-and-test, e2e]
