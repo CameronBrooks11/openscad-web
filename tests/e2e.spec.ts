@@ -12,7 +12,14 @@ type LoggedMessage = {
 
 const isProductionServer = process.env.E2E_SERVER_MODE !== 'dev';
 const appOrigin = isProductionServer ? 'http://localhost:3000' : 'http://localhost:4000';
-const appBasePath = isProductionServer ? '/dist/' : '/';
+const appBasePath =
+  process.env.E2E_SERVER_MODE === 'publish-root'
+    ? '/'
+    : process.env.E2E_SERVER_MODE === 'publish-subpath'
+      ? '/openscad-web/'
+      : isProductionServer
+        ? '/dist/'
+        : '/';
 const appBaseUrl = new URL(appBasePath, appOrigin).toString();
 const renderTimeoutMs = 60_000;
 const pageMessages = new WeakMap<Page, LoggedMessage[]>();
@@ -290,6 +297,26 @@ async function waitForViewer(page: Page): Promise<void> {
   await waitForRenderState(page);
 }
 
+async function waitForCustomizerShell(page: Page): Promise<void> {
+  await page.waitForSelector('osc-customizer-shell', { timeout: renderTimeoutMs });
+  await page.waitForFunction(
+    () => {
+      const shell = document.querySelector('osc-customizer-shell') as
+        | (Element & { _st?: unknown })
+        | null;
+      const state =
+        shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
+      const output =
+        state && typeof state === 'object' && 'output' in state
+          ? (state.output as Record<string, unknown> | undefined)
+          : undefined;
+      return Boolean(state && !state.rendering && !state.previewing && output);
+    },
+    null,
+    { timeout: renderTimeoutMs },
+  );
+}
+
 async function waitForEmbedViewer(frame: Frame): Promise<void> {
   // Playwright locators pierce shadow DOM; waitForSelector does as well.
   await frame.waitForSelector('[data-testid="viewer-canvas"] canvas', { timeout: renderTimeoutMs });
@@ -499,6 +526,30 @@ test.describe('e2e', () => {
 
     expect(parameter).not.toBeNull();
     expect(parameter?.initial).toBe(10);
+  });
+});
+
+test.describe('boot config', () => {
+  test('can select a default surface, model, and title before URL params are applied', async ({
+    page,
+  }) => {
+    await page.route('**/openscad-web.config.json', async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          mode: 'customizer',
+          model: './test-fixture.scad',
+          title: 'Configured Fixture',
+        }),
+      });
+    });
+
+    await page.goto(appBaseUrl);
+    await waitForCustomizerShell(page);
+
+    await expect(page).toHaveTitle('Configured Fixture');
+    await expect(page.locator('osc-customizer-shell')).toHaveCount(1);
   });
 });
 

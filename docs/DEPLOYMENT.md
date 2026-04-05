@@ -1,13 +1,16 @@
 # Deployment
 
-OpenSCAD Web deploys as a static `dist/` directory produced by Vite plus a post-build Workbox service worker step.
+OpenSCAD Web now has two deployment artifacts:
+
+- `dist/` for this repo's own fixed-base deployment
+- `dist-publish/` / `openscad-web-publish.zip` for relocatable consumer publishing
 
 Security headers, CSP guidance, and external-source loading assumptions are documented in [docs/SECURITY.md](./SECURITY.md).
 For iframe embed deployments and the `postMessage` API contract, see [docs/EMBED.md](./EMBED.md).
 
 ## Deployment Model
 
-The shipped output includes:
+The fixed-base repo deployment includes:
 
 - `dist/index.html`
 - hashed app, worker, and wasm assets under `dist/assets/`
@@ -15,6 +18,21 @@ The shipped output includes:
 - `dist/sw.js` and Workbox runtime files
 
 The app expects to be served from a specific base path. That base path is controlled at build time through `PUBLIC_URL`, and the repo default is also reflected in `package.json#homepage`.
+
+## Publish Artifact
+
+The consumer-facing publish artifact is built separately:
+
+- `dist-publish/`
+- `openscad-web-publish.zip`
+
+This artifact is relocatable by construction:
+
+- Vite builds it with `base: './'`
+- runtime asset resolution derives from `document.baseURI`
+- no post-build `<base href>` rewrite step is required
+
+The publish artifact intentionally does **not** include a service worker in v1.
 
 ## Build Commands
 
@@ -29,6 +47,12 @@ Build the app for the current default deployment root:
 
 ```bash
 npm run build
+```
+
+Build the relocatable publish artifact:
+
+```bash
+npm run build:publish
 ```
 
 Build everything in one shot:
@@ -52,6 +76,8 @@ PUBLIC_URL=/ npm run build
 ```
 
 The build output must be served from the same path it was built for. If `PUBLIC_URL` and the actual hosting path do not match, runtime asset URLs, worker URLs, and service worker scope will be wrong.
+
+The publish artifact is different: it can be mounted at `/` or a subpath like `/model/` without rebuilding because it resolves runtime assets relative to the served page URL.
 
 ## Local Production Smoke Test
 
@@ -96,6 +122,8 @@ Current behavior:
 
 This means deployment behavior is sensitive to the final `dist/` contents, not just the app JS bundle.
 
+The relocatable publish artifact skips the service worker step entirely.
+
 ## Hosting Requirements
 
 Your static host should:
@@ -113,6 +141,13 @@ Before shipping a deployment change, run:
 ```bash
 npm run verify
 npm run test:e2e
+```
+
+Before shipping a publish-artifact change, run:
+
+```bash
+npm run build:publish
+npm run test:e2e:publish
 ```
 
 If you changed dev/prod server behavior or are debugging a local issue:
@@ -134,6 +169,8 @@ Then confirm there are no 404s for:
 - wasm
 - `sw.js`
 - packaged library ZIPs
+
+For publish-artifact validation, confirm both root-mount and subpath-mount smoke runs succeed and that there is no `sw.js` in `dist-publish/` or `openscad-web-publish.zip`.
 
 ## Common Failure Modes
 

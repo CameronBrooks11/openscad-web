@@ -19,7 +19,10 @@ import {
 import { fetchSource } from '../utils.ts';
 
 declare const self: DedicatedWorkerGlobalScope;
-const appBaseUrl = new URL(import.meta.env.BASE_URL, self.location.origin).href;
+// The worker bundle always lives under <mount>/assets/, so one parent hop from
+// import.meta.url recovers the app mount regardless of whether the build is
+// fixed-base (/openscad-web/) or relocatable (./).
+const appBaseUrl = new URL('../', import.meta.url).href;
 
 // WASM initializes exactly once per worker lifetime (R4)
 let currentJobId: string | null = null;

@@ -24,11 +24,13 @@
   "scripts": {
     "test:e2e": "playwright test",
     "test:e2e:dev": "cross-env E2E_SERVER_MODE=dev NODE_ENV=development playwright test",
+    "test:e2e:publish": "node ./scripts/run-publish-e2e.mjs",
     "test:unit": "vitest run",
     "start:development": "cross-env NODE_ENV=development vite",
     "start:production": "cross-env PUBLIC_URL=/dist/ npm run build && serve -l 3000 .",
     "start": "npm run start:development",
     "build": "cross-env NODE_ENV=production vite build && node ./scripts/build-sw.mjs && node ./scripts/verify-production-build.mjs",
+    "build:publish": "node ./scripts/build-publish.mjs",
     "build:libs": "cross-env LIBS_BUILD_MODE=all node ./scripts/build-assets/cli.mjs",
     "build:libs:clean": "cross-env LIBS_BUILD_MODE=clean node ./scripts/build-assets/cli.mjs",
     "build:libs:wasm": "cross-env LIBS_BUILD_MODE=wasm node ./scripts/build-assets/cli.mjs",
@@ -47,6 +49,7 @@
     "perf:accept": "node scripts/perf/accept-baseline.mjs",
     "perf:accept:local": "node scripts/perf/accept-baseline.mjs --baseline perf-baseline.local.json",
     "perf:ci": "npm run perf:capture:series && npm run perf:compare",
+    "verify:publish-archive": "node ./scripts/verify-publish-archive.mjs",
     "verify": "npm run lint && npm run typecheck && npm run test:unit && npm run build"
   },
   "browserslist": {

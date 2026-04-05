@@ -1,8 +1,21 @@
 import { defineConfig } from '@playwright/test';
 
-const serverMode = process.env.E2E_SERVER_MODE === 'dev' ? 'dev' : 'prod';
-const isProductionServer = serverMode === 'prod';
-const appUrl = isProductionServer ? 'http://localhost:3000/dist/' : 'http://localhost:4000/';
+const serverMode = process.env.E2E_SERVER_MODE ?? 'prod';
+const isDevelopmentServer = serverMode === 'dev';
+const isPublishRootServer = serverMode === 'publish-root';
+const isPublishSubpathServer = serverMode === 'publish-subpath';
+const appUrl = isDevelopmentServer
+  ? 'http://localhost:4000/'
+  : isPublishRootServer
+    ? 'http://localhost:3000/'
+    : isPublishSubpathServer
+      ? 'http://localhost:3000/openscad-web/'
+      : 'http://localhost:3000/dist/';
+const webServerCommand = isDevelopmentServer
+  ? 'npm run start:development'
+  : isPublishRootServer || isPublishSubpathServer
+    ? 'node ./scripts/serve-publish-e2e.mjs'
+    : 'npm run start:production';
 
 export default defineConfig({
   testDir: './tests',
@@ -23,9 +36,10 @@ export default defineConfig({
     },
   },
   webServer: {
-    command: isProductionServer ? 'npm run start:production' : 'npm run start:development',
+    command: webServerCommand,
     url: appUrl,
     timeout: 180_000,
-    reuseExistingServer: process.env.CI !== 'true',
+    reuseExistingServer:
+      process.env.CI !== 'true' && !isPublishRootServer && !isPublishSubpathServer,
   },
 });

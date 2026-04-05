@@ -3,7 +3,10 @@ node_modules/
 
 # Build outputs
 dist/
+dist-publish/
 libs/
+openscad-web-publish.zip
+.publish-e2e/
 
 # OpenSCAD WASM artifacts (built from openscad-wasm repo)
 public/openscad.js

@@ -7,6 +7,7 @@ import {
   shouldPreloadEditorLibraries,
 } from './fs/library-delivery.ts';
 import { ensureBrowserFSLoaded, getBrowserFS } from './runtime/browserfs-runtime.ts';
+import { loadBootConfig, mergeConfigIntoSearch } from './runtime/boot-config.ts';
 import { isProductionBuild } from './runtime/build-env.ts';
 import { registerAppServiceWorker } from './runtime/service-worker.ts';
 import { readStateFromFragment, writeStateInFragment } from './state/fragment-state.ts';
@@ -45,7 +46,12 @@ injectBootstrapPrefetchHints(
 
 window.addEventListener('load', async () => {
   const rootEl = document.getElementById('root')!;
-  const urlModeResult = parseUrlMode(window.location.search);
+  const bootConfig = await loadBootConfig();
+  if (typeof bootConfig.title === 'string' && bootConfig.title.trim() !== '') {
+    document.title = bootConfig.title;
+  }
+
+  const urlModeResult = parseUrlMode(mergeConfigIntoSearch(window.location.search, bootConfig));
 
   if ('error' in urlModeResult) {
     markPerf('osc:app-bootstrap-error');

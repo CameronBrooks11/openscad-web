@@ -2,7 +2,11 @@ import { isProductionBuild } from './build-env.ts';
 import { resolveRuntimeAssetUrl } from './asset-urls.ts';
 
 export async function registerAppServiceWorker(): Promise<ServiceWorkerRegistration | null> {
-  if (!isProductionBuild() || !('serviceWorker' in navigator)) {
+  if (
+    !isProductionBuild() ||
+    import.meta.env.BASE_URL === './' ||
+    !('serviceWorker' in navigator)
+  ) {
     return null;
   }
 

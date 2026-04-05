@@ -1,11 +1,22 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-const distAssetsDir = path.resolve('dist/assets');
 const forbiddenMarkers = [
   'Logging is enabled!',
   'Lit is in dev mode. Not recommended for production!',
 ];
+
+function getAssetsDirPath() {
+  const dirFlagIndex = process.argv.indexOf('--dir');
+  const buildDirPath =
+    dirFlagIndex === -1 ? path.resolve('dist') : path.resolve(process.argv[dirFlagIndex + 1] ?? '');
+
+  if (dirFlagIndex !== -1 && !process.argv[dirFlagIndex + 1]) {
+    throw new Error('Missing path after --dir');
+  }
+
+  return path.join(buildDirPath, 'assets');
+}
 
 async function listJavaScriptAssets(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -15,6 +26,7 @@ async function listJavaScriptAssets(directory) {
 }
 
 async function main() {
+  const distAssetsDir = getAssetsDirPath();
   const assetFiles = await listJavaScriptAssets(distAssetsDir);
   if (assetFiles.length === 0) {
     throw new Error(`No JavaScript assets found under ${distAssetsDir}`);
