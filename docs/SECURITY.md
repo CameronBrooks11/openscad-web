@@ -121,4 +121,9 @@ Recommended audit command before release work:
 npm audit --omit=dev
 ```
 
+The repo automation also includes:
+
+- a pull-request dependency review workflow for dependency diffs
+- a scheduled/manual production dependency audit workflow that runs `npm audit --omit=dev`
+
 Dependency notices and bundled third-party attributions are maintained in `LICENSE.md`.

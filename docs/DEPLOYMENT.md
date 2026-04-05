@@ -136,14 +136,13 @@ Your static host should:
 
 ## Validation Checklist
 
-Before shipping a deployment change, run:
+Before shipping a deployment or hosted-path change, prefer:
 
 ```bash
-npm run verify
-npm run test:e2e
+npm run verify:full
 ```
 
-Before shipping a publish-artifact change, run:
+If you are iterating specifically on the publish artifact path, the narrower publish-only checks are:
 
 ```bash
 npm run build:publish
