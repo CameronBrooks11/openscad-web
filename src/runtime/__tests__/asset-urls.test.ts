@@ -32,4 +32,23 @@ describe('resolveDefaultRuntimeBaseUrl', () => {
       }),
     ).toBe('https://example.com/openscad-web/');
   });
+
+  it('uses worker self.location.href to recover mount root for relocatable builds in worker context', () => {
+    expect(
+      resolveDefaultRuntimeBaseUrl('./', {
+        documentBaseURI: null,
+        workerHref:
+          'https://example.com/openscad-web/assets/openscad-worker-D3It6O_Y.js',
+      }),
+    ).toBe('https://example.com/openscad-web/');
+  });
+
+  it('uses worker self.location.href at root mount for relocatable builds in worker context', () => {
+    expect(
+      resolveDefaultRuntimeBaseUrl('./', {
+        documentBaseURI: null,
+        workerHref: 'https://example.com/assets/openscad-worker-D3It6O_Y.js',
+      }),
+    ).toBe('https://example.com/');
+  });
 });

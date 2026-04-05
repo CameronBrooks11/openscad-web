@@ -437,6 +437,8 @@ test.afterEach(async ({ page }, testInfo) => {
     if (message.type !== 'error' && message.type !== 'pageerror') return false;
     if (message.text.includes('net::ERR_CONTENT_LENGTH_MISMATCH')) return false;
     if (message.text.includes('net::ERR_INCOMPLETE_CHUNKED_ENCODING')) return false;
+    // openscad-web.config.json is an optional boot config file; a 404 is expected when not present
+    if (message.location?.url?.includes('openscad-web.config.json')) return false;
     return true;
   });
 

@@ -10,6 +10,7 @@ function runCommand(command, args, envOverrides = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
       stdio: 'inherit',
+      shell: process.platform === 'win32',
       env: {
         ...process.env,
         ...envOverrides,

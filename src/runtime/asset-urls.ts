@@ -24,16 +24,29 @@ export function resolveDefaultRuntimeBaseUrl(
     runtimeOrigin = typeof self === 'object' && 'location' in self && self.location?.origin
       ? self.location.origin
       : null,
+    workerHref =
+      typeof document !== 'object' &&
+      typeof self === 'object' &&
+      'location' in self &&
+      (self as { location?: { href?: string } }).location?.href
+        ? (self as { location?: { href?: string } }).location!.href!
+        : null,
   }: {
     documentBaseURI?: string | null;
     runtimeOrigin?: string | null;
+    workerHref?: string | null;
   } = {},
 ): string {
   if (baseUrl === './') {
-    if (!documentBaseURI) {
-      throw new Error('Unable to determine document.baseURI for relocatable asset resolution.');
+    if (documentBaseURI) {
+      return documentBaseURI;
     }
-    return documentBaseURI;
+    if (workerHref) {
+      // Worker context: the worker script lives at <mount>/assets/worker-HASH.js.
+      // Navigate up one level to recover the app mount root.
+      return new URL('../', workerHref).toString();
+    }
+    throw new Error('Unable to determine document.baseURI for relocatable asset resolution.');
   }
 
   return new URL(
