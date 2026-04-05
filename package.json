@@ -25,6 +25,7 @@
     "test:e2e": "playwright test",
     "test:e2e:dev": "cross-env E2E_SERVER_MODE=dev NODE_ENV=development playwright test",
     "test:e2e:publish": "node ./scripts/run-publish-e2e.mjs",
+    "test:e2e:publish:skip-build": "cross-env E2E_PUBLISH_SKIP_BUILD=true node ./scripts/run-publish-e2e.mjs",
     "test:assembly": "vitest run scripts/__tests__",
     "test:unit": "vitest run",
     "start:development": "cross-env NODE_ENV=development vite",
@@ -51,7 +52,8 @@
     "perf:accept:local": "node scripts/perf/accept-baseline.mjs --baseline perf-baseline.local.json",
     "perf:ci": "npm run perf:capture:series && npm run perf:compare",
     "verify:publish-archive": "node ./scripts/verify-publish-archive.mjs",
-    "verify": "npm run lint && npm run typecheck && npm run test:unit && npm run build"
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit && npm run test:assembly && npm run build && npm run build:publish && npm run verify:publish-archive",
+    "verify:full": "npm run verify && npm run test:e2e && npm run test:e2e:publish:skip-build"
   },
   "browserslist": {
     "production": [
