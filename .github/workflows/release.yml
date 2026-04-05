@@ -1,0 +1,83 @@
+name: Release Publish Artifact
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      CI: 'true'
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Restore build-libs cache
+        id: cache-libs
+        uses: actions/cache@v4
+        with:
+          path: |
+            libs/
+            src/wasm/
+            public/libraries/
+          key: v2-libs-${{ hashFiles('libs-config.json') }}
+
+      - name: Build libs
+        if: steps.cache-libs.outputs.cache-hit != 'true'
+        run: npm run build:libs
+
+      - name: Build publish artifact
+        run: npm run build:publish
+
+      - name: Browser E2E (publish artifact)
+        run: npm run test:e2e:publish
+        env:
+          CI: 'true'
+          E2E_PUBLISH_SKIP_BUILD: 'true'
+
+      - name: Verify publish archive structure
+        run: npm run verify:publish-archive
+
+      - name: Upload Playwright artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-artifacts-release
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: openscad-web-publish.zip
+          generate_release_notes: true
+          draft: false
+
+      - name: Move v0 tag
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          major_tag="v${version%%.*}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -f "${major_tag}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${major_tag}" --force
