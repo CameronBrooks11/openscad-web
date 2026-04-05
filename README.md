@@ -57,10 +57,17 @@ npm run start
 # http://localhost:4000/
 ```
 
-Run the canonical verification path:
+Run the broad local verification path:
 
 ```bash
 npm run verify
+```
+
+Run the full verification path, including browser checks for both the hosted app and the publish artifact:
+
+```bash
+npx playwright install chromium
+npm run verify:full
 ```
 
 Run a local production-style build and serve it from `/dist/`:
@@ -71,6 +78,12 @@ npm run start:production
 ```
 
 ## Testing
+
+Assembly and deploy-tooling tests:
+
+```bash
+npm run test:assembly
+```
 
 Unit tests:
 
@@ -90,6 +103,13 @@ Browser E2E against the Vite dev server:
 ```bash
 npx playwright install chromium
 npm run test:e2e:dev
+```
+
+Browser E2E against the publish artifact:
+
+```bash
+npx playwright install chromium
+npm run test:e2e:publish
 ```
 
 ## Build and Deploy

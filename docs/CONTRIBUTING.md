@@ -34,10 +34,17 @@ The default local dev URL is `http://localhost:4000/`.
 
 ## Common Commands
 
-Core verification:
+Broad local verification:
 
 ```bash
 npm run verify
+```
+
+Full local verification, including browser checks for both shipped surfaces:
+
+```bash
+npx playwright install chromium
+npm run verify:full
 ```
 
 Focused checks:
@@ -46,9 +53,11 @@ Focused checks:
 npm run lint
 npm run format:check
 npm run typecheck
+npm run test:assembly
 npm run test:unit
 npm run test:e2e
 npm run test:e2e:dev
+npm run test:e2e:publish
 ```
 
 Generated asset pipeline:
@@ -73,13 +82,14 @@ npm run start:production
 2. prepare generated assets with `npm run build:libs`
 3. make the code change
 4. run the smallest relevant verification locally while iterating
-5. run `npm run verify` before shipping broad changes
-6. run Playwright for user-facing runtime changes
+5. run `npm run verify` before shipping broad non-browser changes
+6. run `npm run verify:full` for user-facing, publish-path, or CI-sensitive changes
 
-For changes that affect startup, rendering, library delivery, or worker behavior, also run:
+If you are not running `npm run verify:full`, then for changes that affect startup, rendering, library delivery, worker behavior, or the publish artifact path, also run the relevant browser checks explicitly:
 
 ```bash
 npm run test:e2e
+npm run test:e2e:publish
 ```
 
 For debugging a browser failure against the Vite dev server, use:
@@ -95,9 +105,13 @@ The main CI workflow currently enforces:
 - lint
 - format check
 - unit tests
+- assembly tests
 - typecheck
 - production build
+- publish-artifact build
+- publish-archive verification
 - production-path Playwright E2E
+- publish-artifact Playwright E2E
 - performance comparison against the committed baseline
 
 If your change affects shipped assets, build behavior, worker loading, service worker behavior, or URL/base-path handling, assume CI will exercise it.

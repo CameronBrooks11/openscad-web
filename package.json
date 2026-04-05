@@ -39,7 +39,7 @@
     "build:libs:fonts": "cross-env LIBS_BUILD_MODE=fonts node ./scripts/build-assets/cli.mjs",
     "build:libs:libraries": "cross-env LIBS_BUILD_MODE=libs node ./scripts/build-assets/cli.mjs",
     "build:all": "npm run build:libs && npm run build",
-    "lint": "eslint src/",
+    "lint": "eslint .",
     "typecheck": "npx tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
