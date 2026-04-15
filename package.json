@@ -15,10 +15,10 @@
     "debug": "^4.4.0",
     "jszip": "^3.10.1",
     "lit": "^3.3.2",
-    "monaco-editor": "^0.52.2",
+    "monaco-editor": "^0.55.1",
     "three": "^0.183.2",
     "thumbhash": "^0.1.1",
-    "uuid": "^11.0.3",
+    "uuid": "^13.0.0",
     "uzip": "^0.20201231.0"
   },
   "scripts": {
