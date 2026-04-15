@@ -30,14 +30,16 @@ CI runs three captures on the same runner, aggregates them with per-metric media
 
 CI fails only on headline user-facing metrics:
 
-- `metrics.firstContentfulPaintMillis`
 - `metrics.appBootstrapMillis`
 - `metrics.firstCompileFromBootstrapMillis`
-- `warmMetrics.firstContentfulPaintMillis`
 - `warmMetrics.appBootstrapMillis`
 - `warmMetrics.firstCompileFromBootstrapMillis`
 
-Lower-level submetrics are still compared and reported, but they are diagnostic-only and do not fail CI.
+`firstContentfulPaintMillis` (cold and warm) is measured and reported but not
+CI-gating. In headless CI mode it resolves at 60–80ms where a 20% budget
+(~12–16ms) is smaller than normal runner scheduler jitter, causing chronic
+false failures. Meaningful FCP regressions are indirectly covered by the
+bootstrap and compile metrics above.
 
 3. For local relative checks, compare against your ignored local baseline:
 
