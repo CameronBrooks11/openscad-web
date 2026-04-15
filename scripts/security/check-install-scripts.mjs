@@ -6,7 +6,12 @@ const currentFilePath = fileURLToPath(import.meta.url);
 const scriptsSecurityDir = path.dirname(currentFilePath);
 const repoRootDir = path.resolve(scriptsSecurityDir, '..', '..');
 const lockfilePath = path.join(repoRootDir, 'package-lock.json');
-const allowlistPath = path.join(repoRootDir, 'scripts', 'security', 'install-script-allowlist.json');
+const allowlistPath = path.join(
+  repoRootDir,
+  'scripts',
+  'security',
+  'install-script-allowlist.json',
+);
 
 function extractPackageName(lockPackagePath) {
   if (!lockPackagePath.includes('node_modules/')) {
@@ -30,7 +35,10 @@ async function readJson(filePath) {
 }
 
 async function main() {
-  const [lockfileJson, allowlistJson] = await Promise.all([readJson(lockfilePath), readJson(allowlistPath)]);
+  const [lockfileJson, allowlistJson] = await Promise.all([
+    readJson(lockfilePath),
+    readJson(allowlistPath),
+  ]);
   const lockfilePackages = lockfileJson.packages;
 
   if (!lockfilePackages || typeof lockfilePackages !== 'object') {
@@ -66,7 +74,9 @@ async function main() {
   }
 
   const observedPackageNames = [...observedByPackageName.keys()].sort();
-  const unexpectedPackages = observedPackageNames.filter((packageName) => !allowedPackageNames.has(packageName));
+  const unexpectedPackages = observedPackageNames.filter(
+    (packageName) => !allowedPackageNames.has(packageName),
+  );
   const staleAllowlistEntries = [...allowedPackageNames].filter(
     (packageName) => !observedByPackageName.has(packageName),
   );
@@ -91,12 +101,16 @@ async function main() {
       }
     }
 
-    console.error('\nReview dependency changes and update scripts/security/install-script-allowlist.json.');
+    console.error(
+      '\nReview dependency changes and update scripts/security/install-script-allowlist.json.',
+    );
     process.exit(1);
   }
 
   const summary = observedPackageNames.join(', ');
-  console.log(`Dependency install-script policy check passed: ${summary || 'no install-script packages'}`);
+  console.log(
+    `Dependency install-script policy check passed: ${summary || 'no install-script packages'}`,
+  );
 }
 
 await main();
