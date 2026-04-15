@@ -125,5 +125,6 @@ The repo automation also includes:
 
 - a pull-request dependency review workflow for dependency diffs
 - a scheduled/manual production dependency audit workflow that runs `npm audit --omit=dev`
+- a lockfile install-script allowlist check (`npm run security:check-install-scripts`) that fails CI when new install-script dependencies appear without an explicit allowlist update
 
 Dependency notices and bundled third-party attributions are maintained in `LICENSE.md`.

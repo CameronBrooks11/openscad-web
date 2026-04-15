@@ -29,6 +29,7 @@ jobs:
         with:
           node-version: ${{ matrix.node.version }}
       - run: npm ci
+      - run: npm run security:check-install-scripts
 
       - name: Install Playwright Chromium
         if: matrix.node.name == 'supported'

@@ -1,0 +1,6 @@
+{
+  "allowedPackages": {
+    "fsevents": "Optional macOS file watcher dependency.",
+    "puppeteer": "Downloads Chromium binaries used by browser-based test tooling."
+  }
+}
