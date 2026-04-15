@@ -17,7 +17,12 @@
     "noEmit": true,
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
-    "allowImportingTsExtensions": true
+    "allowImportingTsExtensions": true,
+    "paths": {
+      "monaco-editor/esm/vs/editor/editor.api": [
+        "./node_modules/monaco-editor/esm/vs/editor/editor.api"
+      ]
+    }
   },
   "include": ["src/**/*.ts", "src/**/*.js"],
   "exclude": ["node_modules", "src/wasm/*.js", "src/runner/openscad-worker.ts"]
