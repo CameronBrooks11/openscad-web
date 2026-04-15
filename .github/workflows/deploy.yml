@@ -29,6 +29,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Guard dependency install scripts
+        run: npm run security:check-install-scripts
+
       - name: Restore build-libs cache
         id: cache-libs
         uses: actions/cache@v5

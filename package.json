@@ -51,6 +51,7 @@
     "perf:accept": "node scripts/perf/accept-baseline.mjs",
     "perf:accept:local": "node scripts/perf/accept-baseline.mjs --baseline perf-baseline.local.json",
     "perf:ci": "npm run perf:capture:series && npm run perf:compare",
+    "security:check-install-scripts": "node ./scripts/security/check-install-scripts.mjs",
     "verify:publish-archive": "node ./scripts/verify-publish-archive.mjs",
     "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit && npm run test:assembly && npm run build && npm run build:publish && npm run verify:publish-archive",
     "verify:full": "npm run verify && npm run test:e2e && npm run test:e2e:publish:skip-build"
