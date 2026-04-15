@@ -1,45 +1,46 @@
 {
   "version": 1,
-  "capturedAt": "2026-03-13T18:53:19.547Z",
+  "capturedAt": "2026-04-15T20:45:17.593Z",
   "environment": {
     "mode": "production",
     "browser": "chrome",
     "profile": "local-headless"
   },
   "metrics": {
-    "firstContentfulPaintMillis": 1724.3,
-    "appBootstrapMillis": 640.3,
-    "mainFsInitMillis": 50.8,
-    "librariesPreloadMillis": 91.1,
-    "languageRegisterMillis": 470.5,
-    "editorMountMillis": 287.9,
-    "firstCompileFromBootstrapMillis": 1583.5,
-    "firstCompileRoundtripMillis": 555.6,
-    "workerFsInitMillis": 22.1,
-    "workerLibraryMountMillis": 0,
-    "workerWasmInitMillis": 313.3,
-    "workerJobTotalMillis": 377.1
+    "firstContentfulPaintMillis": 64,
+    "appBootstrapMillis": 270.4,
+    "mainFsInitMillis": 85.2,
+    "librariesPreloadMillis": 113.6,
+    "languageRegisterMillis": 743.2,
+    "editorMountMillis": 81.3,
+    "firstCompileFromBootstrapMillis": 1858.4,
+    "firstCompileRoundtripMillis": 1599.4,
+    "workerFsInitMillis": 72.8,
+    "workerLibraryMountMillis": 0.2,
+    "workerWasmInitMillis": 455.1,
+    "workerJobTotalMillis": 1140.9
   },
   "warmMetrics": {
-    "firstContentfulPaintMillis": 651.9,
-    "appBootstrapMillis": 375.2,
-    "mainFsInitMillis": 41.9,
-    "librariesPreloadMillis": 70,
-    "languageRegisterMillis": 212,
-    "editorMountMillis": 54.5,
-    "firstCompileFromBootstrapMillis": 945.8,
-    "firstCompileRoundtripMillis": 269.4,
-    "workerFsInitMillis": 19.2,
+    "firstContentfulPaintMillis": 60,
+    "appBootstrapMillis": 96.2,
+    "mainFsInitMillis": 41,
+    "librariesPreloadMillis": 48.4,
+    "languageRegisterMillis": 352,
+    "editorMountMillis": 34.2,
+    "firstCompileFromBootstrapMillis": 927,
+    "firstCompileRoundtripMillis": 830.4,
+    "workerFsInitMillis": 35,
     "workerLibraryMountMillis": 0.1,
-    "workerWasmInitMillis": 111.9,
-    "workerJobTotalMillis": 184.2
+    "workerWasmInitMillis": 94.8,
+    "workerJobTotalMillis": 605.1
   },
   "notes": {
-    "coldLoadStartedControlled": false,
-    "coldServiceWorkerControlledAtCapture": true,
-    "coldServiceWorkerBypassed": true,
-    "warmLoadStartedControlled": true,
-    "warmServiceWorkerControlledAtCapture": true,
-    "warmServiceWorkerBypassed": false
+    "aggregation": "median",
+    "sampleCount": 3,
+    "inputs": [
+      "coverage/perf/runs/run-1.json",
+      "coverage/perf/runs/run-2.json",
+      "coverage/perf/runs/run-3.json"
+    ]
   }
 }
