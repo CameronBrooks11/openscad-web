@@ -16,9 +16,9 @@
     "jszip": "^3.10.1",
     "lit": "^3.3.2",
     "monaco-editor": "^0.55.1",
-    "three": "^0.183.2",
+    "three": "^0.184.0",
     "thumbhash": "^0.1.1",
-    "uuid": "^13.0.0",
+    "uuid": "^14.0.0",
     "uzip": "^0.20201231.0"
   },
   "scripts": {
@@ -78,7 +78,7 @@
     "@types/debug": "^4.1.13",
     "@types/filesystem": "^0.0.36",
     "@types/node": "^25.6.0",
-    "@types/three": "^0.183.1",
+    "@types/three": "^0.184.0",
     "@types/uzip": "^0.20201231.2",
     "@types/web": "^0.0.345",
     "@vitest/coverage-v8": "^4.1.4",
