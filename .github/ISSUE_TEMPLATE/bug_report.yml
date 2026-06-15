@@ -1,0 +1,80 @@
+name: Bug report
+description: Report a problem with the OpenSCAD Web app, runtime, or tooling.
+title: '[Bug]: '
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. Please fill in as much
+        of the form below as you can — reproduction steps and environment
+        details make issues much faster to resolve.
+  - type: checkboxes
+    id: preflight
+    attributes:
+      label: Preflight checklist
+      options:
+        - label: I searched existing issues and did not find a duplicate.
+          required: true
+        - label: I can reproduce this on the hosted demo or a current build.
+          required: false
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug, including what you expected to happen instead.
+      placeholder: When I do X, the app does Y. I expected Z.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: The exact steps someone else can follow to see the bug.
+      placeholder: |
+        1. Open the app at ...
+        2. Click ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Which mode?
+      description: Which surface of the app does this affect?
+      options:
+        - Editor (default)
+        - Customizer
+        - Embed
+        - Build / tooling / not applicable
+    validations:
+      required: true
+  - type: input
+    id: url
+    attributes:
+      label: App URL
+      description: The URL where you saw the bug (you can trim any model fragment if it is large).
+      placeholder: https://cameronbrooks11.github.io/openscad-web/
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: Chrome 126, Firefox 127, Safari 17 ...
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11, macOS 14, Ubuntu 24.04, Android 14 ...
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console output / logs
+      description: Relevant errors from the browser devtools console or the in-app logs panel. This is automatically formatted as code.
+      render: shell
+  - type: textarea
+    id: extra
+    attributes:
+      label: Additional context
+      description: Screenshots, a minimal .scad snippet that triggers the bug, or anything else that helps.

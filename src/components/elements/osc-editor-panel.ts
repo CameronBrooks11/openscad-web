@@ -440,6 +440,15 @@ export class OscEditorPanel extends LitElement {
                   <hr />
                   <button
                     role="menuitem"
+                    @click=${async () => {
+                      this._menuOpen = false;
+                      await this._pasteFromClipboard();
+                    }}
+                  >
+                    Paste
+                  </button>
+                  <button
+                    role="menuitem"
                     @click=${() => {
                       this._editor?.trigger(activePath, 'editor.action.selectAll', null);
                       this._menuOpen = false;
@@ -540,6 +549,33 @@ export class OscEditorPanel extends LitElement {
   private _toggleMenu(e: Event) {
     e.stopPropagation();
     this._menuOpen = !this._menuOpen;
+  }
+
+  /**
+   * Insert clipboard text at the current selection via the async Clipboard API.
+   *
+   * Monaco's right-click "Paste" relies on `document.execCommand('paste')`,
+   * which Chrome and Safari no longer support, so it silently does nothing
+   * (see GitHub issue #38). Keyboard Ctrl/Cmd+V still works because the browser
+   * delivers a native paste event. This provides a working paste affordance in
+   * the app's own editor menu without touching Monaco's internal context menu.
+   */
+  private async _pasteFromClipboard() {
+    const editor = this._editor;
+    if (!editor) return;
+    let text: string;
+    try {
+      text = await navigator.clipboard.readText();
+    } catch {
+      // Clipboard read can be blocked (denied permission or insecure context).
+      // Ctrl/Cmd+V remains available as the fallback.
+      return;
+    }
+    if (!text) return;
+    const selection = editor.getSelection();
+    if (!selection) return;
+    editor.executeEdits('clipboard-paste', [{ range: selection, text, forceMoveMarkers: true }]);
+    editor.focus();
   }
 }
 
