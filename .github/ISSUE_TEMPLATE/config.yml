@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: OpenSCAD language documentation
+    url: https://openscad.org/documentation.html
+    about: Questions about the OpenSCAD language itself (not this web app) are best answered here.
+  - name: Project documentation
+    url: https://github.com/CameronBrooks11/openscad-web#readme
+    about: Setup, usage, deployment, publishing, and security notes for OpenSCAD Web.
