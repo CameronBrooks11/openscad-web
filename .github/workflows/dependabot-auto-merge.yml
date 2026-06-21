@@ -1,0 +1,34 @@
+# Conservative Dependabot auto-merge.
+#
+# Enables GitHub auto-merge (which waits for the required "ok" status check, per
+# branch protection) only for the lowest-risk updates:
+#   - any patch update, and
+#   - minor updates to development dependencies.
+# Production minor/major and all major updates are left for manual review.
+name: Dependabot auto-merge
+
+on: pull_request
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  auto-merge:
+    if: github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch update metadata
+        id: meta
+        uses: dependabot/fetch-metadata@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for low-risk updates
+        if: >-
+          steps.meta.outputs.update-type == 'version-update:semver-patch' ||
+          (steps.meta.outputs.dependency-type == 'direct:development' &&
+          steps.meta.outputs.update-type == 'version-update:semver-minor')
+        run: gh pr merge --auto --squash "${{ github.event.pull_request.html_url }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
