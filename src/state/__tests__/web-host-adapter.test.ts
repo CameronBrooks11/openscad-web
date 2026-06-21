@@ -3,7 +3,7 @@
 
 import { Model } from '../model.ts';
 import { State } from '../app-state.ts';
-import { WebHostAdapter, type HostAdapter } from '../web-host-adapter.ts';
+import { WebHostAdapter } from '../web-host-adapter.ts';
 import { defaultSourcePath, defaultModelColor } from '../initial-state.ts';
 
 vi.mock('../../runner/actions.ts', () => {
@@ -53,7 +53,7 @@ function baseState(): State {
   };
 }
 
-function mockHost(): HostAdapter & { [K in keyof HostAdapter]: ReturnType<typeof vi.fn> } {
+function mockHost() {
   return {
     createObjectURL: vi.fn(() => 'blob:fake'),
     revokeObjectURL: vi.fn(),
