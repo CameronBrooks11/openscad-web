@@ -1,6 +1,6 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import type { Diagnostic } from '../diagnostics.ts';
 import { ProcessStreams, isExpectedJobCancellation, spawnOpenSCAD } from './openscad-runner.ts';
 import { processMergedOutputs } from './output-parser.ts';
 import { AbortablePromise, turnIntoDelayableExecution } from '../utils.ts';
@@ -17,7 +17,7 @@ type SyntaxCheckArgs = {
 };
 type SyntaxCheckOutput = {
   logText: string;
-  markers: monaco.editor.IMarkerData[];
+  markers: Diagnostic[];
   parameterSet?: ParameterSet;
 };
 export const checkSyntax = turnIntoDelayableExecution(syntaxDelay, (sargs: SyntaxCheckArgs) => {
@@ -79,7 +79,7 @@ const renderDelay = 1000;
 export type RenderOutput = {
   outFile: File;
   logText: string;
-  markers: monaco.editor.IMarkerData[];
+  markers: Diagnostic[];
   elapsedMillis: number;
 };
 

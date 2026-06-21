@@ -5,7 +5,6 @@
 import { Model } from '../model.ts';
 import { State } from '../app-state.ts';
 import { defaultSourcePath, defaultModelColor } from '../initial-state.ts';
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import { createOperationFailure } from '../../user-facing-errors.ts';
 
 // ---------------------------------------------------------------------------
@@ -361,7 +360,7 @@ describe('Model — expected cancellation handling', () => {
               endLineNumber: 1,
               endColumn: 100,
               message: 'syntax error',
-              severity: monaco.MarkerSeverity.Error,
+              severity: 'error' as const,
             },
           ],
         }),
