@@ -160,6 +160,20 @@ export class OscEditorPanel extends LitElement {
       run: () => this._model.saveProject(),
     });
 
+    // Make paste work across browsers. Monaco's built-in Ctrl/Cmd+V suppresses
+    // the native paste event in this setup but cannot complete its own clipboard
+    // read, so nothing is inserted (see GitHub issue #38). Bind paste explicitly
+    // to the async Clipboard API, which is the path that actually works here.
+    editor.addAction({
+      id: 'openscad-clipboard-paste',
+      label: 'Paste',
+      keybindings: [
+        monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyV,
+        monaco.KeyMod.Shift | monaco.KeyCode.Insert,
+      ],
+      run: () => this._pasteFromClipboard(),
+    });
+
     // Push source changes to model
     editor.onDidChangeModelContent(() => {
       if (!this._updatingFromState) {
@@ -554,11 +568,12 @@ export class OscEditorPanel extends LitElement {
   /**
    * Insert clipboard text at the current selection via the async Clipboard API.
    *
-   * Monaco's right-click "Paste" relies on `document.execCommand('paste')`,
-   * which Chrome and Safari no longer support, so it silently does nothing
-   * (see GitHub issue #38). Keyboard Ctrl/Cmd+V still works because the browser
-   * delivers a native paste event. This provides a working paste affordance in
-   * the app's own editor menu without touching Monaco's internal context menu.
+   * In this Monaco setup, pressing Ctrl/Cmd+V does not deliver a native paste
+   * event to the editor, and Monaco's own paste (which relies on
+   * `document.execCommand('paste')`) is blocked by the browser — so neither the
+   * keyboard shortcut nor the right-click "Paste" inserts anything (see GitHub
+   * issue #38). This method is bound to Ctrl/Cmd+V (and exposed in the editor
+   * menu) so paste works regardless of the browser's clipboard event behavior.
    */
   private async _pasteFromClipboard() {
     const editor = this._editor;
