@@ -69,30 +69,52 @@ type PendingJob = {
   streamsCallback: (ps: ProcessStreams) => void;
   priority: number;
   startTime: number;
-  softTimeoutHandle: ReturnType<typeof setTimeout> | null;
-  hardTimeoutHandle: ReturnType<typeof setTimeout> | null;
+  timeoutHandle: ReturnType<typeof setTimeout> | null;
 };
 
 const _pending = new Map<string, PendingJob>();
 let _nextId = 0;
 let _worker: Worker | null = null;
+// Identifies the current worker. Bumped whenever the worker is torn down so that
+// late messages from a terminated worker cannot resolve or affect newer jobs.
+let _workerGeneration = 0;
 let _firstCompileRequested = false;
 let _firstCompileCompleted = false;
 
-// Timeout thresholds
-const SOFT_TIMEOUT_MS = 30_000;
-const HARD_TIMEOUT_MS = 60_000;
+// A compile that has not produced a result within this window means the worker
+// is wedged (callMain is synchronous and cannot be interrupted), so the worker
+// is terminated and recreated rather than left blocking all future work.
+const COMPILE_TIMEOUT_MS = 30_000;
 
 function getWorker(): Worker {
   if (!_worker) {
+    const generation = _workerGeneration;
     _worker = createOpenSCADWorker();
-    _worker.onmessage = handleWorkerMessage;
+    _worker.onmessage = (e: MessageEvent<WorkerResponse>) => handleWorkerMessage(e, generation);
     _worker.onerror = handleWorkerError;
   }
   return _worker;
 }
 
-function handleWorkerMessage(e: MessageEvent<WorkerResponse>): void {
+// Terminate the current worker and reject every job bound to it. The next
+// request lazily creates a clean worker (getWorker). This is the recovery path
+// for a wedged or crashed worker.
+function recycleWorker(reason: string): void {
+  if (_worker) {
+    _worker.terminate();
+    _worker = null;
+  }
+  _workerGeneration++;
+  for (const [, job] of _pending) {
+    clearJobTimers(job);
+    job.reject(new Error(reason));
+  }
+  _pending.clear();
+}
+
+function handleWorkerMessage(e: MessageEvent<WorkerResponse>, generation: number): void {
+  // Ignore messages from a worker generation that has since been terminated.
+  if (generation !== _workerGeneration) return;
   const msg = e.data;
   const job = _pending.get(msg.id);
   if (!job) return; // stale response — job was cancelled or timed out
@@ -132,18 +154,11 @@ function handleWorkerMessage(e: MessageEvent<WorkerResponse>): void {
 
 function handleWorkerError(e: ErrorEvent): void {
   console.error('OpenSCAD worker crashed:', e.message);
-  // Reject all pending jobs and reset the worker
-  for (const [, job] of _pending) {
-    clearJobTimers(job);
-    job.reject(new Error('Worker crashed: ' + e.message));
-  }
-  _pending.clear();
-  _worker = null; // will be recreated on next request
+  recycleWorker('Worker crashed: ' + e.message);
 }
 
 function clearJobTimers(job: PendingJob): void {
-  if (job.softTimeoutHandle != null) clearTimeout(job.softTimeoutHandle);
-  if (job.hardTimeoutHandle != null) clearTimeout(job.hardTimeoutHandle);
+  if (job.timeoutHandle != null) clearTimeout(job.timeoutHandle);
 }
 
 function recordCompilePerf(job: PendingJob, perf?: CompilePerfStats): void {
@@ -213,41 +228,23 @@ export function spawnOpenSCAD(
       streamsCallback,
       priority: incomingPriority,
       startTime: performance.now(),
-      softTimeoutHandle: null,
-      hardTimeoutHandle: null,
+      timeoutHandle: null,
     };
 
-    // Soft timeout: reject promise, discard late response.
-    // Must also clear the hard-timeout timer — if we don't, the hard-timeout
-    // fires later and recycles the worker even though this job is already gone,
-    // interrupting any unrelated compile that started in the meantime.
-    job.softTimeoutHandle = setTimeout(() => {
-      if (_pending.has(id)) {
-        _pending.delete(id);
-        clearTimeout(job.hardTimeoutHandle ?? undefined);
-        job.hardTimeoutHandle = null;
-        _worker?.postMessage({ type: 'cancel', id } satisfies CancelRequest);
-        reject(new Error(`Compile timed out after ${SOFT_TIMEOUT_MS / 1000}s`));
-      }
-    }, SOFT_TIMEOUT_MS);
-
-    // Hard timeout: recycle worker if it remains blocked.
-    // Guard on _pending.has(id): the job may have been resolved, cancelled, or
-    // soft-timed-out already — in that case we must NOT recycle the worker.
-    job.hardTimeoutHandle = setTimeout(() => {
-      if (!_pending.has(id)) return; // job already finished — nothing to do
-      if (_worker) {
-        console.warn('[runner] Hard timeout reached — recycling worker');
-        _worker.terminate();
-        _worker = null;
-      }
-      // Clear any residual jobs
-      for (const [, j] of _pending) {
-        clearJobTimers(j);
-        j.reject(new Error('Worker recycled after hard timeout'));
-      }
-      _pending.clear();
-    }, HARD_TIMEOUT_MS);
+    // Timeout: the worker has produced no result in time. Because callMain is a
+    // synchronous WASM call, a wedged worker can process neither this job nor any
+    // queued or future request — so reject this job and recycle the worker so the
+    // next request runs on a clean one. recycleWorker() rejects the remaining
+    // pending jobs (which are stuck behind this one on the same worker).
+    job.timeoutHandle = setTimeout(() => {
+      const stuck = _pending.get(id);
+      if (!stuck) return; // already resolved, cancelled, or superseded
+      clearJobTimers(stuck);
+      _pending.delete(id);
+      reject(new Error(`Compile timed out after ${COMPILE_TIMEOUT_MS / 1000}s`));
+      console.warn(`[runner] Compile ${id} timed out after ${COMPILE_TIMEOUT_MS / 1000}s`);
+      recycleWorker('Worker recycled after timeout');
+    }, COMPILE_TIMEOUT_MS);
 
     _pending.set(id, job);
 
