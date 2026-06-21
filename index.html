@@ -6,15 +6,13 @@
     <title>OpenSCAD Web</title>
     <meta
       name="description"
-      content="OpenSCAD Playground: edit .scad models and render them to STL from the browser (WebAssembly build OpenSCAD, with Monaco editor and STL Viewer)"
+      content="OpenSCAD Web: edit .scad models and render them in the browser, powered by a WebAssembly build of OpenSCAD with a Monaco editor and a 3D viewer."
     />
 
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/logo192.png" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
-
-    <link rel="stylesheet" href="/gh-fork-ribbon.min.css" />
 
     <style>
       #root,
@@ -26,23 +24,6 @@
         margin: 0;
         height: 100vh;
         height: var(--app-height);
-      }
-
-      .p-tabmenu-nav {
-        justify-content: center;
-      }
-
-      .p-fieldset .p-fieldset-content {
-        padding: 0 !important;
-      }
-      .p-fieldset-legend {
-        background-color: rgba(255, 255, 255, 0.4) !important;
-      }
-
-      .p-fieldset-legend,
-      .p-fieldset-content {
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
       }
 
       .absolute-fill {
@@ -59,23 +40,6 @@
       .opacity-0 {
         opacity: 0;
       }
-
-      @media only screen and (max-height: 600px),
-        only screen and (max-width: 600px),
-        only screen and (max-width: 767px),
-        only screen and (max-aspect-ratio: 1/2) {
-        .github-fork-ribbon {
-          display: none;
-        }
-      }
-
-      .p-tabmenu-nav {
-        padding-right: 30px;
-      }
-
-      .github-fork-ribbon:before {
-        background-color: #333;
-      }
     </style>
   </head>
   <body>
@@ -83,17 +47,8 @@
       <source src="/complete.wav" type="audio/wav" />
       Your browser does not support the audio element.
     </audio>
-    <a
-      target="_blank"
-      class="github-fork-ribbon"
-      href="https://github.com/openscad/openscad-playground"
-      data-ribbon="Fork me on GitHub"
-      title="Fork me on GitHub"
-    >
-      Fork me on GitHub
-    </a>
 
-    <noscript>You need to enable JavaScript to run the OpenSCAD Playground.</noscript>
+    <noscript>You need to enable JavaScript to run OpenSCAD Web.</noscript>
     <div id="root"></div>
     <script type="module" src="/src/index.ts"></script>
   </body>
