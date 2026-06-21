@@ -17,6 +17,12 @@ import {
   readFileAsDataURL,
 } from '../utils.ts';
 import { openLocalFile, saveActiveFile } from '../fs/filesystem.ts';
+import {
+  MAX_PROJECT_FILE_COUNT,
+  MAX_PROJECT_TOTAL_BYTES,
+  normalizeProjectPath,
+  ProjectPathError,
+} from '../fs/project-path.ts';
 
 import JSZip from 'jszip';
 import { isExpectedJobCancellation, ProcessStreams } from '../runner/openscad-runner.ts';
@@ -492,17 +498,38 @@ export class Model extends EventTarget {
   async importProjectZip(zipBuffer: ArrayBuffer): Promise<void> {
     try {
       const zip = await JSZip.loadAsync(zipBuffer);
-      const files: [string, string][] = [];
-      for (const [relPath, zipObj] of Object.entries(zip.files)) {
-        if (!zipObj.dir) {
-          files.push([relPath, await zipObj.async('string')]);
-        }
+      const entries = Object.entries(zip.files).filter(([, zipObj]) => !zipObj.dir);
+      if (entries.length > MAX_PROJECT_FILE_COUNT) {
+        throw new ProjectPathError(`Archive has too many files (max ${MAX_PROJECT_FILE_COUNT}).`);
       }
-      for (const [relPath, content] of files) {
+      // Validate and bound EVERY entry before writing ANY of them, so a malicious
+      // archive is rejected atomically (no partial extraction). The size limit is
+      // an approximate cumulative guard over decoded entry lengths (UTF-16 units);
+      // a single entry is still fully decoded before its length is counted.
+      const files: [string, string][] = [];
+      const seen = new Set<string>();
+      let totalSize = 0;
+      for (const [relPath, zipObj] of entries) {
+        const safePath = normalizeProjectPath(relPath);
+        if (seen.has(safePath)) {
+          throw new ProjectPathError(`Duplicate path in archive: ${safePath}`);
+        }
+        seen.add(safePath);
+        const content = await zipObj.async('string');
+        totalSize += content.length;
+        if (totalSize > MAX_PROJECT_TOTAL_BYTES) {
+          throw new ProjectPathError('Archive exceeds the uncompressed size limit.');
+        }
+        files.push([safePath, content]);
+      }
+      // Paths are validated above; FS write failures (e.g. a missing parent dir in
+      // the worker VFS) are best-effort and must not abort the whole import — the
+      // file content is still surfaced via s.params.sources below.
+      for (const [safePath, content] of files) {
         try {
-          this.fs.writeFile(`/home/${relPath}`, content);
+          this.fs.writeFile(`/home/${safePath}`, content);
         } catch {
-          /* ignore */
+          /* best-effort: source is still loaded into the editor below */
         }
       }
       const entryRel = (files.find(([p]) => p === 'main.scad') ??
