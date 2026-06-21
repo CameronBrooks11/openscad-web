@@ -1,42 +1,16 @@
-// T4 — Compile-pipeline tests
+// Compile-pipeline tests
 //
 // Covers:
-//   1. Feature-flag safety: getDefaultCompileArgs() must not include --enable=lazy-union
-//   2. compileWithFallback: success path, no-retry path, and missing-library retry path
-//
-// compileWithFallback calls spawnOpenSCAD from the same module, so we cannot
-// replace spawnOpenSCAD at the module boundary without breaking the internal call chain.
-// Instead, we install a fake Worker in globalThis that immediately posts a
-// synthetic "result" message back to the runner, exercising the full JS-layer
-// path without requiring a real WASM binary.
+//   1. buildOpenScadArgs — the single source of truth for OpenSCAD CLI args,
+//      including feature-flag safety (no implicit --enable=lazy-union).
+//   2. spawnOpenSCAD — the JS-layer request/response loop, exercised via a fake
+//      Worker that posts synthetic result/error messages back to the runner.
 //
 // Full round-trip compilation with real WASM remains intentionally deferred from
-// this JS-layer suite. The Vitest migration removed the old Jest CJS blocker,
-// but the fake-Worker harness still provides the focused coverage used here.
+// this JS-layer suite; the fake-Worker harness provides the focused coverage here.
 
-import { getDefaultCompileArgs } from '../actions.ts';
+import { buildOpenScadArgs } from '../actions.ts';
 import { clearPerfSnapshot, getPerfSnapshot } from '../../perf/runtime-performance.ts';
-
-// ---------------------------------------------------------------------------
-// Mock filesystem.ts — used by compileWithFallback for on-demand library mount
-// ---------------------------------------------------------------------------
-vi.mock('../../fs/filesystem.ts', () => ({
-  mountDemandLibraries: vi.fn().mockResolvedValue([]),
-  extractLibraryNames: vi.fn().mockReturnValue([]),
-  createEditorFS: vi.fn().mockResolvedValue(undefined),
-  preloadEditorLibraries: vi.fn().mockResolvedValue(undefined),
-  symlinkLibraries: vi.fn().mockResolvedValue(undefined),
-  saveActiveFile: vi.fn().mockResolvedValue(false),
-  openLocalFile: vi.fn().mockResolvedValue(null),
-  clearActiveFileHandle: vi.fn(),
-  getParentDir: vi.fn((p: string) => p.split('/').slice(0, -1).join('/') || '/'),
-  join: vi.fn((...args: string[]) => args.join('/')),
-}));
-
-import { compileWithFallback } from '../openscad-runner.ts';
-import { mountDemandLibraries } from '../../fs/filesystem.ts';
-
-const mockMount = mountDemandLibraries as ReturnType<typeof vi.fn>;
 
 // ---------------------------------------------------------------------------
 // Fake Worker that drives the runner message loop
@@ -91,7 +65,6 @@ class FakeWorker {
   terminate() {}
 }
 
-// Install the FakeWorker globally before module code runs
 beforeAll(() => {
   (globalThis as unknown as Record<string, unknown>).Worker = FakeWorker;
 });
@@ -102,52 +75,126 @@ beforeEach(() => {
   clearPerfSnapshot();
 });
 
+// Imported after the FakeWorker is staged so the runner picks it up lazily.
+import { spawnOpenSCAD } from '../openscad-runner.ts';
+
 // ---------------------------------------------------------------------------
-// T4-1 — Feature flags
+// buildOpenScadArgs — single source of truth
 // ---------------------------------------------------------------------------
 
-describe('compile pipeline — feature flags', () => {
-  it('getDefaultCompileArgs returns an array', () => {
-    expect(Array.isArray(getDefaultCompileArgs())).toBe(true);
+describe('buildOpenScadArgs', () => {
+  it('builds the positional path, output, and export format', () => {
+    expect(
+      buildOpenScadArgs({ scadPath: 'm.scad', outFile: 'o.off', exportFormat: 'off' }),
+    ).toEqual(['m.scad', '-o', 'o.off', '--export-format=off']);
   });
 
-  it('includes --backend=manifold', () => {
-    expect(getDefaultCompileArgs()).toContain('--backend=manifold');
+  it('omits --backend when no backend is requested (e.g. syntax pass)', () => {
+    const args = buildOpenScadArgs({
+      scadPath: 'm.scad',
+      outFile: 'o.json',
+      exportFormat: 'param',
+    });
+    expect(args.some((a) => a.startsWith('--backend='))).toBe(false);
   });
 
-  it('does not enable lazy-union', () => {
-    const enableFlags = getDefaultCompileArgs().filter((a: string) => a.startsWith('--enable='));
-    expect(enableFlags).not.toContain('--enable=lazy-union');
+  it('includes the requested backend', () => {
+    const args = buildOpenScadArgs({
+      scadPath: 'm.scad',
+      outFile: 'o.off',
+      exportFormat: 'off',
+      backend: 'manifold',
+    });
+    expect(args).toContain('--backend=manifold');
+  });
+
+  it('does not implicitly enable lazy-union', () => {
+    const args = buildOpenScadArgs({
+      scadPath: 'm.scad',
+      outFile: 'o.off',
+      exportFormat: 'off',
+      backend: 'manifold',
+    });
+    expect(args.filter((a) => a.startsWith('--enable='))).not.toContain('--enable=lazy-union');
+  });
+
+  it('emits -D for vars, --enable for features, and appends extra args', () => {
+    const args = buildOpenScadArgs({
+      scadPath: 'm.scad',
+      outFile: 'o.off',
+      exportFormat: 'off',
+      backend: 'manifold',
+      vars: { n: 3, label: 'hi' },
+      features: ['fast-csg'],
+      extraArgs: ['--quiet'],
+    });
+    expect(args).toContain('-Dn=3');
+    expect(args).toContain('-Dlabel="hi"');
+    expect(args).toContain('--enable=fast-csg');
+    expect(args).toContain('--quiet');
+  });
+
+  it('emits the full render arg list in a stable order', () => {
+    expect(
+      buildOpenScadArgs({
+        scadPath: 'm.scad',
+        outFile: 'o.off',
+        exportFormat: 'off',
+        backend: 'manifold',
+        vars: { n: 3 },
+        features: ['fast-csg'],
+        extraArgs: ['--quiet'],
+      }),
+    ).toEqual([
+      'm.scad',
+      '-o',
+      'o.off',
+      '--backend=manifold',
+      '--export-format=off',
+      '-Dn=3',
+      '--enable=fast-csg',
+      '--quiet',
+    ]);
+  });
+
+  it('throws a parameter-scoped error for an invalid var value', () => {
+    expect(() =>
+      buildOpenScadArgs({
+        scadPath: 'm.scad',
+        outFile: 'o.off',
+        exportFormat: 'off',
+        vars: { bad: NaN },
+      }),
+    ).toThrow(/parameter "bad"/);
   });
 });
 
 // ---------------------------------------------------------------------------
-// T4-2 — compileWithFallback success path
+// spawnOpenSCAD — JS-layer request/response loop
 // ---------------------------------------------------------------------------
 
-describe('compile pipeline — compileWithFallback success', () => {
-  it('resolves with exitCode 0 and does not call mountDemandLibraries', async () => {
+describe('spawnOpenSCAD', () => {
+  it('resolves with the worker exit code on success', async () => {
     _workerSpecs.push({ exitCode: 0 });
-
-    const result = await compileWithFallback(
-      { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
-      vi.fn(),
-    );
-
+    const result = await spawnOpenSCAD({ mountArchives: true, args: ['m.scad'] }, vi.fn());
     expect(result.exitCode).toBe(0);
-    expect(mockMount).not.toHaveBeenCalled();
   });
 
-  it('returns failure without retry when error is unrelated to missing library', async () => {
-    _workerSpecs.push({ exitCode: 1, stderrLines: ['CGAL error: invalid operation'] });
+  it('preserves an explicit worker error response', async () => {
+    _workerSpecs.push({
+      responseType: 'error',
+      message: 'boom',
+      stderrLines: ['runtime exploded'],
+      perf: { workerJobMillis: 33 },
+    });
 
-    const result = await compileWithFallback(
-      { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
-      vi.fn(),
+    const result = await spawnOpenSCAD({ mountArchives: true, args: ['m.scad'] }, vi.fn());
+
+    expect(result.error).toBe('boom');
+    expect(result.exitCode).toBeUndefined();
+    expect(getPerfSnapshot().metrics).toContainEqual(
+      expect.objectContaining({ name: 'osc:worker-job-total', duration: 33 }),
     );
-
-    expect(result.exitCode).toBe(1);
-    expect(mockMount).not.toHaveBeenCalled();
   });
 
   it('records worker perf timings from a successful compile response', async () => {
@@ -161,10 +208,7 @@ describe('compile pipeline — compileWithFallback success', () => {
       },
     });
 
-    const result = await compileWithFallback(
-      { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
-      vi.fn(),
-    );
+    const result = await spawnOpenSCAD({ mountArchives: true, args: ['m.scad'] }, vi.fn());
 
     expect(result.perf?.workerWasmInitMillis).toBe(44);
     const snapshot = getPerfSnapshot();
@@ -172,74 +216,7 @@ describe('compile pipeline — compileWithFallback success', () => {
       expect.objectContaining({ name: 'osc:worker-fs-init', duration: 12 }),
     );
     expect(snapshot.metrics).toContainEqual(
-      expect.objectContaining({ name: 'osc:worker-library-mount', duration: 8 }),
-    );
-    expect(snapshot.metrics).toContainEqual(
       expect.objectContaining({ name: 'osc:worker-wasm-init', duration: 44 }),
     );
-  });
-
-  it('handles explicit worker error responses and preserves the message', async () => {
-    _workerSpecs.push({
-      responseType: 'error',
-      message: 'boom',
-      stderrLines: ['runtime exploded'],
-      perf: { workerJobMillis: 33 },
-    });
-
-    const result = await compileWithFallback(
-      { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
-      vi.fn(),
-    );
-
-    expect(result.error).toBe('boom');
-    expect(result.exitCode).toBeUndefined();
-    expect(getPerfSnapshot().metrics).toContainEqual(
-      expect.objectContaining({ name: 'osc:worker-job-total', duration: 33 }),
-    );
-  });
-});
-
-// ---------------------------------------------------------------------------
-// T4-3 — compileWithFallback retry path
-// ---------------------------------------------------------------------------
-
-describe('compile pipeline — compileWithFallback retry on missing library', () => {
-  it('mounts the missing library and retries, returning the second result', async () => {
-    _workerSpecs.push({
-      exitCode: 1,
-      stderrLines: ["WARNING: Can't open library 'MCAD/involute_gears.scad'."],
-    });
-    _workerSpecs.push({ exitCode: 0 }); // retry succeeds
-
-    mockMount.mockResolvedValueOnce(['MCAD']);
-
-    const result = await compileWithFallback(
-      { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
-      vi.fn(),
-    );
-
-    expect(result.exitCode).toBe(0);
-    expect(mockMount).toHaveBeenCalledTimes(1);
-    // Both specs consumed (two Worker calls)
-    expect(_workerSpecs).toHaveLength(0);
-  });
-
-  it('does not retry when mountDemandLibraries returns empty (unknown library)', async () => {
-    _workerSpecs.push({
-      exitCode: 1,
-      stderrLines: ["WARNING: Can't open library 'UnknownLib/foo.scad'."],
-    });
-
-    mockMount.mockResolvedValueOnce([]); // nothing mounted
-
-    const result = await compileWithFallback(
-      { mountArchives: true, args: ['test.scad', '-o', 'out.off'] },
-      vi.fn(),
-    );
-
-    expect(result.exitCode).toBe(1);
-    expect(_workerSpecs).toHaveLength(0); // only one spec pushed, was consumed
-    expect(mockMount).toHaveBeenCalledTimes(1);
   });
 });

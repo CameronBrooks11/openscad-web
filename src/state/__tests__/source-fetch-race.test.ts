@@ -18,7 +18,6 @@ vi.mock('../../runner/actions.ts', () => {
       markers: [],
       elapsedMillis: 0,
     }),
-    getDefaultCompileArgs: vi.fn().mockReturnValue(['--backend=manifold']),
   };
 });
 vi.mock('../../io/import_off.ts', () => ({ parseOff: vi.fn() }));
