@@ -27,6 +27,8 @@ export class OscGeometryViewer extends LitElement {
   @property({ attribute: false }) offText: string | null = null;
   @property() color = DEFAULT_COLOR;
   @property({ type: Boolean }) showAxes = true;
+  /** When false, the scene is suspended (no rendering) until reactivated. */
+  @property({ type: Boolean }) active = true;
   /** Initial camera; applied on mount only — the user drives it afterward. */
   @property({ attribute: false }) camera: CameraState | null = null;
 
@@ -59,12 +61,14 @@ export class OscGeometryViewer extends LitElement {
     });
     this._ro.observe(container);
 
+    if (!this.active) scene.setActive(false);
     if (this.offText) this._loadGeometry(this.offText);
   }
 
   override updated(changed: PropertyValues) {
     const scene = this._scene;
     if (!scene) return;
+    if (changed.has('active')) scene.setActive(this.active);
     if (changed.has('showAxes')) scene.setAxesVisible(this.showAxes);
     if (changed.has('color') && this.color) scene.setModelColor(this.color);
     if (changed.has('offText') && this.offText && this.offText !== this._loadedOffText) {

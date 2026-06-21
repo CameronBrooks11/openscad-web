@@ -1,6 +1,6 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 import { LitElement, html } from 'lit';
-import { customElement, state } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { getModel } from '../../state/model-context.ts';
 import { blurHashToImage, imageToThumbhash, thumbHashToImage } from '../../io/image_hashes.ts';
 import { getViewerOutputMode } from './viewer-output-mode.ts';
@@ -21,6 +21,8 @@ export class OscViewerPanel extends LitElement {
     return this;
   }
 
+  /** Whether this panel is the active surface; forwarded to suspend the viewer. */
+  @property({ type: Boolean }) active = true;
   @state() private _st: State | null = null;
   @state() private _offText: string | null = null;
   private _model!: Model;
@@ -153,6 +155,7 @@ export class OscViewerPanel extends LitElement {
               .offText=${this._offText}
               color=${st?.view.color ?? DEFAULT_COLOR}
               ?showAxes=${!!st?.view.showAxes}
+              ?active=${this.active}
               .camera=${(st?.view.camera ?? null) as CameraState | null}
               @camera-change=${(e: CustomEvent<CameraState>) =>
                 this._model.mutate((s) => {

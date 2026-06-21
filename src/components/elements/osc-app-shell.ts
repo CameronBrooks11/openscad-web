@@ -2,6 +2,11 @@
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { getModel } from '../../state/model-context.ts';
+import {
+  createAppCommands,
+  matchKeybinding,
+  type AppCommand,
+} from '../../commands/app-commands.ts';
 import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
 import './osc-panel-switcher.ts';
@@ -19,6 +24,7 @@ export class OscAppShell extends LitElement {
 
   @state() private _st: State | null = null;
   private _model!: Model;
+  private _commands: AppCommand[] = [];
   private _onState = (e: Event) => {
     this._st = (e as CustomEvent<State>).detail;
   };
@@ -26,10 +32,11 @@ export class OscAppShell extends LitElement {
   override connectedCallback() {
     super.connectedCallback();
     this._model = getModel();
+    this._commands = createAppCommands(this._model);
     this._model.addEventListener('state', this._onState);
     this._st = this._model.state;
 
-    // Global keyboard shortcuts
+    // Map global keyboard shortcuts onto named commands.
     window.addEventListener('keydown', this._handleKeyDown);
   }
 
@@ -40,18 +47,10 @@ export class OscAppShell extends LitElement {
   }
 
   private _handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'F5') {
+    const command = matchKeybinding(this._commands, e);
+    if (command) {
       e.preventDefault();
-      this._model.render({ isPreview: true, now: true });
-    } else if (e.key === 'F6') {
-      e.preventDefault();
-      this._model.render({ isPreview: false, now: true });
-    } else if (e.key === 'F7') {
-      e.preventDefault();
-      this._model.export();
-    } else if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      this._model.saveProject();
+      command.run();
     }
   };
 
@@ -141,6 +140,7 @@ export class OscAppShell extends LitElement {
             ? html`
                 <osc-viewer-panel
                   id="panel-viewer"
+                  ?active=${true}
                   style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow:hidden;"
                 ></osc-viewer-panel>
               `
@@ -179,6 +179,7 @@ export class OscAppShell extends LitElement {
             role="tabpanel"
             aria-label="Viewer panel"
             class="absolute-fill"
+            ?active=${focus === 'viewer'}
             style="z-index:${zOf('viewer')};"
             ?inert=${focus !== 'viewer'}
             aria-hidden=${focus !== 'viewer' ? 'true' : 'false'}
