@@ -1,5 +1,5 @@
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
 import { MergedOutputs } from './openscad-runner';
+import type { Diagnostic } from '../diagnostics.ts';
 
 const ignoredLogs = new Set(['Could not initialize localization.']);
 
@@ -31,10 +31,10 @@ export function joinMergedOutputs(mergedOutputs: MergedOutputs, _opts: MergedOut
 export function parseMergedOutputs(
   mergedOutputs: MergedOutputs,
   opts: MergedOutputsOptions,
-): monaco.editor.IMarkerData[] {
+): Diagnostic[] {
   let unmatchedLines = [];
 
-  const markers = [];
+  const markers: Diagnostic[] = [];
   let warningCount = 0,
     errorCount = 0;
   const addError = (error: string, file: string, line: number) => {
@@ -44,7 +44,7 @@ export function parseMergedOutputs(
       endLineNumber: Number(line),
       endColumn: 1000,
       message: error,
-      severity: monaco.MarkerSeverity.Error,
+      severity: 'error',
     });
   };
   const shiftSourceName = opts.shiftSourceLines && opts.shiftSourceLines.sourcePath;
@@ -84,7 +84,7 @@ export function parseMergedOutputs(
           endLineNumber: getLine(file, line),
           endColumn: 1000,
           message: warning,
-          severity: monaco.MarkerSeverity.Warning,
+          severity: 'warning',
         });
         continue;
       }

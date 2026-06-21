@@ -10,6 +10,7 @@ import { getParentDir, join } from '../../fs/filesystem.ts';
 import { defaultSourcePath, getBlankProjectState } from '../../state/initial-state.ts';
 import { buildUrlForStateParams } from '../../state/fragment-state.ts';
 import { registerOpenSCADLanguage } from '../../language/openscad-register-language.ts';
+import { toMonacoMarkers } from '../../language/diagnostic-markers.ts';
 import { markPerf, measurePerf } from '../../perf/runtime-performance.ts';
 import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
@@ -46,7 +47,11 @@ export class OscEditorPanel extends LitElement {
       const checkerRun = st.lastCheckerRun;
       const editorModel = this._editor.getModel();
       if (editorModel && checkerRun) {
-        this._monaco.editor.setModelMarkers(editorModel, 'openscad', checkerRun.markers);
+        this._monaco.editor.setModelMarkers(
+          editorModel,
+          'openscad',
+          toMonacoMarkers(checkerRun.markers),
+        );
       }
 
       // If path changed, update the editor model
@@ -185,7 +190,11 @@ export class OscEditorPanel extends LitElement {
     const checkerRun = st.lastCheckerRun;
     const editorModelInstance = editor.getModel();
     if (editorModelInstance && checkerRun) {
-      monaco.editor.setModelMarkers(editorModelInstance, 'openscad', checkerRun.markers);
+      monaco.editor.setModelMarkers(
+        editorModelInstance,
+        'openscad',
+        toMonacoMarkers(checkerRun.markers),
+      );
     }
 
     // ResizeObserver to keep Monaco sized correctly

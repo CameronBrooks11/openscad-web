@@ -1,6 +1,6 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import type { Diagnostic } from '../diagnostics.ts';
 import { ParameterSet } from './customizer-types.ts';
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
 
@@ -73,7 +73,7 @@ export interface State {
 
   lastCheckerRun?: {
     logText: string;
-    markers: monaco.editor.IMarkerData[];
+    markers: Diagnostic[];
   };
   rendering?: boolean;
   previewing?: boolean;

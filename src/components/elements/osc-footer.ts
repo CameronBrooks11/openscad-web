@@ -1,7 +1,7 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import { countDiagnostics, maxDiagnosticSeverity } from '../../diagnostics.ts';
 import { getModel } from '../../state/model-context.ts';
 import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
@@ -159,13 +159,11 @@ export class OscFooter extends LitElement {
 
     const busy = st.rendering || st.previewing || st.checkingSyntax || st.exporting;
     const markers = st.lastCheckerRun?.markers ?? [];
-    const errCount = markers.filter((m) => m.severity === monaco.MarkerSeverity.Error).length;
-    const warnCount = markers.filter((m) => m.severity === monaco.MarkerSeverity.Warning).length;
-    const infoCount = markers.filter((m) => m.severity === monaco.MarkerSeverity.Info).length;
-    const maxSev =
-      markers.length === 0
-        ? undefined
-        : markers.reduce((a, b) => (a.severity > b.severity ? a : b)).severity;
+    const counts = countDiagnostics(markers);
+    const errCount = counts.error;
+    const warnCount = counts.warning;
+    const infoCount = counts.info;
+    const maxSev = maxDiagnosticSeverity(markers) ?? undefined;
     const hasDiagnostics = !!(
       st.lastCheckerRun ||
       st.output ||
@@ -237,9 +235,9 @@ export class OscFooter extends LitElement {
         ${hasDiagnostics
           ? html`
               <button
-                class="foot-btn ${maxSev === monaco.MarkerSeverity.Error
+                class="foot-btn ${maxSev === 'error'
                   ? 'danger'
-                  : maxSev === monaco.MarkerSeverity.Warning
+                  : maxSev === 'warning'
                     ? 'warning'
                     : ''}"
                 title="Toggle log output"

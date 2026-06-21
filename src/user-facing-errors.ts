@@ -1,4 +1,4 @@
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import { hasErrorDiagnostic, type Diagnostic } from './diagnostics.ts';
 
 export type UserFacingOperation = 'preview' | 'render' | 'export' | 'syntax' | 'source' | 'model';
 
@@ -6,7 +6,7 @@ export type UserFacingError = {
   message: string;
   details?: string;
   logText?: string;
-  markers?: monaco.editor.IMarkerData[];
+  markers?: Diagnostic[];
 };
 
 export class UserFacingOperationError extends Error {
@@ -88,14 +88,12 @@ export function createOperationFailure(
     markers,
     logText,
   }: {
-    markers?: monaco.editor.IMarkerData[];
+    markers?: Diagnostic[];
     logText?: string;
   } = {},
 ): UserFacingOperationError {
   const details = getErrorText(error);
-  const hasSyntaxErrors = (markers ?? []).some(
-    (marker) => marker.severity === monaco.MarkerSeverity.Error,
-  );
+  const hasSyntaxErrors = hasErrorDiagnostic(markers ?? []);
 
   if (hasSyntaxErrors) {
     return new UserFacingOperationError({

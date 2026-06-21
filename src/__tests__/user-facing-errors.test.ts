@@ -1,5 +1,3 @@
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
-
 import {
   createOperationFailure,
   formatExternalLoadError,
@@ -49,7 +47,7 @@ describe('user-facing error helpers', () => {
           endLineNumber: 1,
           endColumn: 100,
           message: 'syntax error',
-          severity: monaco.MarkerSeverity.Error,
+          severity: 'error' as const,
         },
       ],
     });
