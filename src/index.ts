@@ -99,14 +99,14 @@ window.addEventListener('load', async () => {
       const data = JSON.parse(
         new TextDecoder('utf-8').decode(bfs.readFileSync('/home/state.json')),
       );
-      const { view, params } = data;
-      persistedState = { view, params };
+      const { view, params, preview } = data;
+      persistedState = { view, params, preview };
     } catch (e) {
       console.log('Failed to read the persisted state from local storage.', e);
     }
     statePersister = {
-      set: async ({ view, params }) => {
-        bfs.writeFile('/home/state.json', JSON.stringify({ view, params }));
+      set: async ({ view, params, preview }) => {
+        bfs.writeFile('/home/state.json', JSON.stringify({ view, params, preview }));
       },
     };
   } else {

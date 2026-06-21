@@ -29,6 +29,19 @@ import {
   UserFacingOperation,
 } from '../user-facing-errors.ts';
 
+/** Debounce window for durable-state persistence (coalesces rapid edits/drags). */
+const PERSIST_DEBOUNCE_MS = 500;
+/** Cap so persistence still flushes during sustained activity (e.g. log streaming). */
+const PERSIST_MAX_WAIT_MS = 2000;
+
+/** The durable slice of State that is persisted (matches the fragment encoder). */
+type PersistedSlice = Pick<State, 'params' | 'view' | 'preview'>;
+const durableSlice = (state: State): PersistedSlice => ({
+  params: state.params,
+  view: state.view,
+  preview: state.preview,
+});
+
 export class Model extends EventTarget {
   /** Owns project-source logic (lookup, edits, file ops, ZIP import/export). */
   private readonly projectStore: ProjectStore;
@@ -41,6 +54,7 @@ export class Model extends EventTarget {
   ) {
     super();
     this.projectStore = new ProjectStore(fs);
+    this._lastPersistedJson = JSON.stringify(durableSlice(state));
   }
 
   // Sequence counters identifying the latest in-flight operation of each kind.
@@ -51,6 +65,18 @@ export class Model extends EventTarget {
   private _previewSeq = 0;
   private _renderSeq = 0;
   private _syntaxSeq = 0;
+
+  // Scoped persistence: only the durable slice (params/view/preview) is written,
+  // so transient mutations (rendering flags, logs, errors, output URLs) don't
+  // cause writes. Writes are debounced and serialized. deep-mutate only re-bumps
+  // the top-level State identity (nested objects mutate in place), so durable
+  // changes are detected by comparing a JSON signature of the slice — computed
+  // once per debounce window, not per mutation.
+  private _lastPersistedJson: string;
+  private _persistTimer: ReturnType<typeof setTimeout> | null = null;
+  private _persistDeadline: number | null = null;
+  private _persistInFlight = false;
+  private _persistPending = false;
 
   init() {
     if (
@@ -66,9 +92,55 @@ export class Model extends EventTarget {
 
   private setState(state: State) {
     this.state = state;
-    this.statePersister?.set(state);
+    this.schedulePersist();
     this.setStateCallback?.(state);
     this.dispatchEvent(new CustomEvent<State>('state', { detail: state }));
+  }
+
+  /**
+   * Debounce a persistence check; the actual durable-change test runs at flush.
+   * A max-wait deadline ensures the timer still fires under sustained activity
+   * (e.g. a render streaming logs) rather than being pushed back indefinitely.
+   */
+  private schedulePersist() {
+    if (!this.statePersister) return;
+    const now = Date.now();
+    if (this._persistDeadline == null) this._persistDeadline = now + PERSIST_MAX_WAIT_MS;
+    const delay = Math.max(0, Math.min(PERSIST_DEBOUNCE_MS, this._persistDeadline - now));
+    if (this._persistTimer) clearTimeout(this._persistTimer);
+    this._persistTimer = setTimeout(() => {
+      this._persistTimer = null;
+      this._persistDeadline = null;
+      void this.flushPersist();
+    }, delay);
+  }
+
+  /**
+   * Persist the durable slice, but only if it actually changed (so transient-only
+   * mutations write nothing). Serialized so writes can't overlap or reorder; the
+   * latest state is coalesced into a single follow-up write, and errors are logged.
+   */
+  private async flushPersist() {
+    if (!this.statePersister) return;
+    if (this._persistInFlight) {
+      this._persistPending = true; // re-check & persist the latest once the current write finishes
+      return;
+    }
+    const json = JSON.stringify(durableSlice(this.state));
+    if (json === this._lastPersistedJson) return; // durable state unchanged — skip the write
+    this._persistInFlight = true;
+    try {
+      await this.statePersister.set(this.state);
+      this._lastPersistedJson = json; // record only on success so a failed write retries
+    } catch (e) {
+      console.error('Failed to persist state:', e);
+    } finally {
+      this._persistInFlight = false;
+      if (this._persistPending) {
+        this._persistPending = false;
+        void this.flushPersist();
+      }
+    }
   }
 
   mutate(f: (state: State) => void) {
