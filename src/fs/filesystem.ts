@@ -2,6 +2,7 @@
 
 import { getBrowserFS } from '../runtime/browserfs-runtime.ts';
 import { resolveRuntimeAssetUrl } from '../runtime/asset-urls.ts';
+import { fetchAssetBytes } from '../runtime/fetch-asset.ts';
 import { zipArchives, ZipArchive } from './zip-archives.generated.ts';
 
 // Re-export for consumers that need the type
@@ -64,9 +65,7 @@ export async function createEditorFS({
 }): Promise<FS> {
   const browserFS = getBrowserFS();
   // Fonts are always pre-loaded — needed for any text() call in OpenSCAD
-  const fontsBuf = await fetch(resolveRuntimeAssetUrl('libraries/fonts.zip')).then((r) =>
-    r.arrayBuffer(),
-  );
+  const fontsBuf = await fetchAssetBytes(resolveRuntimeAssetUrl('libraries/fonts.zip'));
   const fontsFS = await createBFSBackend('ZipFS', {
     zipData: browserFS.BFSRequire('buffer').Buffer.from(fontsBuf),
   });
@@ -137,7 +136,7 @@ async function fetchAndMountLibrary(name: string): Promise<void> {
     if (!_rootMFS)
       throw new Error('[filesystem] createEditorFS() must be called before mountDemandLibraries()');
     const browserFS = getBrowserFS();
-    const buf = await fetch(resolveRuntimeAssetUrl(archive.zipPath)).then((r) => r.arrayBuffer());
+    const buf = await fetchAssetBytes(resolveRuntimeAssetUrl(archive.zipPath));
     const zipFS = await createBFSBackend('ZipFS', {
       zipData: browserFS.BFSRequire('buffer').Buffer.from(buf),
     });
