@@ -127,6 +127,11 @@ For publishing OpenSCAD projects into GitHub Pages or another static-site tree, 
 
 Security assumptions, CSP guidance, and external-source loading policy are documented in [docs/SECURITY.md](./docs/SECURITY.md).
 
+## Architecture
+
+The module layout, dependency boundaries, compile lifecycle, and the decision
+records behind the current design live in [docs/architecture/](./docs/architecture/README.md).
+
 ## Contributing
 
 Contributor workflow, verification expectations, and repo conventions are documented in [docs/CONTRIBUTING.md](./docs/CONTRIBUTING.md).
