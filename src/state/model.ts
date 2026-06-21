@@ -10,7 +10,7 @@ import {
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
 import { bubbleUpDeepMutations } from './deep-mutate.ts';
 import { fetchSource, formatBytes, formatMillis, readFileAsDataURL } from '../utils.ts';
-import { openLocalFile, saveActiveFile } from '../fs/filesystem.ts';
+import { openLocalFile, saveViaHandle } from '../fs/filesystem.ts';
 import { ProjectStore } from './project-store.ts';
 import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
 import { isExpectedJobCancellation, ProcessStreams } from '../runner/openscad-runner.ts';
@@ -61,6 +61,11 @@ export class Model extends EventTarget {
   private _previewSeq = 0;
   private _renderSeq = 0;
   private _syntaxSeq = 0;
+
+  // FSAPI write-back handles, keyed by source path (Chromium only). Scoping the
+  // handle to a path keeps `saveProject()` writing back to the source the handle
+  // was opened for, rather than whichever file was opened last.
+  private fsapiHandles = new Map<string, FileSystemFileHandle>();
 
   // Scoped persistence: only the durable slice (params/view/preview) is written,
   // so transient mutations (rendering flags, logs, errors, output URLs) don't
@@ -539,6 +544,11 @@ export class Model extends EventTarget {
     try {
       const next = await this.projectStore.importZip(zipBuffer);
       if (!next) return; // archive had no files
+      // A ZIP import replaces the whole project — none of the imported sources
+      // were opened via FSAPI, so drop every retained handle (a surviving
+      // handle for a colliding path would write archive content to the user's
+      // original on-disk file).
+      this.fsapiHandles.clear();
       this.mutate((s) => {
         s.params.sources = next.sources;
         s.params.activePath = next.activePath;
@@ -559,11 +569,9 @@ export class Model extends EventTarget {
   async openFileViaFSAPI(): Promise<boolean> {
     const result = await openLocalFile();
     if (!result) return false;
-    const next = this.projectStore.addFile(
-      this.state.params.sources,
-      `/home/${result.name}`,
-      result.content,
-    );
+    const path = `/home/${result.name}`;
+    const next = this.projectStore.addFile(this.state.params.sources, path, result.content);
+    this.fsapiHandles.set(path, result.handle);
     this.mutate((s) => {
       s.params.sources = next.sources;
       s.params.activePath = next.activePath;
@@ -579,9 +587,14 @@ export class Model extends EventTarget {
   async saveProject() {
     if (this.state.params.sources.length == 1) {
       const content = this.state.params.sources[0].content ?? '';
-      // Try FSAPI save first (if user opened file via File System Access API)
-      const saved = await saveActiveFile(content);
-      if (saved) return;
+      // Write back through the FSAPI handle for the *active* source, if it was
+      // opened that way; otherwise fall back to a download.
+      const activePath = this.state.params.activePath;
+      const handle = this.fsapiHandles.get(activePath);
+      if (handle) {
+        if (await saveViaHandle(handle, content)) return;
+        this.fsapiHandles.delete(activePath); // handle invalidated — drop it
+      }
       // TextEncoder.encode() always returns an ArrayBuffer-backed Uint8Array;
       // cast required because the TS lib defines encode() → Uint8Array (= <ArrayBufferLike>)
       // while Blob's BlobPart expects ArrayBufferView<ArrayBuffer>. TS 5.7+ issue.

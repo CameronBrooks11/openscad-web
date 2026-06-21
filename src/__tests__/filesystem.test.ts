@@ -1,13 +1,12 @@
 // Unit tests for Phase 2 filesystem layer — F2/F3/F7 exit criteria
 
 import {
-  clearActiveFileHandle,
   clearHomeDirectory,
   extractLibraryNames,
   getParentDir,
   join,
   openLocalFile,
-  saveActiveFile,
+  saveViaHandle,
 } from '../fs/filesystem.ts';
 import { zipArchives, deployedArchiveNames, ZipArchive } from '../fs/zip-archives.generated.ts';
 import libsConfig from '../../libs-config.json';
@@ -213,7 +212,6 @@ describe('clearHomeDirectory', () => {
 
 describe('File System Access helpers', () => {
   afterEach(() => {
-    clearActiveFileHandle();
     delete (window as Window & { showOpenFilePicker?: unknown }).showOpenFilePicker;
   });
 
@@ -221,7 +219,7 @@ describe('File System Access helpers', () => {
     await expect(openLocalFile()).resolves.toBeNull();
   });
 
-  it('openLocalFile returns file metadata and saveActiveFile writes via the retained handle', async () => {
+  it('openLocalFile returns file metadata + handle; saveViaHandle writes through it', async () => {
     const writable = {
       write: vi.fn().mockResolvedValue(undefined),
       close: vi.fn().mockResolvedValue(undefined),
@@ -239,36 +237,32 @@ describe('File System Access helpers', () => {
       value: vi.fn().mockResolvedValue([handle]),
     });
 
-    await expect(openLocalFile()).resolves.toEqual({
-      name: 'demo.scad',
-      content: 'cube(10);',
-    });
-    await expect(saveActiveFile('sphere(5);')).resolves.toBe(true);
+    const result = await openLocalFile();
+    expect(result).toMatchObject({ name: 'demo.scad', content: 'cube(10);' });
+    expect(result!.handle).toBe(handle as unknown as FileSystemFileHandle);
+
+    await expect(saveViaHandle(result!.handle, 'sphere(5);')).resolves.toBe(true);
     expect(writable.write).toHaveBeenCalledWith('sphere(5);');
     expect(writable.close).toHaveBeenCalled();
   });
 
-  it('openLocalFile treats AbortError as a user cancel and resets failed save handles', async () => {
-    const handle = {
-      getFile: vi.fn().mockResolvedValue({
-        name: 'demo.scad',
-        text: vi.fn().mockResolvedValue('cube(10);'),
-      }),
-      createWritable: vi.fn().mockRejectedValue(new Error('disk full')),
-    };
-
+  it('openLocalFile treats AbortError as a user cancel', async () => {
     Object.defineProperty(window, 'showOpenFilePicker', {
       configurable: true,
       value: vi
         .fn()
-        .mockRejectedValueOnce(Object.assign(new Error('cancelled'), { name: 'AbortError' }))
-        .mockResolvedValueOnce([handle]),
+        .mockRejectedValueOnce(Object.assign(new Error('cancelled'), { name: 'AbortError' })),
     });
 
     await expect(openLocalFile()).resolves.toBeNull();
-    await openLocalFile();
-    await expect(saveActiveFile('cube(1);')).resolves.toBe(false);
-    await expect(saveActiveFile('cube(2);')).resolves.toBe(false);
+  });
+
+  it('saveViaHandle returns false when the handle write fails', async () => {
+    const handle = {
+      createWritable: vi.fn().mockRejectedValue(new Error('disk full')),
+    } as unknown as FileSystemFileHandle;
+
+    await expect(saveViaHandle(handle, 'cube(1);')).resolves.toBe(false);
   });
 
   it('openLocalFile rethrows non-abort picker failures', async () => {
