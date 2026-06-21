@@ -9,6 +9,13 @@ export type { CameraState };
 
 const BACKGROUND_COLOR = new THREE.Color(0x1e1e1e);
 
+/** Cap device-pixel-ratio so high-DPI displays don't blow up fill cost / memory. */
+export const MAX_PIXEL_RATIO = 2;
+export function cappedPixelRatio(devicePixelRatio: number, max = MAX_PIXEL_RATIO): number {
+  if (!Number.isFinite(devicePixelRatio) || devicePixelRatio <= 0) return 1;
+  return Math.min(devicePixelRatio, max);
+}
+
 export interface NamedPosition {
   name: string;
   position: [number, number, number];
@@ -33,17 +40,36 @@ export class ThreeScene {
   readonly scene: THREE.Scene;
   readonly controls: OrbitControls;
   private animationId: number | null = null;
+  private needsRender = false;
   private modelMesh: THREE.Mesh | null = null;
   private axesObject: THREE.LineSegments | null = null;
+  private cameraDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private readonly onContextLostHandler: (e: Event) => void;
+  private readonly onContextRestoredHandler: () => void;
 
   // Callback fired (debounced) when the user moves the camera.
   onCameraChange: ((state: CameraState) => void) | null = null;
+  // Fired when the WebGL context is lost (recoverable; a restore re-renders).
+  onContextLost: (() => void) | null = null;
 
   constructor(container: HTMLElement) {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
-    this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.renderer.setPixelRatio(cappedPixelRatio(window.devicePixelRatio));
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(this.renderer.domElement);
+
+    // Recover gracefully from a lost WebGL context instead of going silently blank.
+    this.onContextLostHandler = (e: Event) => {
+      e.preventDefault(); // allow the browser to restore the context
+      this.stop();
+      this.onContextLost?.();
+    };
+    this.onContextRestoredHandler = () => this.requestRender();
+    this.renderer.domElement.addEventListener('webglcontextlost', this.onContextLostHandler);
+    this.renderer.domElement.addEventListener(
+      'webglcontextrestored',
+      this.onContextRestoredHandler,
+    );
 
     this.camera = new THREE.PerspectiveCamera(
       45,
@@ -71,14 +97,15 @@ export class ThreeScene {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.05;
 
-    // Forward camera changes to caller (debounced 200 ms).
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     this.controls.addEventListener('change', () => {
+      // Any control-driven change needs a frame...
+      this.requestRender();
+      // ...and is forwarded to the caller (debounced 200 ms).
       if (!this.onCameraChange) return;
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
+      if (this.cameraDebounceTimer) clearTimeout(this.cameraDebounceTimer);
+      this.cameraDebounceTimer = setTimeout(() => {
         this.onCameraChange?.(this.getCameraState());
-        debounceTimer = null;
+        this.cameraDebounceTimer = null;
       }, 200);
     });
   }
@@ -87,14 +114,36 @@ export class ThreeScene {
   // Lifecycle
   // ---------------------------------------------------------------------------
 
+  /** Render on demand: schedule a single frame, plus a damping settle loop. */
   start(): void {
-    const animate = () => {
-      this.animationId = requestAnimationFrame(animate);
-      this.controls.update();
-      this.renderer.render(this.scene, this.camera);
-    };
-    animate();
+    this.requestRender();
   }
+
+  requestRender(): void {
+    this.needsRender = true;
+    if (this.animationId === null) {
+      this.animationId = requestAnimationFrame(this.tick);
+    }
+  }
+
+  /** Render exactly one frame now (e.g. before capturing the canvas). */
+  renderOnce(): void {
+    this.renderer.render(this.scene, this.camera);
+    this.needsRender = false;
+  }
+
+  private tick = (): void => {
+    // OrbitControls damping keeps moving the camera for a few frames after input;
+    // update() returns true while it's still settling.
+    const damping = this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+    this.needsRender = false;
+    if (damping || this.needsRender) {
+      this.animationId = requestAnimationFrame(this.tick);
+    } else {
+      this.animationId = null; // settled — stop until the next requestRender()
+    }
+  };
 
   stop(): void {
     if (this.animationId !== null) {
@@ -108,11 +157,37 @@ export class ThreeScene {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(width, height);
+    this.requestRender();
   }
 
   dispose(): void {
     this.stop();
+    if (this.cameraDebounceTimer) {
+      clearTimeout(this.cameraDebounceTimer);
+      this.cameraDebounceTimer = null;
+    }
+    this.renderer.domElement.removeEventListener('webglcontextlost', this.onContextLostHandler);
+    this.renderer.domElement.removeEventListener(
+      'webglcontextrestored',
+      this.onContextRestoredHandler,
+    );
+    if (this.modelMesh) {
+      this.scene.remove(this.modelMesh);
+      this.modelMesh.geometry.dispose();
+      (this.modelMesh.material as THREE.Material).dispose();
+      this.modelMesh = null;
+    }
+    if (this.axesObject) {
+      this.scene.remove(this.axesObject);
+      this.axesObject.geometry.dispose();
+      (this.axesObject.material as THREE.Material).dispose();
+      this.axesObject = null;
+    }
     this.controls.dispose();
+    // renderer.dispose() frees programs/render-lists but not the GL context itself;
+    // force it so repeated viewer teardowns (e.g. 3D<->SVG toggles) don't accumulate
+    // live WebGL contexts toward the browser's per-page limit.
+    this.renderer.forceContextLoss();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -142,6 +217,7 @@ export class ThreeScene {
     this.modelMesh = new THREE.Mesh(geometry, material);
     this.scene.add(this.modelMesh);
     this.fitCameraToMesh(this.modelMesh);
+    this.requestRender();
   }
 
   private fitCameraToMesh(mesh: THREE.Mesh): void {
@@ -178,6 +254,7 @@ export class ThreeScene {
     this.camera.zoom = saved.zoom;
     this.camera.updateProjectionMatrix();
     this.controls.update();
+    this.requestRender();
   }
 
   setCameraPosition(name: string): void {
@@ -193,6 +270,7 @@ export class ThreeScene {
     this.camera.zoom = 1;
     this.camera.updateProjectionMatrix();
     this.controls.update();
+    this.requestRender();
   }
 
   // ---------------------------------------------------------------------------
@@ -245,6 +323,7 @@ export class ThreeScene {
     } else if (this.axesObject) {
       this.scene.remove(this.axesObject);
     }
+    this.requestRender();
   }
 
   // ---------------------------------------------------------------------------
@@ -256,6 +335,7 @@ export class ThreeScene {
       const mat = this.modelMesh.material as THREE.MeshPhongMaterial;
       // Don't override per-vertex colors from a multi-material model.
       if (!mat.vertexColors) mat.color.set(color);
+      this.requestRender();
     }
   }
 }

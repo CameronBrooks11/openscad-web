@@ -788,6 +788,32 @@ test.describe('conformance — geometry primitives', () => {
     });
     expect(loaded).toBe(true);
   });
+
+  test('a non-empty preview thumbnail is produced from the rendered canvas', async ({ page }) => {
+    // The preview thumbhash is computed from the rendered canvas (renderOnce ->
+    // toDataURL). Its presence proves the capture path produced pixels; a render
+    // that threw or a missing canvas would leave it unset.
+    await loadSrc(page, 'cube([20, 20, 20]);');
+    await waitForViewer(page);
+    const thumbhash = await page.evaluate(async () => {
+      for (let i = 0; i < 50; i++) {
+        const shell = document.querySelector('osc-app-shell') as
+          | (Element & { _st?: unknown })
+          | null;
+        const state =
+          shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
+        const preview =
+          state && typeof state === 'object' && 'preview' in state
+            ? (state.preview as Record<string, unknown> | undefined)
+            : undefined;
+        if (preview?.thumbhash != null) return JSON.stringify(preview.thumbhash);
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      return null;
+    });
+    expect(thumbhash).not.toBeNull();
+    expect(thumbhash).not.toBe('""');
+  });
 });
 
 test.describe('e2e — keyboard shortcuts', () => {
