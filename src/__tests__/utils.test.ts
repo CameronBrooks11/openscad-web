@@ -137,6 +137,37 @@ describe('turnIntoDelayableExecution – settlement & supersession (#48)', () =>
     expect(await first).toBe('rej:Cancelled');
   });
 
+  it('rejects (does not hang) when a delayed job throws synchronously', async () => {
+    const job = vi.fn((_x: string): AbortablePromise<string> => {
+      throw new Error('bad args');
+    });
+    const delayable = turnIntoDelayableExecution(1000, job);
+    const result = outcome(delayable('x')({ now: false }));
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(await result).toBe('rej:bad args');
+  });
+
+  it('rejects an immediate (now:true) job that throws synchronously, and recovers after', async () => {
+    let throwNext = true;
+    const job = vi.fn((arg: string): AbortablePromise<string> => {
+      if (throwNext) throw new Error('boom');
+      return AbortablePromise<string>((resolve) => {
+        resolve(`ok:${arg}`);
+        return () => {};
+      });
+    });
+    const delayable = turnIntoDelayableExecution(0, job);
+
+    const first = outcome(delayable('a')({ now: true }));
+    expect(await first).toBe('rej:boom');
+
+    // A sync throw must have freed the live signal so a later call still settles.
+    throwNext = false;
+    const second = outcome(delayable('b')({ now: true }));
+    expect(await second).toBe('res:ok:b');
+  });
+
   it('keeps a running job cancellable after an earlier job finishes (no clobber race)', async () => {
     const { job, controllers } = makeJob();
     const delayable = turnIntoDelayableExecution(0, job);

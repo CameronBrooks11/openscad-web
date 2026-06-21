@@ -148,7 +148,7 @@ export function normalizeOperationFailure(
 
   if (
     lower.includes('worker crashed') ||
-    lower.includes('worker recycled after hard timeout') ||
+    lower.includes('worker recycled') ||
     lower.includes('stopped responding')
   ) {
     return {
@@ -162,6 +162,12 @@ export function normalizeOperationFailure(
       message: `${label} finished without producing an output file.`,
       details,
     };
+  }
+
+  // Invalid customizer parameter value: the thrown message already names the
+  // parameter and the reason, so surface it directly as the headline.
+  if (lower.includes('invalid value for parameter')) {
+    return { message: details, details };
   }
 
   return {
