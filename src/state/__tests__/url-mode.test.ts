@@ -176,6 +176,34 @@ describe('formatValue — string escaping', () => {
     expect(formatValue(['a', 'b'])).toBe('["a", "b"]');
     expect(formatValue([1, [2, 3]])).toBe('[1, [2, 3]]');
   });
+
+  it('rejects non-finite numbers', () => {
+    expect(() => formatValue(NaN)).toThrow();
+    expect(() => formatValue(Infinity)).toThrow();
+    expect(() => formatValue(-Infinity)).toThrow();
+  });
+
+  it('rejects objects, null, undefined, and functions', () => {
+    expect(() => formatValue({})).toThrow();
+    expect(() => formatValue(null)).toThrow();
+    expect(() => formatValue(undefined)).toThrow();
+    expect(() => formatValue(() => {})).toThrow();
+  });
+
+  it('rejects an invalid value nested inside an array', () => {
+    expect(() => formatValue([1, NaN, 3])).toThrow();
+    expect(() => formatValue([1, {}])).toThrow();
+  });
+
+  it('rejects excessively deep array nesting at the boundary', () => {
+    const nest = (levels: number) => {
+      let v: unknown = 1;
+      for (let i = 0; i < levels; i++) v = [v];
+      return v;
+    };
+    expect(() => formatValue(nest(16))).not.toThrow();
+    expect(() => formatValue(nest(17))).toThrow();
+  });
 });
 
 // ---------------------------------------------------------------------------

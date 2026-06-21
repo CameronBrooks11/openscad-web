@@ -87,11 +87,20 @@ export function turnIntoDelayableExecution<T extends unknown[], R>(
 
         const execute = () => {
           timer = null;
-          runningJob = job(...args);
-          runningJob.then(settleResolve, settleReject).finally(() => {
+          const release = () => {
             // Only release the shared signal if this call is still the live one.
             if (cancelLive === cancelThis) cancelLive = null;
-          });
+          };
+          try {
+            runningJob = job(...args);
+          } catch (e) {
+            // A job factory that throws synchronously (e.g. invalid args) must
+            // still settle this promise — never leave it pending.
+            settleReject(e);
+            release();
+            return;
+          }
+          runningJob.then(settleResolve, settleReject).finally(release);
         };
 
         if (now) {

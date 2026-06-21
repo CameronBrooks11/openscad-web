@@ -97,16 +97,39 @@ export type RenderArgs = {
   backend?: 'manifold' | 'cgal';
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function formatValue(value: any): string {
+/** Maximum array-nesting depth accepted for a customizer value. */
+const MAX_VALUE_DEPTH = 16;
+
+/**
+ * Render an OpenSCAD customizer value into a `-D` literal. Only the value shapes
+ * OpenSCAD parameters can hold are accepted — string, finite number, boolean, and
+ * (bounded) nested arrays of those. Anything else (NaN/Infinity, objects,
+ * functions, null/undefined, over-deep arrays) throws, so malformed values surface
+ * as a clear error instead of producing garbage like `-Dx=[object Object]`.
+ */
+export function formatValue(value: unknown): string {
+  return formatValueAtDepth(value, 0);
+}
+
+function formatValueAtDepth(value: unknown, depth: number): string {
+  if (depth > MAX_VALUE_DEPTH) {
+    throw new Error('array nesting is too deep');
+  }
   if (typeof value === 'string') {
     const escaped = value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
     return `"${escaped}"`;
-  } else if (value instanceof Array) {
-    return `[${value.map(formatValue).join(', ')}]`;
-  } else {
+  }
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value)) throw new Error(`non-finite number (${value})`);
     return `${value}`;
   }
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((v) => formatValueAtDepth(v, depth + 1)).join(', ')}]`;
+  }
+  throw new Error(`unsupported value type (${value === null ? 'null' : typeof value})`);
 }
 /**
  * Returns the fixed compile-time args shared by all render invocations.
@@ -159,7 +182,13 @@ export const render = turnIntoDelayableExecution(renderDelay, (renderArgs: Rende
     outFile,
     `--backend=${backend ?? 'manifold'}`,
     '--export-format=' + (actualRenderFormat == 'stl' ? 'binstl' : actualRenderFormat),
-    ...Object.entries(vars ?? {}).flatMap(([k, v]) => [`-D${k}=${formatValue(v)}`]),
+    ...Object.entries(vars ?? {}).map(([k, v]) => {
+      try {
+        return `-D${k}=${formatValue(v)}`;
+      } catch (e) {
+        throw new Error(`Invalid value for parameter "${k}": ${(e as Error).message}`);
+      }
+    }),
     ...(features ?? []).map((f) => `--enable=${f}`),
     ...(extraArgs ?? []),
   ];

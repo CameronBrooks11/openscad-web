@@ -13,6 +13,20 @@ describe('user-facing error helpers', () => {
     );
   });
 
+  it('normalizes a recycled-worker timeout to the stopped-responding message', () => {
+    expect(
+      normalizeOperationFailure(new Error('Worker recycled after timeout'), 'render').message,
+    ).toBe('Render failed because the compile worker stopped responding. Try again.');
+  });
+
+  it('surfaces an invalid customizer parameter value as the headline message', () => {
+    const message = normalizeOperationFailure(
+      new Error('Invalid value for parameter "x": non-finite number (NaN)'),
+      'render',
+    ).message;
+    expect(message).toBe('Invalid value for parameter "x": non-finite number (NaN)');
+  });
+
   it('normalizes OOM messages for export operations', () => {
     expect(normalizeOperationFailure(new Error('Out of memory'), 'export').message).toBe(
       'Export ran out of memory in the browser. Try simplifying the model.',
