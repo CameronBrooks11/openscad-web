@@ -15,7 +15,7 @@ describe('turnIntoDelayableExecution – kill cancels pending timeout (BUG-7)', 
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
-  it('kill() before timeout prevents job from executing', () => {
+  it('kill() before timeout prevents job from executing and rejects the promise', async () => {
     let executed = false;
     const job = vi.fn(() =>
       AbortablePromise<void>((res) => {
@@ -27,15 +27,130 @@ describe('turnIntoDelayableExecution – kill cancels pending timeout (BUG-7)', 
 
     const delayable = turnIntoDelayableExecution(1000, job);
     const promise = delayable()({ now: false });
+    const outcome = promise.then(
+      () => 'resolved',
+      (e) => (e as Error).message,
+    );
 
     // kill before the 1000ms timeout fires
     promise.kill();
 
     // advance all timers — job must NOT run
-    vi.runAllTimers();
+    await vi.runAllTimersAsync();
 
     expect(executed).toBe(false);
     expect(job).not.toHaveBeenCalled();
+    // The promise must settle (rejected) rather than leak as a pending orphan.
+    expect(await outcome).toBe('Cancelled');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// #48 — deterministic settlement and supersession
+// ---------------------------------------------------------------------------
+
+describe('turnIntoDelayableExecution – settlement & supersession (#48)', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  type JobController = {
+    resolve: (v: string) => void;
+    reject: (e: unknown) => void;
+    wasKilled: () => boolean;
+  };
+
+  function makeJob() {
+    const controllers: JobController[] = [];
+    const job = vi.fn((..._args: unknown[]) => {
+      let resolveFn!: (v: string) => void;
+      let rejectFn!: (e: unknown) => void;
+      let killed = false;
+      const p = AbortablePromise<string>((resolve, reject) => {
+        resolveFn = resolve;
+        rejectFn = reject;
+        return () => {
+          killed = true;
+          reject(new Error('Cancelled'));
+        };
+      });
+      controllers.push({ resolve: resolveFn, reject: rejectFn, wasKilled: () => killed });
+      return p;
+    });
+    return { job, controllers };
+  }
+
+  const outcome = (p: Promise<string>) =>
+    p.then(
+      (v) => `res:${v}`,
+      (e) => `rej:${e instanceof Error ? e.message : String(e)}`,
+    );
+
+  it('rejects a superseded delayed call without ever running its job', async () => {
+    const { job } = makeJob();
+    const delayable = turnIntoDelayableExecution(1000, job);
+
+    const first = outcome(delayable('a')({ now: false }));
+    delayable('b')({ now: false }).catch(() => {}); // supersedes the first before either runs
+
+    expect(await first).toBe('rej:Cancelled');
+    expect(job).not.toHaveBeenCalled(); // still inside the debounce window
+  });
+
+  it('runs only the latest delayed call after the debounce delay', async () => {
+    const { job, controllers } = makeJob();
+    const delayable = turnIntoDelayableExecution(1000, job);
+
+    outcome(delayable('a')({ now: false }));
+    const second = outcome(delayable('b')({ now: false }));
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(job).toHaveBeenCalledTimes(1);
+    expect(job).toHaveBeenCalledWith('b');
+
+    controllers[0].resolve('B');
+    expect(await second).toBe('res:B');
+  });
+
+  it('rejects a superseded running call and resolves only the newer one', async () => {
+    const { job, controllers } = makeJob();
+    const delayable = turnIntoDelayableExecution(0, job);
+
+    const first = outcome(delayable('a')({ now: true })); // runs immediately
+    const second = outcome(delayable('b')({ now: true })); // supersedes & kills the first
+
+    expect(controllers[0].wasKilled()).toBe(true);
+    expect(await first).toBe('rej:Cancelled');
+
+    controllers[1].resolve('B');
+    expect(await second).toBe('res:B');
+  });
+
+  it('settles exactly once — a late resolve of a superseded job is ignored', async () => {
+    const { job, controllers } = makeJob();
+    const delayable = turnIntoDelayableExecution(0, job);
+
+    const first = outcome(delayable('a')({ now: true }));
+    delayable('b')({ now: true }).catch(() => {}); // supersede → first rejects Cancelled
+
+    expect(await first).toBe('rej:Cancelled');
+    controllers[0].resolve('late'); // must not flip the already-settled promise
+    expect(await first).toBe('rej:Cancelled');
+  });
+
+  it('keeps a running job cancellable after an earlier job finishes (no clobber race)', async () => {
+    const { job, controllers } = makeJob();
+    const delayable = turnIntoDelayableExecution(0, job);
+
+    delayable('a')({ now: true }).catch(() => {}); // job 0 runs
+    delayable('b')({ now: true }).catch(() => {}); // supersedes/kills job 0; job 1 runs
+    expect(controllers[0].wasKilled()).toBe(true);
+
+    // Let job 0's settlement/finally flush — in the buggy version this nulled the
+    // shared kill signal and left job 1 uncancellable.
+    await vi.advanceTimersByTimeAsync(0);
+
+    delayable('c')({ now: true }).catch(() => {}); // must still be able to supersede/kill job 1
+    expect(controllers[1].wasKilled()).toBe(true);
   });
 });
 
