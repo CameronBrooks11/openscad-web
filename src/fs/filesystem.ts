@@ -229,23 +229,27 @@ export async function symlinkLibraries(
 // File System Access API (Chromium) with graceful degradation
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _activeHandle: any | null = null;
-
 /**
  * Opens a local .scad file via the File System Access API (Chromium).
  * Returns null on Firefox/Safari — the caller falls back to <input type="file">.
+ *
+ * The returned `handle` is owned by the caller, which must retain it scoped to
+ * the opened source (so write-back targets the right file even after other
+ * sources are opened) and pass it back to `saveViaHandle()`.
  */
-export async function openLocalFile(): Promise<{ name: string; content: string } | null> {
+export async function openLocalFile(): Promise<{
+  name: string;
+  content: string;
+  handle: FileSystemFileHandle;
+} | null> {
   if (!('showOpenFilePicker' in window)) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const [handle] = await (window as any).showOpenFilePicker({
+    const [handle] = (await (window as any).showOpenFilePicker({
       types: [{ description: 'OpenSCAD files', accept: { 'text/plain': ['.scad'] } }],
-    });
-    _activeHandle = handle;
+    })) as FileSystemFileHandle[];
     const file = await handle.getFile();
-    return { name: file.name, content: await file.text() };
+    return { name: file.name, content: await file.text(), handle };
   } catch (e) {
     if ((e as Error).name === 'AbortError') return null; // user cancelled
     throw e;
@@ -253,25 +257,22 @@ export async function openLocalFile(): Promise<{ name: string; content: string }
 }
 
 /**
- * Writes back through the retained FSAPI handle.
- * Returns true on success, false if no handle is retained (caller uses download fallback).
+ * Writes `content` back through a retained FSAPI handle.
+ * Returns true on success, false if the handle is invalid (caller drops it and
+ * uses the download fallback).
  */
-export async function saveActiveFile(content: string): Promise<boolean> {
-  if (!_activeHandle) return false;
+export async function saveViaHandle(
+  handle: FileSystemFileHandle,
+  content: string,
+): Promise<boolean> {
   try {
-    const writable = await _activeHandle.createWritable();
+    const writable = await handle.createWritable();
     await writable.write(content);
     await writable.close();
     return true;
   } catch {
-    _activeHandle = null; // handle invalidated — reset
     return false;
   }
-}
-
-/** Clears the active file handle (e.g. when a new project is started). */
-export function clearActiveFileHandle(): void {
-  _activeHandle = null;
 }
 
 type MutableFS = FS & {
