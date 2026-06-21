@@ -25,7 +25,6 @@ vi.mock('../../runner/actions.ts', () => {
       markers: [],
       elapsedMillis: 0,
     }),
-    getDefaultCompileArgs: vi.fn().mockReturnValue(['--backend=manifold']),
   };
 });
 

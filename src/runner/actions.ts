@@ -28,7 +28,7 @@ export const checkSyntax = turnIntoDelayableExecution(syntaxDelay, (sargs: Synta
     {
       mountArchives: true,
       inputs: sources,
-      args: [activePath, '-o', outFile, '--export-format=param'],
+      args: buildOpenScadArgs({ scadPath: activePath, outFile, exportFormat: 'param' }),
       outputPaths: [outFile],
     },
     (_streams) => {},
@@ -58,7 +58,7 @@ export const checkSyntax = turnIntoDelayableExecution(syntaxDelay, (sargs: Synta
         res({
           ...processMergedOutputs(result.mergedOutputs, {
             shiftSourceLines: {
-              sourcePath: sources[0].path,
+              sourcePath: activePath,
               skipLines: 0,
             },
           }),
@@ -131,15 +131,43 @@ function formatValueAtDepth(value: unknown, depth: number): string {
   }
   throw new Error(`unsupported value type (${value === null ? 'null' : typeof value})`);
 }
+export interface OpenScadArgsRequest {
+  /** Entry-point .scad path passed positionally to OpenSCAD. */
+  scadPath: string;
+  /** Output file path (`-o`). */
+  outFile: string;
+  /** `--export-format` value (e.g. `param`, `off`, `binstl`, `svg`). */
+  exportFormat: string;
+  /** Compute backend; omit for syntax/parameter passes that don't render geometry. */
+  backend?: 'manifold' | 'cgal';
+  /** Customizer variable overrides, emitted as `-D` literals. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  vars?: { [name: string]: any };
+  /** Experimental feature flags, emitted as `--enable=`. */
+  features?: string[];
+  /** Extra raw args appended verbatim. */
+  extraArgs?: string[];
+}
+
 /**
- * Returns the fixed compile-time args shared by all render invocations.
- * Exported for testability — the feature-flag test (T5) asserts that
- * no non-default experimental flags (e.g. --enable=lazy-union) are present.
+ * Single source of truth for OpenSCAD command-line arguments. Every compile path
+ * (syntax check, preview, render, export) builds its args here so flag handling
+ * and `-D`/feature-flag formatting stay consistent and individually testable.
  */
-export function getDefaultCompileArgs(): string[] {
-  // The only constant arg is the backend selector. Feature flags (--enable=X) are
-  // user-controlled and come from renderArgs.features[], NOT from a hard-coded list.
-  return [`--backend=manifold`];
+export function buildOpenScadArgs(request: OpenScadArgsRequest): string[] {
+  const args = [request.scadPath, '-o', request.outFile];
+  if (request.backend) args.push(`--backend=${request.backend}`);
+  args.push(`--export-format=${request.exportFormat}`);
+  for (const [k, v] of Object.entries(request.vars ?? {})) {
+    try {
+      args.push(`-D${k}=${formatValue(v)}`);
+    } catch (e) {
+      throw new Error(`Invalid value for parameter "${k}": ${(e as Error).message}`);
+    }
+  }
+  for (const f of request.features ?? []) args.push(`--enable=${f}`);
+  args.push(...(request.extraArgs ?? []));
+  return args;
 }
 
 export const render = turnIntoDelayableExecution(renderDelay, (renderArgs: RenderArgs) => {
@@ -176,22 +204,15 @@ export const render = turnIntoDelayableExecution(renderDelay, (renderArgs: Rende
     .split('/')
     .pop();
   const outFile = `${stem}.${actualRenderFormat}`;
-  const args = [
+  const args = buildOpenScadArgs({
     scadPath,
-    '-o',
     outFile,
-    `--backend=${backend ?? 'manifold'}`,
-    '--export-format=' + (actualRenderFormat == 'stl' ? 'binstl' : actualRenderFormat),
-    ...Object.entries(vars ?? {}).map(([k, v]) => {
-      try {
-        return `-D${k}=${formatValue(v)}`;
-      } catch (e) {
-        throw new Error(`Invalid value for parameter "${k}": ${(e as Error).message}`);
-      }
-    }),
-    ...(features ?? []).map((f) => `--enable=${f}`),
-    ...(extraArgs ?? []),
-  ];
+    exportFormat: actualRenderFormat == 'stl' ? 'binstl' : actualRenderFormat,
+    backend: backend ?? 'manifold',
+    vars,
+    features,
+    extraArgs,
+  });
 
   const job = spawnOpenSCAD(
     {

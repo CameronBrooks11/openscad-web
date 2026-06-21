@@ -8,14 +8,6 @@
 // hangs per-instance: a worker created in "hang" mode answers nothing until it
 // is terminated and a fresh worker is created.
 
-// openscad-runner imports mountDemandLibraries from filesystem.ts; stub the
-// module so the heavy BrowserFS graph is not pulled into the test.
-vi.mock('../../fs/filesystem.ts', () => ({
-  mountDemandLibraries: vi.fn().mockResolvedValue([]),
-  symlinkLibraries: vi.fn().mockResolvedValue(undefined),
-  createEditorFS: vi.fn().mockResolvedValue(undefined),
-}));
-
 // The runner's per-job timeout (kept in sync with SOFT/COMPILE timeout in the runner).
 const TIMEOUT_MS = 30_000;
 
