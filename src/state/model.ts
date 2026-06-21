@@ -9,15 +9,10 @@ import {
 } from './app-state.ts';
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
 import { bubbleUpDeepMutations } from './deep-mutate.ts';
-import {
-  downloadUrl,
-  fetchSource,
-  formatBytes,
-  formatMillis,
-  readFileAsDataURL,
-} from '../utils.ts';
+import { fetchSource, formatBytes, formatMillis, readFileAsDataURL } from '../utils.ts';
 import { openLocalFile, saveActiveFile } from '../fs/filesystem.ts';
 import { ProjectStore } from './project-store.ts';
+import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
 import { isExpectedJobCancellation, ProcessStreams } from '../runner/openscad-runner.ts';
 import { is2DFormatExtension } from './formats.ts';
 import { parseOff } from '../io/import_off.ts';
@@ -51,6 +46,7 @@ export class Model extends EventTarget {
     public state: State,
     private setStateCallback?: (state: State) => void,
     private statePersister?: StatePersister,
+    private host: HostAdapter = new WebHostAdapter(),
   ) {
     super();
     this.projectStore = new ProjectStore(fs);
@@ -319,7 +315,7 @@ export class Model extends EventTarget {
           await fetchSource(
             this.fs,
             { path: requestedPath, url },
-            { baseUrl: window.location.href },
+            { baseUrl: this.host.baseUrl() },
           ),
         );
         // The active file may have changed while the fetch was in flight. Write
@@ -428,9 +424,12 @@ export class Model extends EventTarget {
       if (normalPassThrough || glbPassThrough) {
         this.mutate((s) => (s.export = s.output));
         if (glbPassThrough) {
-          downloadUrl(this.state.output.displayFileURL!, this.state.output.displayFile!.name);
+          this.host.download(
+            this.state.output.displayFileURL!,
+            this.state.output.displayFile!.name,
+          );
         } else {
-          downloadUrl(this.state.output.outFileURL, this.state.output.outFile.name);
+          this.host.download(this.state.output.outFileURL, this.state.output.outFile.name);
         }
         return;
       }
@@ -496,11 +495,11 @@ export class Model extends EventTarget {
         })({ now: true });
       }
 
-      const outFileURL = URL.createObjectURL(output.outFile);
+      const outFileURL = this.host.createObjectURL(output.outFile);
       this.mutate((s) => {
         s.exporting = false;
         if (s.export?.outFileURL?.startsWith('blob:') ?? false) {
-          URL.revokeObjectURL(s.export!.outFileURL);
+          this.host.revokeObjectURL(s.export!.outFileURL);
         }
         s.export = {
           outFile: output.outFile,
@@ -509,7 +508,7 @@ export class Model extends EventTarget {
           formattedElapsedMillis: formatMillis(output.elapsedMillis),
           formattedOutFileSize: formatBytes(output.outFile.size),
         };
-        downloadUrl(s.export.outFileURL, output.outFile.name);
+        this.host.download(s.export.outFileURL, output.outFile.name);
       });
     } catch (err) {
       this.mutate((s) => {
@@ -589,12 +588,12 @@ export class Model extends EventTarget {
       const contentBytes = new TextEncoder().encode(content) as Uint8Array<ArrayBuffer>;
       const blob = new Blob([contentBytes], { type: 'text/plain' });
       const file = new File([blob], this.state.params.activePath.split('/').pop()!);
-      downloadUrl(URL.createObjectURL(file), file.name);
+      this.host.download(this.host.createObjectURL(file), file.name);
     } else {
       try {
         const blob = await this.projectStore.buildZip(this.state.params.sources);
         const file = new File([blob], 'project.zip');
-        downloadUrl(URL.createObjectURL(file), file.name);
+        this.host.download(this.host.createObjectURL(file), file.name);
       } catch (err) {
         this.mutate((s) => {
           this.applyUserFacingError(s, err, 'model');
@@ -677,7 +676,7 @@ export class Model extends EventTarget {
       } else {
         is2D = false;
       }
-      const outFileURL = URL.createObjectURL(output.outFile);
+      const outFileURL = this.host.createObjectURL(output.outFile);
       const displayFileURL = displayFile && (await readFileAsDataURL(displayFile));
       this.mutate((s) => {
         setRendering(s, false);
@@ -689,10 +688,10 @@ export class Model extends EventTarget {
           markers: output.markers,
         };
         if (s.output?.outFileURL?.startsWith('blob:') ?? false) {
-          URL.revokeObjectURL(s.output!.outFileURL);
+          this.host.revokeObjectURL(s.output!.outFileURL);
         }
         if (s.output?.displayFileURL?.startsWith('blob:') ?? false) {
-          URL.revokeObjectURL(s.output!.displayFileURL!);
+          this.host.revokeObjectURL(s.output!.displayFileURL!);
         }
 
         s.output = {
@@ -707,8 +706,7 @@ export class Model extends EventTarget {
         };
 
         if (!isPreview) {
-          const audio = document.getElementById('complete-sound') as HTMLAudioElement;
-          audio?.play();
+          this.host.playCompletionChime();
         }
       });
     } catch (err) {
