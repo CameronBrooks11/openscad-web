@@ -17,14 +17,7 @@ import {
   readFileAsDataURL,
 } from '../utils.ts';
 import { openLocalFile, saveActiveFile } from '../fs/filesystem.ts';
-import {
-  MAX_PROJECT_FILE_COUNT,
-  MAX_PROJECT_TOTAL_BYTES,
-  normalizeProjectPath,
-  ProjectPathError,
-} from '../fs/project-path.ts';
-
-import JSZip from 'jszip';
+import { ProjectStore } from './project-store.ts';
 import { isExpectedJobCancellation, ProcessStreams } from '../runner/openscad-runner.ts';
 import { is2DFormatExtension } from './formats.ts';
 import { parseOff } from '../io/import_off.ts';
@@ -37,6 +30,9 @@ import {
 } from '../user-facing-errors.ts';
 
 export class Model extends EventTarget {
+  /** Owns project-source logic (lookup, edits, file ops, ZIP import/export). */
+  private readonly projectStore: ProjectStore;
+
   constructor(
     private fs: FS,
     public state: State,
@@ -44,6 +40,7 @@ export class Model extends EventTarget {
     private statePersister?: StatePersister,
   ) {
     super();
+    this.projectStore = new ProjectStore(fs);
   }
 
   // Sequence counters identifying the latest in-flight operation of each kind.
@@ -198,58 +195,39 @@ export class Model extends EventTarget {
   }
 
   openFile(path: string) {
-    // console.log(`openFile: ${path}`);
-    if (
-      this.mutate((s) => {
-        if (s.params.activePath != path) {
-          const readSource = (path: string) => {
-            try {
-              return new TextDecoder('utf-8').decode(this.fs.readFileSync(path));
-            } catch (e) {
-              console.error('Error while reading file:', e);
-              return '';
-            }
-          };
-          // Remove source of previous active path if it's unmodified
-          const activePathContent = readSource(s.params.activePath);
-          s.params.sources = s.params.sources.filter(
-            (src) => src.path !== s.params.activePath || src.content != activePathContent,
-          );
-
-          s.params.activePath = path;
-          if (!s.params.sources.find((src) => src.path === path)) {
-            const content = readSource(path);
-            s.params.sources = [...s.params.sources, { path, content }];
-          }
-          s.lastCheckerRun = undefined;
-          s.output = undefined;
-          s.export = undefined;
-          s.preview = undefined;
-          s.currentRunLogs = undefined;
-          s.error = undefined;
-          s.errorDetails = undefined;
-          s.is2D = undefined;
-        }
-      })
-    ) {
-      this.processSource();
-    }
+    const next = this.projectStore.openFile(
+      this.state.params.sources,
+      this.state.params.activePath,
+      path,
+    );
+    if (!next) return; // already the active file
+    this.mutate((s) => {
+      s.params.sources = next.sources;
+      s.params.activePath = next.activePath;
+      s.lastCheckerRun = undefined;
+      s.output = undefined;
+      s.export = undefined;
+      s.preview = undefined;
+      s.currentRunLogs = undefined;
+      s.error = undefined;
+      s.errorDetails = undefined;
+      s.is2D = undefined;
+    });
+    this.processSource();
   }
 
   get source(): string {
-    return (
-      this.state.params.sources.find((src) => src.path === this.state.params.activePath)?.content ??
-      ''
-    );
+    return this.projectStore.activeContent(this.state.params.sources, this.state.params.activePath);
   }
   set source(source: string) {
     if (
-      this.mutate(
-        (s) =>
-          (s.params.sources = s.params.sources.map((src) =>
-            src.path === s.params.activePath ? { path: src.path, content: source } : src,
-          )),
-      )
+      this.mutate((s) => {
+        s.params.sources = this.projectStore.withActiveContent(
+          s.params.sources,
+          s.params.activePath,
+          source,
+        );
+      })
     ) {
       this.processSource();
     }
@@ -474,19 +452,10 @@ export class Model extends EventTarget {
 
   /** Creates a new empty .scad file in /home/ and activates it. */
   newFile(): void {
-    const base = '/home/untitled';
-    let path = `${base}.scad`;
-    let n = 2;
-    const existing = new Set(this.state.params.sources.map((s) => s.path));
-    while (existing.has(path)) path = `${base}-${n++}.scad`;
-    try {
-      this.fs.writeFile(path, '');
-    } catch {
-      /* fs may not support it yet */
-    }
+    const next = this.projectStore.newFile(this.state.params.sources);
     this.mutate((s) => {
-      s.params.sources = [...s.params.sources, { path, content: '' }];
-      s.params.activePath = path;
+      s.params.sources = next.sources;
+      s.params.activePath = next.activePath;
       s.lastCheckerRun = undefined;
       s.output = undefined;
       s.error = undefined;
@@ -497,56 +466,17 @@ export class Model extends EventTarget {
   /** Extracts a ZIP archive into /home/ and activates the entry .scad. */
   async importProjectZip(zipBuffer: ArrayBuffer): Promise<void> {
     try {
-      const zip = await JSZip.loadAsync(zipBuffer);
-      const entries = Object.entries(zip.files).filter(([, zipObj]) => !zipObj.dir);
-      if (entries.length > MAX_PROJECT_FILE_COUNT) {
-        throw new ProjectPathError(`Archive has too many files (max ${MAX_PROJECT_FILE_COUNT}).`);
-      }
-      // Validate and bound EVERY entry before writing ANY of them, so a malicious
-      // archive is rejected atomically (no partial extraction). The size limit is
-      // an approximate cumulative guard over decoded entry lengths (UTF-16 units);
-      // a single entry is still fully decoded before its length is counted.
-      const files: [string, string][] = [];
-      const seen = new Set<string>();
-      let totalSize = 0;
-      for (const [relPath, zipObj] of entries) {
-        const safePath = normalizeProjectPath(relPath);
-        if (seen.has(safePath)) {
-          throw new ProjectPathError(`Duplicate path in archive: ${safePath}`);
-        }
-        seen.add(safePath);
-        const content = await zipObj.async('string');
-        totalSize += content.length;
-        if (totalSize > MAX_PROJECT_TOTAL_BYTES) {
-          throw new ProjectPathError('Archive exceeds the uncompressed size limit.');
-        }
-        files.push([safePath, content]);
-      }
-      // Paths are validated above; FS write failures (e.g. a missing parent dir in
-      // the worker VFS) are best-effort and must not abort the whole import — the
-      // file content is still surfaced via s.params.sources below.
-      for (const [safePath, content] of files) {
-        try {
-          this.fs.writeFile(`/home/${safePath}`, content);
-        } catch {
-          /* best-effort: source is still loaded into the editor below */
-        }
-      }
-      const entryRel = (files.find(([p]) => p === 'main.scad') ??
-        files.find(([p]) => p.endsWith('.scad')) ??
-        files[0])?.[0];
-      if (entryRel) {
-        const fullEntry = `/home/${entryRel}`;
-        this.mutate((s) => {
-          s.params.sources = files.map(([p, content]) => ({ path: `/home/${p}`, content }));
-          s.params.activePath = fullEntry;
-          s.lastCheckerRun = undefined;
-          s.output = undefined;
-          s.error = undefined;
-          s.errorDetails = undefined;
-        });
-        this.processSource();
-      }
+      const next = await this.projectStore.importZip(zipBuffer);
+      if (!next) return; // archive had no files
+      this.mutate((s) => {
+        s.params.sources = next.sources;
+        s.params.activePath = next.activePath;
+        s.lastCheckerRun = undefined;
+        s.output = undefined;
+        s.error = undefined;
+        s.errorDetails = undefined;
+      });
+      this.processSource();
     } catch (err) {
       this.mutate((s) => {
         this.applyUserFacingError(s, err, 'model');
@@ -558,16 +488,14 @@ export class Model extends EventTarget {
   async openFileViaFSAPI(): Promise<boolean> {
     const result = await openLocalFile();
     if (!result) return false;
-    const path = `/home/${result.name}`;
-    try {
-      this.fs.writeFile(path, result.content);
-    } catch {
-      /* ignore */
-    }
+    const next = this.projectStore.addFile(
+      this.state.params.sources,
+      `/home/${result.name}`,
+      result.content,
+    );
     this.mutate((s) => {
-      const withoutExisting = s.params.sources.filter((src) => src.path !== path);
-      s.params.sources = [...withoutExisting, { path, content: result.content }];
-      s.params.activePath = path;
+      s.params.sources = next.sources;
+      s.params.activePath = next.activePath;
       s.lastCheckerRun = undefined;
       s.output = undefined;
       s.error = undefined;
@@ -592,15 +520,7 @@ export class Model extends EventTarget {
       downloadUrl(URL.createObjectURL(file), file.name);
     } else {
       try {
-        const zip = new JSZip();
-        for (const source of this.state.params.sources) {
-          let path = source.path;
-          if (path.startsWith('/')) {
-            path = path.substring(1);
-          }
-          zip.file(path, await fetchSource(this.fs, source));
-        }
-        const blob = await zip.generateAsync({ type: 'blob' });
+        const blob = await this.projectStore.buildZip(this.state.params.sources);
         const file = new File([blob], 'project.zip');
         downloadUrl(URL.createObjectURL(file), file.name);
       } catch (err) {
