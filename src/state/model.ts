@@ -40,6 +40,15 @@ export class Model extends EventTarget {
     super();
   }
 
+  // Sequence counters identifying the latest in-flight operation of each kind.
+  // checkSyntax/render debounce and supersede one another (turnIntoDelayableExecution),
+  // so a superseded call settles (rejects) while a newer one owns the shared UI
+  // flags — these guards stop the stale call from clobbering the newer call's
+  // previewing/rendering/checkingSyntax state.
+  private _previewSeq = 0;
+  private _renderSeq = 0;
+  private _syntaxSeq = 0;
+
   init() {
     if (
       !this.state.output &&
@@ -288,18 +297,22 @@ export class Model extends EventTarget {
   }
 
   async checkSyntax() {
+    const token = ++this._syntaxSeq;
+    const isCurrent = () => this._syntaxSeq === token;
     this.mutate((s) => (s.checkingSyntax = true));
     try {
       const checkerRun = await checkSyntax({
         activePath: this.state.params.activePath,
         sources: this.state.params.sources,
       })({ now: false });
+      if (!isCurrent()) return; // a newer syntax check superseded this one
       this.mutate((s) => {
         s.lastCheckerRun = checkerRun;
         s.parameterSet = checkerRun?.parameterSet;
         s.checkingSyntax = false;
       });
     } catch (err) {
+      if (!isCurrent()) return; // superseded — the newer check owns checkingSyntax
       if (!isExpectedJobCancellation(err)) {
         if (!isUserFacingOperationError(err)) {
           console.error('Error while checking syntax:', err);
@@ -309,9 +322,11 @@ export class Model extends EventTarget {
         });
       }
     } finally {
-      this.mutate((s) => {
-        if (s.checkingSyntax) s.checkingSyntax = false;
-      });
+      if (isCurrent()) {
+        this.mutate((s) => {
+          if (s.checkingSyntax) s.checkingSyntax = false;
+        });
+      }
     }
   }
 
@@ -566,6 +581,10 @@ export class Model extends EventTarget {
     // console.log(JSON.stringify(this.state, null, 2));
     mountArchives ??= true;
     retryInOtherDim ??= true;
+    // A render and a preview own separate UI flags; track the latest of each so a
+    // superseded call cannot turn off the spinner a newer call is still driving.
+    const token = isPreview ? ++this._previewSeq : ++this._renderSeq;
+    const isCurrent = () => (isPreview ? this._previewSeq : this._renderSeq) === token;
     const setRendering = (s: State, value: boolean) => {
       if (isPreview) {
         s.previewing = value;
@@ -615,6 +634,7 @@ export class Model extends EventTarget {
     };
     try {
       const output = await render(renderArgs)({ now });
+      if (!isCurrent()) return; // a newer render/preview superseded this one
       const displayFile = output.outFile;
       if (output.outFile.name.endsWith('.svg') || output.outFile.name.endsWith('.dxf')) {
         is2D = true;
@@ -656,6 +676,7 @@ export class Model extends EventTarget {
         }
       });
     } catch (err) {
+      if (!isCurrent()) return; // superseded — the newer call owns the spinner state
       this.mutate((s) => {
         setRendering(s, false);
         if (!isExpectedJobCancellation(err)) {

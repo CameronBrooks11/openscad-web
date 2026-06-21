@@ -30,50 +30,77 @@ export function AbortablePromise<T>(
   return Object.assign(promise, { kill: kill! });
 }
 
-// <T extends unknown[]>(...args: T)
+// Rejection message used when a delayable call is superseded by a newer one or
+// killed before it finishes. Recognized by isExpectedJobCancellation so the UI
+// treats it as benign rather than a real failure.
+export const DELAYABLE_CANCELLED_MESSAGE = 'Cancelled';
+
+/**
+ * Wraps `job` so that rapid calls debounce and supersede one another: at most one
+ * execution is live at a time, and a newer call cancels the previous one whether
+ * it is still waiting out the debounce delay or already running.
+ *
+ * Every returned promise settles exactly once — resolved on success, rejected on
+ * job failure, or rejected with `DELAYABLE_CANCELLED_MESSAGE` when superseded or
+ * killed. Superseded calls are never left pending.
+ */
 export function turnIntoDelayableExecution<T extends unknown[], R>(
   delay: number,
   job: (...args: T) => AbortablePromise<R>,
 ) {
-  let pendingId: number | null;
-  let runningJobKillSignal: (() => void) | null;
+  // Cancels whichever call is currently live (pending-delayed or running).
+  // Identity-checked on cleanup so a finished job cannot clobber a newer one's.
+  let cancelLive: (() => void) | null = null;
+
   return (...args: T) =>
     ({ now }: { now: boolean }) =>
       AbortablePromise<R>((resolve, reject) => {
-        let abortablePromise: AbortablePromise<R> | undefined = undefined;
-        (async () => {
-          const doExecute = async () => {
-            if (runningJobKillSignal) {
-              runningJobKillSignal();
-              runningJobKillSignal = null;
-            }
-            abortablePromise = job(...args);
-            runningJobKillSignal = abortablePromise.kill;
-            try {
-              resolve(await abortablePromise);
-            } catch (e) {
-              reject(e);
-            } finally {
-              runningJobKillSignal = null;
-            }
-          };
-          if (pendingId) {
-            clearTimeout(pendingId);
-            pendingId = null;
+        let settled = false;
+        const settleResolve = (r: R) => {
+          if (!settled) {
+            settled = true;
+            resolve(r);
           }
-          if (now) {
-            doExecute();
-          } else {
-            pendingId = window.setTimeout(doExecute, delay);
-          }
-        })();
-        return () => {
-          if (pendingId) {
-            clearTimeout(pendingId);
-            pendingId = null;
-          }
-          abortablePromise?.kill();
         };
+        const settleReject = (e: unknown) => {
+          if (!settled) {
+            settled = true;
+            reject(e);
+          }
+        };
+
+        // Supersede the previously-live call before starting this one.
+        cancelLive?.();
+
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        let runningJob: AbortablePromise<R> | undefined;
+
+        const cancelThis = () => {
+          if (timer != null) {
+            clearTimeout(timer);
+            timer = null;
+          }
+          runningJob?.kill();
+          settleReject(new Error(DELAYABLE_CANCELLED_MESSAGE));
+        };
+        cancelLive = cancelThis;
+
+        const execute = () => {
+          timer = null;
+          runningJob = job(...args);
+          runningJob.then(settleResolve, settleReject).finally(() => {
+            // Only release the shared signal if this call is still the live one.
+            if (cancelLive === cancelThis) cancelLive = null;
+          });
+        };
+
+        if (now) {
+          execute();
+        } else {
+          timer = setTimeout(execute, delay);
+        }
+
+        return cancelThis;
       });
 }
 
