@@ -36,8 +36,12 @@ try {
     swDest,
     globIgnores: ['**/.*', '**/*.map', 'manifest*.js'],
     maximumFileSizeToCacheInBytes: 200 * 1024 * 1024,
-    clientsClaim: true,
-    skipWaiting: true,
+    // A new worker WAITS instead of taking over the open page: skipWaiting/
+    // clientsClaim would swap the controller mid-session (risking 404s on hashed
+    // chunks removed by the new deploy). The app surfaces an "update available"
+    // signal instead, and the new worker activates on the next load. See #53.
+    clientsClaim: false,
+    skipWaiting: false,
     // Preserve the established runtime-caching rule order to avoid behavior drift.
     runtimeCaching: [
       {
