@@ -256,23 +256,40 @@ export class Model extends EventTarget {
   } = {}) {
     const src = this.state.params.sources.find((src) => src.path === this.state.params.activePath);
     if (src && src.content == null) {
+      const requestedPath = src.path;
+      const { url } = src;
       try {
-        const { path } = src;
-        const { url } = src;
         const content = new TextDecoder().decode(
-          await fetchSource(this.fs, { path, url }, { baseUrl: window.location.href }),
+          await fetchSource(
+            this.fs,
+            { path: requestedPath, url },
+            { baseUrl: window.location.href },
+          ),
         );
+        // The active file may have changed while the fetch was in flight. Write
+        // the content back to the source it was actually fetched for — never
+        // whichever file is active now — and only if that source still needs it.
+        let written = false;
         this.mutate((s) => {
-          s.params.sources = s.params.sources.map((src) =>
-            src.path === s.params.activePath ? { ...src, content } : src,
+          const target = s.params.sources.find((cur) => cur.path === requestedPath);
+          if (!target || target.content != null) return; // source removed or already filled
+          s.params.sources = s.params.sources.map((cur) =>
+            cur.path === requestedPath ? { ...cur, content } : cur,
           );
           s.error = undefined;
           s.errorDetails = undefined;
+          written = true;
         });
+        // If the user has since switched away, a newer processSource owns the
+        // active file's compilation — don't drive a render for the file they left.
+        if (!written || requestedPath !== this.state.params.activePath) return;
       } catch (err) {
-        this.mutate((s) => {
-          this.applyUserFacingError(s, err, 'source');
-        });
+        // Only surface the error if this fetch is still for the active file.
+        if (requestedPath === this.state.params.activePath) {
+          this.mutate((s) => {
+            this.applyUserFacingError(s, err, 'source');
+          });
+        }
         return;
       }
     }
