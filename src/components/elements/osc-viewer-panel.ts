@@ -131,6 +131,7 @@ export class OscViewerPanel extends LitElement {
     if (!scene) return;
     try {
       const text = await file.text();
+      if (this._scene !== scene) return; // viewer torn down / scene replaced during await
       const data = parseOff(text);
       const geometry = offToBufferGeometry(data);
       const color = this._st?.view.color ?? '#f9d72c';
@@ -138,8 +139,11 @@ export class OscViewerPanel extends LitElement {
 
       if (this._container) this._container.dataset.geometryLoaded = 'true';
 
-      const dataUrl = scene.renderer.domElement.toDataURL('image/png', 0.5);
+      // Render the new geometry before capturing so the thumbnail isn't stale.
+      scene.renderOnce();
+      const dataUrl = scene.renderer.domElement.toDataURL('image/png');
       const hash = await imageToThumbhash(dataUrl);
+      if (this._scene !== scene) return; // torn down during hashing
       this._model.mutate((s) => {
         s.preview = { thumbhash: hash };
       });
