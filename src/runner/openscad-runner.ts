@@ -39,7 +39,7 @@ export type ProcessStreams = { stderr: string } | { stdout: string };
 export type OpenSCADInvocationCallback = { result: OpenSCADInvocationResults } | ProcessStreams;
 
 // ---------------------------------------------------------------------------
-// R6 — Priority levels (higher number = higher priority)
+// Priority levels (higher number = higher priority)
 // ---------------------------------------------------------------------------
 export type JobPriority = 'export' | 'render' | 'preview' | 'syntax';
 // Syntax checking is background bookkeeping; explicit user-triggered work must
@@ -60,7 +60,7 @@ export function isExpectedJobCancellation(error: unknown): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// R3 — Persistent singleton Worker
+// Persistent singleton Worker
 // ---------------------------------------------------------------------------
 type PendingJob = {
   resolve: (r: OpenSCADInvocationResults) => void;
@@ -190,7 +190,7 @@ function recordCompilePerf(job: PendingJob, perf?: CompilePerfStats): void {
   }
 }
 
-// Discard a job without terminating the worker (R6 cancel path)
+// Discard a job without terminating the worker (queued-job cancel path)
 function cancelJobById(id: string, reason = 'Cancelled'): void {
   const job = _pending.get(id);
   if (!job) return;
@@ -212,7 +212,7 @@ export function spawnOpenSCAD(
     markPerf('osc:first-compile-request');
   }
 
-  // R6 — cancel all lower-priority pending jobs when a higher-priority job arrives
+  // cancel all lower-priority pending jobs when a higher-priority job arrives
   const incomingPriority = PRIORITY[priority];
   for (const [pendingId, pendingJob] of _pending) {
     if (pendingJob.priority < incomingPriority) {

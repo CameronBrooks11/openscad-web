@@ -472,7 +472,7 @@ export class Model extends EventTarget {
     }
   }
 
-  /** F6: Creates a new empty .scad file in /home/ and activates it. */
+  /** Creates a new empty .scad file in /home/ and activates it. */
   newFile(): void {
     const base = '/home/untitled';
     let path = `${base}.scad`;
@@ -494,7 +494,7 @@ export class Model extends EventTarget {
     });
   }
 
-  /** F6: Extracts a ZIP archive into /home/ and activates the entry .scad. */
+  /** Extracts a ZIP archive into /home/ and activates the entry .scad. */
   async importProjectZip(zipBuffer: ArrayBuffer): Promise<void> {
     try {
       const zip = await JSZip.loadAsync(zipBuffer);
@@ -554,7 +554,7 @@ export class Model extends EventTarget {
     }
   }
 
-  /** F5: Opens a local file via the File System Access API. Returns true if opened. */
+  /** Opens a local file via the File System Access API. Returns true if opened. */
   async openFileViaFSAPI(): Promise<boolean> {
     const result = await openLocalFile();
     if (!result) return false;

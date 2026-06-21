@@ -112,7 +112,7 @@ export function parseUrlMode(search: string): UrlModeParams | { error: string } 
 }
 
 // ---------------------------------------------------------------------------
-// U2 — External model fetching
+// External model fetching
 // ---------------------------------------------------------------------------
 
 const MODEL_MAX_BYTES = EXTERNAL_SOURCE_MAX_BYTES;
@@ -170,7 +170,7 @@ export async function fetchExternalModel(modelUrl: string): Promise<string | { e
 }
 
 // ---------------------------------------------------------------------------
-// U8 — Customizer share URL builder
+// Customizer share URL builder
 // ---------------------------------------------------------------------------
 
 /** Build a shareable URL for the current customizer state.

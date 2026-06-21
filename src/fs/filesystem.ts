@@ -42,10 +42,10 @@ function createBFSBackend(fsName: string, options?: Record<string, unknown>): Pr
 }
 
 // ---------------------------------------------------------------------------
-// F1 + F2 — Canonical mount layout + IndexedDB persistence
+// Canonical mount layout + IndexedDB persistence
 // ---------------------------------------------------------------------------
 
-// Module-level reference to the root MountableFileSystem for dynamic mounting (F3)
+// Module-level reference to the root MountableFileSystem for dynamic mounting
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let _rootMFS: any = null;
 
@@ -90,7 +90,7 @@ export async function createEditorFS({
   browserFS.install(ctx);
   await browserFS.initialize(_rootMFS);
 
-  // F2: storage budget warning for standalone mode
+  // storage budget warning for standalone mode
   if (allowPersistence && 'storage' in navigator) {
     const { usage, quota } = await navigator.storage.estimate();
     if (usage && quota && usage / quota > 0.8) {
@@ -102,7 +102,7 @@ export async function createEditorFS({
 }
 
 // ---------------------------------------------------------------------------
-// F3 — Demand-loaded library mounting
+// Demand-loaded library mounting
 // ---------------------------------------------------------------------------
 
 /** Parses `use <...>` and `include <...>` directives; returns the top-level library names. */
@@ -226,7 +226,7 @@ export async function symlinkLibraries(
 }
 
 // ---------------------------------------------------------------------------
-// F5 — File System Access API (Chromium) with graceful degradation
+// File System Access API (Chromium) with graceful degradation
 // ---------------------------------------------------------------------------
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

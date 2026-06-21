@@ -24,7 +24,7 @@ declare const self: DedicatedWorkerGlobalScope;
 // fixed-base (/openscad-web/) or relocatable (./).
 const appBaseUrl = new URL('../', import.meta.url).href;
 
-// WASM initializes exactly once per worker lifetime (R4)
+// WASM initializes exactly once per worker lifetime
 let currentJobId: string | null = null;
 // Points at the current job's mergedOutputs accumulator so print/printErr can push to it
 let currentMergedOutputs: MergedOutput[] | null = null;
@@ -32,7 +32,7 @@ let currentMergedOutputs: MergedOutput[] | null = null;
 // NOTE: runtimePromise is NOT a singleton — Emscripten's callMain calls exit() internally,
 // setting Module.ABORT=true. A second callMain on the same instance throws
 // "program has already aborted!". We therefore create a fresh runtime per compile job.
-// The persistent-worker model (R3) still avoids worker-startup overhead; only the WASM
+// The persistent-worker model still avoids worker-startup overhead; only the WASM
 // module instance is recreated. The compiled .wasm binary is cached by the browser's
 // WebAssembly module cache so subsequent instantiations are fast.
 function createJobRuntime(): Promise<OpenSCADRuntime> {
@@ -106,7 +106,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
 
     try {
       await ensureWorkerBrowserFSLoaded();
-      // F3: Demand-load only the libraries referenced in the source texts
+      // Demand-load only the libraries referenced in the source texts
       let libraryNames: string[] = [];
       if (mountArchives) {
         if (!editorFSInitialized) {
