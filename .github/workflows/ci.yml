@@ -265,16 +265,17 @@ jobs:
           name: perf-baseline-candidate
           path: coverage/perf/
 
-  ci:
+  # Unified gate — the ONLY job required by branch protection. Add every job to
+  # `needs:` here; never add individual jobs to the branch-protection rule.
+  ok:
+    name: ok
     runs-on: ubuntu-24.04
     needs: [build-and-test, publish-artifact, e2e, publish-e2e, performance]
     if: always()
+    timeout-minutes: 5
     steps:
-      - name: All CI checks passed
-        run: |
-          results='${{ toJSON(needs) }}'
-          if echo "$results" | grep -q '"result": "failure"\|"result": "cancelled"'; then
-            echo "One or more required jobs failed or were cancelled."
-            exit 1
-          fi
-          echo "All required jobs succeeded."
+      - name: Fail if any upstream job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - name: Pass
+        run: echo 'All checks passed or were skipped'
