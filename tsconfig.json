@@ -25,5 +25,8 @@
     }
   },
   "include": ["src/**/*.ts", "src/**/*.js"],
-  "exclude": ["node_modules", "src/wasm/*.js", "src/runner/openscad-worker.ts"]
+  // src/wasm/*.js are generated Emscripten glue files that are not authored TypeScript.
+  // The worker (src/runner/openscad-worker.ts) is type-checked like the rest of src; it
+  // carries its own `/// <reference lib="webworker" />`.
+  "exclude": ["node_modules", "src/wasm/*.js"]
 }
