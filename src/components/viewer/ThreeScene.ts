@@ -41,6 +41,7 @@ export class ThreeScene {
   readonly controls: OrbitControls;
   private animationId: number | null = null;
   private needsRender = false;
+  private paused = false;
   private modelMesh: THREE.Mesh | null = null;
   private axesObject: THREE.LineSegments | null = null;
   private cameraDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -119,7 +120,23 @@ export class ThreeScene {
     this.requestRender();
   }
 
+  /**
+   * Suspend or resume rendering. While inactive, `requestRender` is a no-op (so
+   * geometry/camera changes don't spin the loop for an off-screen viewer);
+   * resuming renders the current state once. `renderOnce` still works while
+   * suspended so a thumbnail can be captured.
+   */
+  setActive(active: boolean): void {
+    this.paused = !active;
+    if (active) {
+      this.requestRender();
+    } else {
+      this.stop();
+    }
+  }
+
   requestRender(): void {
+    if (this.paused) return; // suspended — will render on resume
     this.needsRender = true;
     if (this.animationId === null) {
       this.animationId = requestAnimationFrame(this.tick);
