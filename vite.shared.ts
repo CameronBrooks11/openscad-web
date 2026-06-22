@@ -35,6 +35,21 @@ export function createAppViteConfig({
       outDir,
       target: 'es2022',
       emptyOutDir: true,
+      rollupOptions: {
+        output: {
+          // Split the two heavy vendor libraries into their own named chunks so
+          // they can be budgeted separately and are only fetched by the surfaces
+          // that dynamically import them (editor → monaco, viewer → three).
+          // rolldown-vite requires manualChunks as a function.
+          manualChunks: (id: string) => {
+            // Trailing slash so these match only the package itself, not a
+            // future `three-*` / `monaco-*`-prefixed dependency.
+            if (id.includes('node_modules/monaco-editor/')) return 'monaco';
+            if (id.includes('node_modules/three/')) return 'three';
+            return undefined;
+          },
+        },
+      },
     },
     server: {
       host: '127.0.0.1',

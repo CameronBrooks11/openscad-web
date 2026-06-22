@@ -1,8 +1,11 @@
 {
-  "_comment": "Gzipped-size budgets (KB) enforced in CI by scripts/check-bundle-budgets.mjs (#68). These bound regressions of the boot-critical artifacts; update deliberately when a size change is intended and understood. Monaco and Three.js currently share the initial app JS chunk — split them into named chunks to budget separately.",
+  "_comment": "Gzipped-size budgets (KB) enforced in CI by scripts/check-bundle-budgets.mjs (#68). These bound regressions of the boot-critical artifacts; update deliberately when a size change is intended and understood. Monaco and Three.js are now split into their own named chunks (#68) so they are budgeted separately and only loaded by the surfaces that import them (editor -> monaco, viewer -> three).",
   "budgets": [
-    { "label": "initial app JS", "pattern": "assets/index-*.js", "maxGzipKB": 1024 },
-    { "label": "app CSS", "pattern": "assets/index-*.css", "maxGzipKB": 115 },
+    { "label": "initial app JS", "pattern": "assets/index-*.js", "maxGzipKB": 175 },
+    { "label": "app CSS", "pattern": "assets/index-*.css", "maxGzipKB": 20 },
+    { "label": "monaco chunk", "pattern": "assets/monaco-*.js", "maxGzipKB": 700 },
+    { "label": "monaco CSS", "pattern": "assets/monaco-*.css", "maxGzipKB": 120 },
+    { "label": "three chunk", "pattern": "assets/three-*.js", "maxGzipKB": 160 },
     { "label": "openscad worker", "pattern": "assets/openscad-worker-*.js", "maxGzipKB": 110 },
     { "label": "openscad WASM", "pattern": "assets/openscad-*.wasm", "maxGzipKB": 3072 }
   ]
