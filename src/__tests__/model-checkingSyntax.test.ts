@@ -18,7 +18,7 @@ describe('Model.checkSyntax', () => {
     return {
       params: {
         activePath: defaultSourcePath,
-        sources: [{ path: defaultSourcePath, content: 'cube(10);' }],
+        sources: [{ kind: 'text', path: defaultSourcePath, content: 'cube(10);' }],
         features: [],
         exportFormat2D: 'svg',
         exportFormat3D: 'stl',

@@ -4,6 +4,7 @@
 
 import { Model } from '../model.ts';
 import { State } from '../app-state.ts';
+import { contentOf } from '../project-source.ts';
 import { defaultModelColor } from '../initial-state.ts';
 
 // Avoid touching the real runner (Worker/WASM) and heavy IO.
@@ -47,8 +48,8 @@ function stateWithUrlSources(): State {
     params: {
       activePath: '/a.scad',
       sources: [
-        { path: '/a.scad', url: 'a.scad' },
-        { path: '/b.scad', url: 'b.scad' },
+        { kind: 'remote', path: '/a.scad', url: 'a.scad' },
+        { kind: 'remote', path: '/b.scad', url: 'b.scad' },
       ],
       features: [],
       exportFormat2D: 'svg',
@@ -118,8 +119,8 @@ describe('source fetch write-back race (#49)', () => {
     const b = sources.find((s) => s.path === '/b.scad');
 
     // Content landed in /a.scad...
-    expect(a?.content).toBe('A_CONTENT');
+    expect(a && contentOf(a)).toBe('A_CONTENT');
     // ...and NOT in the now-active /b.scad.
-    expect(b?.content ?? null).not.toBe('A_CONTENT');
+    expect((b && contentOf(b)) ?? null).not.toBe('A_CONTENT');
   });
 });

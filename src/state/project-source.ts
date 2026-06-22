@@ -107,3 +107,21 @@ export function fromFragment(source: FragmentSource): SerializableSource {
 export function toFragment(source: SerializableSource): FragmentSource {
   return toWire(source) as FragmentSource;
 }
+
+/**
+ * The in-memory text content of a source, or `undefined` when it is not yet
+ * materialized as text: an unloaded `remote`, an on-disk `local`, an `archive`,
+ * or in-memory `binary` bytes. Lets callers read content without re-deriving
+ * which variants carry it.
+ */
+export function contentOf(source: ProjectSource): string | undefined {
+  switch (source.kind) {
+    case 'text':
+    case 'remote':
+      return source.content;
+    case 'local':
+    case 'archive':
+    case 'binary':
+      return undefined;
+  }
+}

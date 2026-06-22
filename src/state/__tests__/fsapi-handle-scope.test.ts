@@ -48,7 +48,7 @@ function singleSourceState(path: string): State {
   return {
     params: {
       activePath: path,
-      sources: [{ path, content: 'cube(1);' }],
+      sources: [{ kind: 'text', path, content: 'cube(1);' }],
       features: [],
       exportFormat2D: 'svg',
       exportFormat3D: 'stl',

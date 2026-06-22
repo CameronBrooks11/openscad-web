@@ -12,6 +12,7 @@ import { bubbleUpDeepMutations } from './deep-mutate.ts';
 import { fetchSource, formatBytes, formatMillis, readFileAsDataURL } from '../utils.ts';
 import { openLocalFile, saveViaHandle } from '../fs/filesystem.ts';
 import { ProjectFileSystem } from '../fs/project-filesystem.ts';
+import { contentOf } from './project-source.ts';
 import { ProjectStore } from './project-store.ts';
 import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
 import { isExpectedJobCancellation, ProcessStreams } from '../runner/openscad-runner.ts';
@@ -329,9 +330,11 @@ export class Model extends EventTarget {
     immediatePreview?: boolean;
   } = {}) {
     const src = this.state.params.sources.find((src) => src.path === this.state.params.activePath);
-    if (src && src.content == null) {
+    // A source needs its content materialized when it is not yet inline text: an
+    // unloaded remote (fetch its url) or an on-disk local file (read the fs).
+    if (src && src.kind !== 'archive' && contentOf(src) == null) {
       const requestedPath = src.path;
-      const { url } = src;
+      const url = src.kind === 'remote' ? src.url : undefined;
       try {
         const content = new TextDecoder().decode(
           await fetchSource(
@@ -346,10 +349,15 @@ export class Model extends EventTarget {
         let written = false;
         this.mutate((s) => {
           const target = s.params.sources.find((cur) => cur.path === requestedPath);
-          if (!target || target.content != null) return; // source removed or already filled
-          s.params.sources = s.params.sources.map((cur) =>
-            cur.path === requestedPath ? { ...cur, content } : cur,
-          );
+          if (!target || contentOf(target) != null) return; // removed or already filled
+          s.params.sources = s.params.sources.map((cur) => {
+            if (cur.path !== requestedPath) return cur;
+            // A remote stays remote (now loaded, keeps its url); a local file's
+            // content is inlined as text.
+            return cur.kind === 'remote'
+              ? { ...cur, content }
+              : { kind: 'text', path: cur.path, content };
+          });
           s.error = undefined;
           s.errorDetails = undefined;
           written = true;
@@ -607,7 +615,7 @@ export class Model extends EventTarget {
 
   async saveProject() {
     if (this.state.params.sources.length == 1) {
-      const content = this.state.params.sources[0].content ?? '';
+      const content = contentOf(this.state.params.sources[0]) ?? '';
       // Write back through the FSAPI handle for the *active* source, if it was
       // opened that way; otherwise fall back to a download.
       const activePath = this.state.params.activePath;
@@ -683,6 +691,7 @@ export class Model extends EventTarget {
       activePath = loaderPath;
       sources = [
         {
+          kind: 'text',
           path: activePath,
           content: `${is2D ? 'linear_extrude(1) ' : ''} import("${resourcePath}");`,
         },

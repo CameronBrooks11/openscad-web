@@ -1,6 +1,6 @@
 import JSZip from 'jszip';
-import { Source } from './app-state.ts';
 import { ProjectFileSystem } from '../fs/project-filesystem.ts';
+import { contentOf, type SerializableSource } from './project-source.ts';
 import { fetchSource } from '../utils.ts';
 import {
   MAX_PROJECT_FILE_COUNT,
@@ -11,7 +11,7 @@ import {
 
 /** The project's file set and which one is the active entry point. */
 export interface ProjectSnapshot {
-  sources: Source[];
+  sources: SerializableSource[];
   activePath: string;
 }
 
@@ -25,13 +25,20 @@ export class ProjectStore {
   constructor(private fs: ProjectFileSystem) {}
 
   /** Content of the active source, or '' if absent/not yet loaded. */
-  activeContent(sources: Source[], activePath: string): string {
-    return sources.find((s) => s.path === activePath)?.content ?? '';
+  activeContent(sources: SerializableSource[], activePath: string): string {
+    const found = sources.find((s) => s.path === activePath);
+    return (found ? contentOf(found) : undefined) ?? '';
   }
 
-  /** Sources with the active source's content replaced. */
-  withActiveContent(sources: Source[], activePath: string, content: string): Source[] {
-    return sources.map((s) => (s.path === activePath ? { path: s.path, content } : s));
+  /** Sources with the active source's content replaced (it becomes inline text). */
+  withActiveContent(
+    sources: SerializableSource[],
+    activePath: string,
+    content: string,
+  ): SerializableSource[] {
+    return sources.map((s) =>
+      s.path === activePath ? { kind: 'text', path: s.path, content } : s,
+    );
   }
 
   private read(path: string): string {
@@ -48,18 +55,22 @@ export class ProjectStore {
    * unmodified vs disk, and add `path` (reading its content) if not already
    * present. Returns null if `path` is already active (no change).
    */
-  openFile(sources: Source[], activePath: string, path: string): ProjectSnapshot | null {
+  openFile(
+    sources: SerializableSource[],
+    activePath: string,
+    path: string,
+  ): ProjectSnapshot | null {
     if (activePath === path) return null;
     const activeContent = this.read(activePath);
-    let next = sources.filter((src) => src.path !== activePath || src.content != activeContent);
+    let next = sources.filter((src) => src.path !== activePath || contentOf(src) != activeContent);
     if (!next.find((src) => src.path === path)) {
-      next = [...next, { path, content: this.read(path) }];
+      next = [...next, { kind: 'text', path, content: this.read(path) }];
     }
     return { sources: next, activePath: path };
   }
 
   /** Create a new empty .scad file with a unique /home/untitled* name. */
-  newFile(sources: Source[]): ProjectSnapshot {
+  newFile(sources: SerializableSource[]): ProjectSnapshot {
     const base = '/home/untitled';
     let path = `${base}.scad`;
     let n = 2;
@@ -70,18 +81,18 @@ export class ProjectStore {
     } catch {
       /* fs may not support it yet */
     }
-    return { sources: [...sources, { path, content: '' }], activePath: path };
+    return { sources: [...sources, { kind: 'text', path, content: '' }], activePath: path };
   }
 
   /** Add (or replace) an externally-opened file and make it active. */
-  addFile(sources: Source[], path: string, content: string): ProjectSnapshot {
+  addFile(sources: SerializableSource[], path: string, content: string): ProjectSnapshot {
     try {
       this.fs.writeFile(path, content);
     } catch {
       /* ignore */
     }
     const withoutExisting = sources.filter((src) => src.path !== path);
-    return { sources: [...withoutExisting, { path, content }], activePath: path };
+    return { sources: [...withoutExisting, { kind: 'text', path, content }], activePath: path };
   }
 
   /**
@@ -129,13 +140,17 @@ export class ProjectStore {
       files[0])?.[0];
     if (!entryRel) return null;
     return {
-      sources: files.map(([p, content]) => ({ path: `/home/${p}`, content })),
+      sources: files.map(([p, content]) => ({
+        kind: 'text' as const,
+        path: `/home/${p}`,
+        content,
+      })),
       activePath: `/home/${entryRel}`,
     };
   }
 
   /** Build a project ZIP blob from the current sources (caller downloads it). */
-  async buildZip(sources: Source[]): Promise<Blob> {
+  async buildZip(sources: SerializableSource[]): Promise<Blob> {
     const zip = new JSZip();
     for (const source of sources) {
       let path = source.path;

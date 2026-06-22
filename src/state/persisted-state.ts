@@ -13,14 +13,23 @@
 
 import { ProjectFileSystem } from '../fs/project-filesystem.ts';
 import type { State } from './app-state.ts';
+import { fromFragment, toFragment, type FragmentSource } from './project-source.ts';
 
 const STATE_PATH = '/home/state.json';
 
-/** Read the persisted durable state, or null if absent/unreadable. */
+/**
+ * Read the persisted durable state, or null if absent/unreadable. The on-disk
+ * sources are the flat `{ path, url?, content? }` shape; classify them into the
+ * typed union so in-memory state is well-formed (this is the load-bearing
+ * normalization for existing users' state.json).
+ */
 export function readPersistedState(fs: ProjectFileSystem): State | null {
   try {
     const data = JSON.parse(new TextDecoder('utf-8').decode(fs.readFileSync(STATE_PATH)));
     const { view, params, preview } = data;
+    if (params && Array.isArray(params.sources)) {
+      params.sources = (params.sources as FragmentSource[]).map(fromFragment);
+    }
     return { view, params, preview };
   } catch (e) {
     console.log('Failed to read the persisted state from local storage.', e);
@@ -28,7 +37,8 @@ export function readPersistedState(fs: ProjectFileSystem): State | null {
   }
 }
 
-/** Persist the durable slice (view/params/preview) of the given state. */
+/** Persist the durable slice (view/params/preview), flattening sources to disk. */
 export function writePersistedState(fs: ProjectFileSystem, { view, params, preview }: State): void {
-  fs.writeFile(STATE_PATH, JSON.stringify({ view, params, preview }));
+  const flatParams = { ...params, sources: params.sources.map(toFragment) };
+  fs.writeFile(STATE_PATH, JSON.stringify({ view, params: flatParams, preview }));
 }
