@@ -1,6 +1,7 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import { fetchExternalSourceBytes } from './external-source.ts';
+import { ProjectFileSystem } from './fs/project-filesystem.ts';
 import { Source } from './state/app-state.ts';
 
 export function mapObject<T, R>(
@@ -183,7 +184,7 @@ export function downloadUrl(url: string, filename: string) {
 }
 
 export async function fetchSource(
-  fs: FS,
+  fs: ProjectFileSystem,
   { content, path, url }: Source,
   { baseUrl }: { baseUrl?: string } = {},
 ): Promise<Uint8Array> {
