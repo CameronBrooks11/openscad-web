@@ -59,8 +59,8 @@ describe('fromWire — classification', () => {
     );
   });
 
-  it('normalizes a bare path (no url, no content) to empty text', () => {
-    expect(fromWire({ path: '/a.scad' })).toEqual({ kind: 'text', path: '/a.scad', content: '' });
+  it('classifies a bare path (no url, no content) as an on-disk local source', () => {
+    expect(fromWire({ path: '/a.scad' })).toEqual({ kind: 'local', path: '/a.scad' });
   });
 });
 
@@ -100,12 +100,20 @@ describe('toWire — flattening', () => {
       url: 'z',
     });
   });
+
+  it('flattens a local source to a bare path', () => {
+    const wire = toWire({ kind: 'local', path: '/disk.scad' });
+    expect(wire).toEqual({ path: '/disk.scad' });
+    expect('content' in wire).toBe(false);
+    expect('url' in wire).toBe(false);
+  });
 });
 
 describe('round-trip: toWire(fromWire(x)) === x for real source shapes', () => {
   const corpus: WireSource[] = [
     { path: '/a.scad', content: 'cube(10);' },
     { path: '/empty.scad', content: '' },
+    { path: '/disk.scad' }, // bare path → local, now lossless
     { path: '/r.scad', url: 'https://x/r.scad' },
     { path: '/r.scad', url: 'https://x/r.scad', content: 'loaded' },
     { path: '/lib/', url: 'https://x/lib.zip' },
@@ -113,7 +121,7 @@ describe('round-trip: toWire(fromWire(x)) === x for real source shapes', () => {
   ];
 
   for (const wire of corpus) {
-    it(`round-trips ${JSON.stringify(wire.path)} (${wire.url ? 'remote/archive' : typeof wire.content})`, () => {
+    it(`round-trips ${JSON.stringify(wire.path)}`, () => {
       expect(toWire(fromWire(wire))).toEqual(wire);
     });
   }
@@ -125,6 +133,7 @@ describe('round-trip: toWire(fromWire(x)) === x for real source shapes', () => {
     // round-tripping. Neither is produced by the codebase.
     const sources: ProjectSource[] = [
       { kind: 'text', path: '/a.scad', content: 'x' },
+      { kind: 'local', path: '/disk.scad' },
       { kind: 'remote', path: '/r.scad', url: 'u' },
       { kind: 'remote', path: '/r.scad', url: 'u', content: 'c' },
       { kind: 'archive', path: '/lib/', url: 'z' },
@@ -156,6 +165,7 @@ describe('fragment helpers — text-only projection', () => {
   it('round-trips serializable sources through the fragment shape', () => {
     const sources = [
       { path: '/a.scad', content: 'cube();' },
+      { path: '/disk.scad' },
       { path: '/r.scad', url: 'u' },
       { path: '/r.scad', url: 'u', content: 'c' },
       { path: '/lib/', url: 'z' },
