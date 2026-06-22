@@ -40,23 +40,15 @@ export class ExportService {
     // export/exporting/error/log/view fields it writes via the mutate callback.
     const state = this.ctx.getState();
     if (state.output) {
+      // The preview/render output is already in the target format (the SVG for a
+      // 2D model, the OFF for a 3D `off` export), so download it directly.
       const normalPassThrough =
         (state.is2D && state.params.exportFormat2D === 'svg') ||
         (!state.is2D && state.params.exportFormat3D === 'off');
 
-      const glbPassThrough =
-        !state.is2D &&
-        state.params.exportFormat3D === 'glb' &&
-        (state.output.displayFile?.name.endsWith('.glb') ?? false) &&
-        state.output.displayFileURL != null;
-
-      if (normalPassThrough || glbPassThrough) {
+      if (normalPassThrough) {
         mutate((s) => (s.export = s.output));
-        if (glbPassThrough) {
-          host.download(state.output.displayFileURL!, state.output.displayFile!.name);
-        } else {
-          host.download(state.output.outFileURL, state.output.outFile.name);
-        }
+        host.download(state.output.outFileURL, state.output.outFile.name);
         return;
       }
     }
@@ -92,6 +84,20 @@ export class ExportService {
         const elapsedMillis = performance.now() - start;
         output = {
           outFile: new File([exportedData], state.output.outFile.name.replace('.off', '.3mf')),
+          elapsedMillis,
+          logText: '',
+          markers: [],
+        };
+      } else if (exportFormat === 'glb') {
+        // GLB is produced in-browser from the rendered OFF (OpenSCAD's WASM build
+        // has no glTF writer). Three.js is heavy, so load the converter lazily.
+        const start = performance.now();
+        const data = parseOff(await state.output.outFile.text());
+        const { exportGLB } = await import('../../io/export_glb.ts');
+        const glb = await exportGLB(data);
+        const elapsedMillis = performance.now() - start;
+        output = {
+          outFile: new File([glb], state.output.outFile.name.replace(/\.off$/, '.glb')),
           elapsedMillis,
           logText: '',
           markers: [],
