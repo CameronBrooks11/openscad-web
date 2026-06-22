@@ -2,15 +2,64 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import workboxBuild from 'workbox-build';
 
 const { generateSW } = workboxBuild;
 
-const distDir = path.resolve('dist');
-const swDest = path.join(distDir, 'sw.js');
 const obsoleteArtifacts = ['openscad.js', 'openscad.wasm', 'fonts/InterVariable.woff2'];
 
-async function removeObsoleteArtifacts() {
+/**
+ * Build the Workbox `generateSW` config. Pure (no I/O) so it can be asserted in
+ * tests — the precache excludes and runtime-route order are correctness-critical.
+ */
+export function buildWorkboxConfig({ distDir, swDest }) {
+  return {
+    mode: 'production',
+    globDirectory: distDir,
+    globPatterns: ['**/*'],
+    swDest,
+    // The WASM binary (~9.6 MB) and the library zips (~tens of MB total) are
+    // deliberately kept OUT of the precache: precaching them would force the
+    // whole bundle to re-download atomically on every deploy (a new precache
+    // revision invalidates the lot), even when only an app chunk changed. They
+    // are instead fetched lazily and persisted by the CacheFirst runtime rule
+    // below, so they survive deploys and only download when first needed.
+    globIgnores: ['**/.*', '**/*.map', 'manifest*.js', '**/*.wasm', 'libraries/**'],
+    maximumFileSizeToCacheInBytes: 200 * 1024 * 1024,
+    // A new worker WAITS instead of taking over the open page: skipWaiting/
+    // clientsClaim would swap the controller mid-session (risking 404s on hashed
+    // chunks removed by the new deploy). The app surfaces an "update available"
+    // signal instead, and the new worker activates on the next load. See #53.
+    clientsClaim: false,
+    skipWaiting: false,
+    // Order matters: Workbox uses the FIRST matching route. The CacheFirst rule
+    // for the large WASM/library assets must come before the broad same-origin
+    // StaleWhileRevalidate, or the latter would swallow every same-origin request
+    // and the large assets would be re-validated (re-fetched) on every load.
+    runtimeCaching: [
+      {
+        urlPattern: ({ url }) =>
+          url.pathname.endsWith('.wasm') || url.pathname.includes('/libraries/'),
+        handler: 'CacheFirst',
+        options: {
+          cacheName: 'large-assets',
+          expiration: { maxEntries: 50, purgeOnQuotaError: true },
+        },
+      },
+      {
+        urlPattern: ({ url }) => url.origin === self.location.origin,
+        handler: 'StaleWhileRevalidate',
+        options: {
+          cacheName: 'same-origin-assets',
+          expiration: { maxEntries: 200, purgeOnQuotaError: true },
+        },
+      },
+    ],
+  };
+}
+
+async function removeObsoleteArtifacts(distDir) {
   for (const artifact of obsoleteArtifacts) {
     try {
       await fs.rm(path.join(distDir, artifact), { force: true });
@@ -26,43 +75,11 @@ async function removeObsoleteArtifacts() {
   }
 }
 
-try {
-  await removeObsoleteArtifacts();
+export async function runBuildSW({ distDir = path.resolve('dist') } = {}) {
+  const swDest = path.join(distDir, 'sw.js');
+  await removeObsoleteArtifacts(distDir);
 
-  const result = await generateSW({
-    mode: 'production',
-    globDirectory: distDir,
-    globPatterns: ['**/*'],
-    swDest,
-    globIgnores: ['**/.*', '**/*.map', 'manifest*.js'],
-    maximumFileSizeToCacheInBytes: 200 * 1024 * 1024,
-    // A new worker WAITS instead of taking over the open page: skipWaiting/
-    // clientsClaim would swap the controller mid-session (risking 404s on hashed
-    // chunks removed by the new deploy). The app surfaces an "update available"
-    // signal instead, and the new worker activates on the next load. See #53.
-    clientsClaim: false,
-    skipWaiting: false,
-    // Preserve the established runtime-caching rule order to avoid behavior drift.
-    runtimeCaching: [
-      {
-        urlPattern: ({ url }) => url.origin === self.location.origin,
-        handler: 'StaleWhileRevalidate',
-        options: {
-          cacheName: 'same-origin-assets',
-          expiration: { maxEntries: 200, purgeOnQuotaError: true },
-        },
-      },
-      {
-        urlPattern: ({ url }) =>
-          url.pathname.endsWith('.wasm') || url.pathname.includes('/libraries/'),
-        handler: 'CacheFirst',
-        options: {
-          cacheName: 'large-assets',
-          expiration: { maxEntries: 50, purgeOnQuotaError: true },
-        },
-      },
-    ],
-  });
+  const result = await generateSW(buildWorkboxConfig({ distDir, swDest }));
 
   // generateSW already emits a `SKIP_WAITING` message listener in the worker,
   // so the app can let the user apply a waiting update on demand (see
@@ -84,7 +101,17 @@ try {
   console.log(
     `[build-sw] Generated ${swDest} with ${result.count} precached entries (${result.size} bytes).`,
   );
-} catch (error) {
-  console.error(error);
-  process.exitCode = 1;
+  return result;
+}
+
+const isEntrypoint =
+  process.argv[1] != null && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isEntrypoint) {
+  try {
+    await runBuildSW();
+  } catch (error) {
+    console.error(error);
+    process.exitCode = 1;
+  }
 }
