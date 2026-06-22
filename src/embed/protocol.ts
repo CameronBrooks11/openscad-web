@@ -1,10 +1,22 @@
 // Versioned, validated embed message protocol (issue #63).
 //
 // The embed iframe and its host page communicate over `postMessage`. This
-// module is the single source of truth for the wire format: a protocol
+// module is the single source of truth for the embed wire format: a protocol
 // version, strict inbound validation with size limits, and structured error /
 // acknowledgement envelopes. It is intentionally free of DOM/Lit dependencies
-// so the validation can be unit-tested in isolation.
+// so the validation can be unit-tested in isolation. The version-agnostic
+// envelope/validation primitives live in `src/protocol/envelope.ts` (ADR 0005);
+// this module is one binding over that shared core.
+
+import {
+  isPlainJsonValue,
+  isRecord,
+  stampOutbound,
+  type ProtocolErrorCode,
+} from '../protocol/envelope.ts';
+
+// Origin checking is generic; re-export it so embed consumers keep one import.
+export { isTrustedOrigin } from '../protocol/envelope.ts';
 
 /**
  * Wire protocol version. Inbound messages MUST carry this exact value;
@@ -26,41 +38,12 @@ export type InboundMessage =
   | { type: 'getVars'; requestId?: string }
   | { type: 'getArtifact'; requestId?: string };
 
-export type EmbedErrorCode =
-  | 'malformed' // not an object / missing fields
-  | 'unsupported-version' // protocolVersion absent or != current
-  | 'unknown-type' // type not a recognised inbound command
-  | 'invalid-payload' // recognised type, wrong field types
-  | 'too-large'; // a bounded field exceeded its size limit
+/** Embed rejection codes are the shared protocol vocabulary. */
+export type EmbedErrorCode = ProtocolErrorCode;
 
 export type ValidationResult =
   | { ok: true; message: InboundMessage }
   | { ok: false; code: EmbedErrorCode; reason: string; requestId?: string };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-/**
- * Whether `value` is a plain JSON value (primitive, or array/plain-object
- * thereof). Exotic structured-cloneable types — `ArrayBuffer`, typed arrays,
- * `Map`, `Set`, `Blob`, `Date`, class instances, functions, symbols — are
- * rejected. `JSON.stringify` collapses those to `"{}"`/`undefined`, which would
- * let a multi-megabyte payload slip the encoded-size limit, so a setVar value
- * must be genuinely JSON-shaped. Assumes an acyclic input (callers stringify
- * first, which rejects cycles).
- */
-function isPlainJsonValue(value: unknown): boolean {
-  if (value === null) return true;
-  const t = typeof value;
-  if (t === 'string' || t === 'boolean') return true;
-  if (t === 'number') return Number.isFinite(value);
-  if (t !== 'object') return false; // function, symbol, bigint, undefined
-  if (Array.isArray(value)) return value.every(isPlainJsonValue);
-  const proto = Object.getPrototypeOf(value);
-  if (proto !== Object.prototype && proto !== null) return false; // exotic object
-  return Object.values(value as Record<string, unknown>).every(isPlainJsonValue);
-}
 
 /** Extract a string requestId if present, so errors/acks can echo it. */
 function readRequestId(data: Record<string, unknown>): string | undefined {
@@ -149,22 +132,7 @@ export function validateInbound(data: unknown): ValidationResult {
   }
 }
 
-/**
- * Whether an inbound message's origin is trusted. With no configured
- * `parentOrigin` only this document's own origin is trusted (same-origin mode);
- * a configured `parentOrigin` is then the sole trusted origin (explicit-origin
- * mode). The wildcard is never trusted — there is no default acceptance of
- * arbitrary parent origins.
- */
-export function isTrustedOrigin(
-  eventOrigin: string,
-  parentOrigin: string | null,
-  selfOrigin: string,
-): boolean {
-  return eventOrigin === (parentOrigin ?? selfOrigin);
-}
-
-/** Stamp an outbound payload with the protocol version. */
+/** Stamp an outbound payload with the embed protocol version. */
 export function outbound(type: string, payload: Record<string, unknown> = {}) {
-  return { protocolVersion: EMBED_PROTOCOL_VERSION, type, ...payload };
+  return stampOutbound(EMBED_PROTOCOL_VERSION, type, payload);
 }
