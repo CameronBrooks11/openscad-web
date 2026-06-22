@@ -40,13 +40,13 @@ export class OscExportButton extends LitElement {
     button {
       cursor: pointer;
       padding: 4px 10px;
-      border: 1px solid #bbb;
-      background: #f5f5f5;
+      border: 1px solid var(--osc-border);
+      background: var(--osc-panel-muted);
       font-size: 0.85rem;
-      color: #333;
+      color: var(--osc-fg);
     }
     button:hover:not(:disabled) {
-      background: #e8e8e8;
+      background: var(--osc-hover);
     }
     button:disabled {
       opacity: 0.5;
@@ -71,13 +71,13 @@ export class OscExportButton extends LitElement {
       position: absolute;
       left: 0;
       top: 100%;
-      background: #fff;
-      border: 1px solid #ddd;
+      background: var(--osc-panel);
+      border: 1px solid var(--osc-border-muted);
       border-radius: 4px;
       padding: 4px 0;
       z-index: 1000;
       min-width: 220px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      box-shadow: 0 2px 8px var(--osc-shadow);
     }
     .menu-item {
       display: block;
@@ -89,15 +89,15 @@ export class OscExportButton extends LitElement {
       text-align: left;
       white-space: nowrap;
       font-size: 0.9rem;
-      color: #333;
+      color: var(--osc-fg);
     }
     .menu-item:hover {
-      background: #f0f0f0;
+      background: var(--osc-hover);
     }
     hr {
       margin: 4px 0;
       border: none;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--osc-border-muted);
     }
   `;
 

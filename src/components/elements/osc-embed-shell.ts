@@ -86,7 +86,7 @@ export class OscEmbedShell extends LitElement {
     }
     .error {
       padding: 2rem;
-      color: red;
+      color: var(--osc-error);
     }
   `;
 

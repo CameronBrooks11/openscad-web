@@ -19,14 +19,14 @@ export class OscFooter extends LitElement {
     .progress-bar-track {
       height: 6px;
       margin: 0 5px;
-      background: #e0e0e0;
+      background: var(--osc-panel-muted);
       border-radius: 3px;
       overflow: hidden;
     }
     .progress-bar-indeterminate {
       height: 100%;
       width: 30%;
-      background: #4f87c5;
+      background: var(--osc-accent);
       border-radius: 3px;
       animation: osc-progress 1.4s linear infinite;
     }
@@ -48,29 +48,29 @@ export class OscFooter extends LitElement {
     button.foot-btn {
       cursor: pointer;
       padding: 4px 10px;
-      border: 1px solid #bbb;
-      background: #f5f5f5;
+      border: 1px solid var(--osc-border);
+      background: var(--osc-panel-muted);
       border-radius: 4px;
       font-size: 0.85rem;
-      color: #333;
+      color: var(--osc-fg);
       display: inline-flex;
       align-items: center;
       gap: 4px;
     }
     button.foot-btn:hover:not(:disabled) {
-      background: #e8e8e8;
+      background: var(--osc-hover);
     }
     button.foot-btn:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
     button.foot-btn.danger {
-      border-color: #e00;
-      color: #c00;
+      border-color: var(--osc-error);
+      color: var(--osc-error);
     }
     button.foot-btn.warning {
-      border-color: #e90;
-      color: #860;
+      border-color: var(--osc-warning);
+      color: var(--osc-warning);
     }
     .badge {
       display: inline-block;
@@ -78,17 +78,17 @@ export class OscFooter extends LitElement {
       border-radius: 10px;
       font-size: 0.7rem;
       font-weight: bold;
-      color: #fff;
+      color: var(--osc-on-accent);
       line-height: 1.4;
     }
     .badge-danger {
-      background: #d32f2f;
+      background: var(--osc-error);
     }
     .badge-warning {
-      background: #f57c00;
+      background: var(--osc-warning);
     }
     .badge-info {
-      background: #0288d1;
+      background: var(--osc-info);
     }
     .spacer {
       flex: 1;
@@ -99,10 +99,10 @@ export class OscFooter extends LitElement {
       gap: 8px;
       margin: 5px 5px 0;
       padding: 10px 12px;
-      border: 1px solid #ef9a9a;
+      border: 1px solid var(--osc-error-border);
       border-radius: 8px;
-      background: #fff5f5;
-      color: #7f1d1d;
+      background: var(--osc-error-bg);
+      color: var(--osc-error-fg);
     }
     .error-banner-header {
       display: flex;
@@ -121,7 +121,7 @@ export class OscFooter extends LitElement {
     }
     .error-details {
       font-size: 0.8rem;
-      color: #5f1a1a;
+      color: var(--osc-error-fg);
     }
     .error-details summary {
       cursor: pointer;

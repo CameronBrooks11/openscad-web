@@ -27,25 +27,25 @@ export class OscSettingsMenu extends LitElement {
       background: transparent;
       border: none;
       font-size: 1rem;
-      color: #555;
+      color: var(--osc-muted);
     }
     summary::-webkit-details-marker {
       display: none;
     }
     summary:hover {
-      background: rgba(0, 0, 0, 0.07);
+      background: var(--osc-overlay-hover);
     }
     .menu {
       position: absolute;
       right: 0;
       top: 100%;
-      background: #fff;
-      border: 1px solid #ddd;
+      background: var(--osc-panel);
+      border: 1px solid var(--osc-border-muted);
       border-radius: 4px;
       padding: 4px 0;
       z-index: 1000;
       min-width: 240px;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+      box-shadow: 0 2px 8px var(--osc-shadow);
     }
     button.item {
       display: block;
@@ -57,18 +57,18 @@ export class OscSettingsMenu extends LitElement {
       text-align: left;
       white-space: nowrap;
       font-size: 0.9rem;
-      color: #333;
+      color: var(--osc-fg);
     }
     button.item:hover {
-      background: #f0f0f0;
+      background: var(--osc-hover);
     }
     hr {
       margin: 4px 0;
       border: none;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--osc-border-muted);
     }
     button.item.danger {
-      color: #c00;
+      color: var(--osc-error);
     }
   `;
 

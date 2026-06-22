@@ -132,8 +132,8 @@ export class OscGeometryViewer extends LitElement {
           position: absolute;
           top: 8px;
           right: 8px;
-          background: rgba(0, 0, 0, 0.65);
-          color: #fff;
+          background: var(--osc-overlay);
+          color: var(--osc-on-accent);
           padding: 4px 12px;
           border-radius: 4px;
           font-size: 0.8rem;
@@ -162,7 +162,7 @@ export class OscGeometryViewer extends LitElement {
                 this._scene?.setCameraPosition(name);
                 this._showToast(`${name} view`);
               }}
-              style="font-size:0.65rem;padding:2px 6px;cursor:pointer;opacity:0.75;background:rgba(0,0,0,0.5);color:#fff;border:none;border-radius:3px;"
+              style="font-size:0.65rem;padding:2px 6px;cursor:pointer;opacity:0.75;background:var(--osc-overlay);color:var(--osc-on-accent);border:none;border-radius:3px;"
             >
               ${name}
             </button>

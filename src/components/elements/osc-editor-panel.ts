@@ -294,8 +294,8 @@ export class OscEditorPanel extends LitElement {
           width: 100%;
           height: 100%;
           overflow: hidden;
-          background: #f7f9fc;
-          border-right: 1px solid #d6deec;
+          background: var(--osc-bg);
+          border-right: 1px solid var(--osc-border);
         }
         osc-editor-panel .osc-editor-toolbar {
           display: flex;
@@ -303,8 +303,8 @@ export class OscEditorPanel extends LitElement {
           gap: 8px;
           align-items: center;
           padding: 8px 10px;
-          border-bottom: 1px solid #d6deec;
-          background: linear-gradient(180deg, #fbfdff 0%, #f2f6fd 100%);
+          border-bottom: 1px solid var(--osc-border);
+          background: linear-gradient(180deg, var(--osc-bg) 0%, var(--osc-bg) 100%);
         }
         osc-editor-panel .osc-editor-toolbar-item {
           position: relative;
@@ -315,16 +315,16 @@ export class OscEditorPanel extends LitElement {
           min-width: 0;
           max-width: 100%;
           height: 30px;
-          border: 1px solid #b7c2d8;
+          border: 1px solid var(--osc-border);
           border-radius: 6px;
-          background: #fff;
-          color: #253042;
+          background: var(--osc-panel);
+          color: var(--osc-fg);
           padding: 4px 8px;
           font-size: 0.88rem;
         }
         osc-editor-panel .osc-editor-file-select:focus-visible,
         osc-editor-panel .toolbar-btn:focus-visible {
-          outline: 2px solid #4f87c5;
+          outline: 2px solid var(--osc-accent);
           outline-offset: 1px;
         }
         osc-editor-panel .osc-editor-body {
@@ -345,9 +345,9 @@ export class OscEditorPanel extends LitElement {
         osc-editor-panel .osc-editor-logs {
           overflow-y: auto;
           max-height: min(200px, 30vh);
-          border-top: 1px solid #d6deec;
+          border-top: 1px solid var(--osc-border);
           padding: 6px 10px;
-          background: #f5f8ff;
+          background: var(--osc-bg);
           font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
           font-size: 12px;
           line-height: 1.45;
@@ -377,27 +377,27 @@ export class OscEditorPanel extends LitElement {
           cursor: pointer;
           height: 30px;
           padding: 4px 10px;
-          border: 1px solid #b7c2d8;
-          background: #fff;
+          border: 1px solid var(--osc-border);
+          background: var(--osc-panel);
           border-radius: 6px;
           font-size: 0.85rem;
-          color: #243246;
+          color: var(--osc-fg);
           white-space: nowrap;
         }
         osc-editor-panel button.toolbar-btn:hover {
-          background: #f0f5ff;
+          background: var(--osc-hover);
         }
         osc-editor-panel .osc-editor-menu {
           position: absolute;
           left: 0;
           top: calc(100% + 6px);
           z-index: 1000;
-          background: #fff;
-          border: 1px solid #d3dbe9;
+          background: var(--osc-panel);
+          border: 1px solid var(--osc-border);
           border-radius: 6px;
           padding: 4px 0;
           min-width: 200px;
-          box-shadow: 0 10px 24px rgba(32, 45, 66, 0.18);
+          box-shadow: 0 10px 24px var(--osc-shadow);
         }
         osc-editor-panel .osc-editor-menu button,
         osc-editor-panel .osc-editor-menu a {
@@ -409,12 +409,12 @@ export class OscEditorPanel extends LitElement {
           cursor: pointer;
           text-align: left;
           font-size: 0.875rem;
-          color: #333;
+          color: var(--osc-fg);
           text-decoration: none;
         }
         osc-editor-panel .osc-editor-menu button:hover,
         osc-editor-panel .osc-editor-menu a:hover {
-          background: #f0f5ff;
+          background: var(--osc-hover);
         }
         osc-editor-panel .osc-editor-menu button:disabled {
           opacity: 0.5;
@@ -423,7 +423,7 @@ export class OscEditorPanel extends LitElement {
         osc-editor-panel .osc-editor-menu hr {
           margin: 4px 0;
           border: none;
-          border-top: 1px solid #e7edf8;
+          border-top: 1px solid var(--osc-border-muted);
         }
       </style>
 

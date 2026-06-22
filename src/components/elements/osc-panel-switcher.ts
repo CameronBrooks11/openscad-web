@@ -33,29 +33,29 @@ export class OscPanelSwitcher extends LitElement {
     }
     button.tab {
       padding: 5px 14px;
-      border: 1px solid #ccc;
+      border: 1px solid var(--osc-border);
       border-radius: 4px;
-      background: #f5f5f5;
+      background: var(--osc-panel-muted);
       cursor: pointer;
       font-size: 0.875rem;
-      color: #333;
+      color: var(--osc-fg);
     }
     button.tab:hover {
-      background: #e8e8e8;
+      background: var(--osc-hover);
     }
     button.tab.active {
-      background: #4f87c5;
-      color: #fff;
-      border-color: #4f87c5;
+      background: var(--osc-accent);
+      color: var(--osc-on-accent);
+      border-color: var(--osc-accent);
     }
     button.tab.toggled {
-      background: #4f87c5;
-      color: #fff;
-      border-color: #4f87c5;
+      background: var(--osc-accent);
+      color: var(--osc-on-accent);
+      border-color: var(--osc-accent);
     }
     button.tab.untoggled {
-      background: #f5f5f5;
-      color: #555;
+      background: var(--osc-panel-muted);
+      color: var(--osc-muted);
     }
   `;
 
