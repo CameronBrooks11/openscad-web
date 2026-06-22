@@ -246,3 +246,157 @@ describe('fragment-state — edge cases (T2)', () => {
     expect(state?.params.sources[0]?.url).toBe('http://localhost/fixtures/test.scad');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Backward-compatibility fixtures (#56). These pin the EXISTING on-the-wire
+// fragment shape so a later Source→ProjectSource migration cannot silently
+// break shared/bookmarked URLs. Each closes a previously-untested boundary:
+// .url round-trip, multiple sources, the uncompressed-legacy fallback, and the
+// legacy source/sourcePath reconstruction.
+// ---------------------------------------------------------------------------
+
+describe('fragment backward-compat fixtures (#56)', () => {
+  function mockMatchMedia() {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+  }
+
+  /** Set the hash to an uncompressed, URI-encoded JSON fragment (legacy format). */
+  function setLegacyJsonHash(obj: unknown) {
+    window.location.hash = '#' + encodeURIComponent(JSON.stringify(obj));
+  }
+
+  const baseView = {
+    logs: false,
+    layout: { mode: 'multi', editor: true, viewer: true, customizer: false },
+    color: '#aabbcc',
+    showAxes: true,
+    lineNumbers: false,
+  };
+
+  it('preserves a loaded remote source (url + content) through gzip round-trip', async () => {
+    mockMatchMedia();
+    const createInitialState = (await import('../state/initial-state.ts')).createInitialState;
+    const state = createInitialState(null, { content: 'cube(10);' });
+    // A same-origin absolute url is canonicalized to itself (no drift).
+    state.params.sources = [
+      { path: '/main.scad', content: 'include <lib.scad>' },
+      { path: '/lib.scad', url: 'http://localhost/lib.scad', content: 'module lib(){}' },
+    ];
+
+    history.replaceState(null, '', '#' + (await encodeStateParamsAsFragment(state)));
+    const restored = await readStateFromFragment();
+
+    expect(restored?.params.sources).toEqual([
+      { path: '/main.scad', content: 'include <lib.scad>', url: undefined },
+      { path: '/lib.scad', url: 'http://localhost/lib.scad', content: 'module lib(){}' },
+    ]);
+  });
+
+  it('preserves an unloaded remote and an archive source through gzip round-trip', async () => {
+    mockMatchMedia();
+    const createInitialState = (await import('../state/initial-state.ts')).createInitialState;
+    const state = createInitialState(null, { content: 'cube(10);' });
+    // The two discriminant edges most at risk in a future union migration: a
+    // url-only remote (no content yet) and a trailing-slash archive directory.
+    state.params.sources = [
+      { path: '/r.scad', url: 'http://localhost/r.scad' },
+      { path: '/lib/', url: 'http://localhost/lib.zip' },
+    ];
+
+    history.replaceState(null, '', '#' + (await encodeStateParamsAsFragment(state)));
+    const restored = await readStateFromFragment();
+
+    expect(restored?.params.sources).toEqual([
+      { path: '/r.scad', url: 'http://localhost/r.scad', content: undefined },
+      { path: '/lib/', url: 'http://localhost/lib.zip', content: undefined },
+    ]);
+  });
+
+  it('preserves multiple sources and their order through gzip round-trip', async () => {
+    mockMatchMedia();
+    const createInitialState = (await import('../state/initial-state.ts')).createInitialState;
+    const state = createInitialState(null, { content: 'a' });
+    state.params.sources = [
+      { path: '/a.scad', content: 'a();' },
+      { path: '/b.scad', content: 'b();' },
+      { path: '/c.scad', content: 'c();' },
+    ];
+
+    history.replaceState(null, '', '#' + (await encodeStateParamsAsFragment(state)));
+    const restored = await readStateFromFragment();
+
+    expect(restored?.params.sources.map((s) => s.path)).toEqual(['/a.scad', '/b.scad', '/c.scad']);
+    expect(restored?.params.sources.map((s) => s.content)).toEqual(['a();', 'b();', 'c();']);
+  });
+
+  it('decodes an uncompressed (legacy, non-gzip) JSON fragment', async () => {
+    setLegacyJsonHash({
+      params: {
+        activePath: '/legacy.scad',
+        features: [],
+        sources: [{ path: '/legacy.scad', content: 'legacy();' }],
+        exportFormat2D: 'svg',
+        exportFormat3D: 'stl',
+      },
+      view: baseView,
+    });
+
+    const state = await readStateFromFragment();
+
+    expect(state?.params.activePath).toBe('/legacy.scad');
+    expect(state?.params.sources).toEqual([
+      { path: '/legacy.scad', content: 'legacy();', url: undefined },
+    ]);
+  });
+
+  it('reconstructs sources from the legacy source + sourcePath fields', async () => {
+    setLegacyJsonHash({
+      params: {
+        // No `sources` array — only the pre-array legacy shape.
+        source: 'cube(1);',
+        sourcePath: '/old.scad',
+        features: [],
+        exportFormat2D: 'svg',
+        exportFormat3D: 'stl',
+      },
+      view: baseView,
+    });
+
+    const state = await readStateFromFragment();
+
+    expect(state?.params.sources).toEqual([
+      { path: '/old.scad', content: 'cube(1);', url: undefined },
+    ]);
+  });
+
+  it('falls back to the default source path when legacy sourcePath is absent', async () => {
+    setLegacyJsonHash({
+      params: {
+        source: 'cube(2);',
+        features: [],
+        exportFormat2D: 'svg',
+        exportFormat3D: 'stl',
+      },
+      view: baseView,
+    });
+
+    const state = await readStateFromFragment();
+
+    expect(state?.params.sources).toEqual([
+      { path: '/home/playground.scad', content: 'cube(2);', url: undefined },
+    ]);
+  });
+});
