@@ -48,12 +48,9 @@ export class OscEditorPanel extends LitElement {
 
     // Sync editor content when active path changes or source is externally modified
     if (this._editor && this._monaco) {
-      const checkerRun = st.lastCheckerRun;
-      if (checkerRun) {
-        this._applyDiagnosticMarkers(checkerRun.markers);
-      }
-
-      // If path changed, update the editor model
+      // Update/create the active file's model FIRST, then apply diagnostics —
+      // so a diagnostic for a freshly-opened file routes to its now-existing
+      // model instead of falling back to the active one (and never reapplying).
       if (prev?.params.activePath !== st.params.activePath) {
         this._updatingFromState = true;
         try {
@@ -68,6 +65,11 @@ export class OscEditorPanel extends LitElement {
         } finally {
           this._updatingFromState = false;
         }
+      }
+
+      const checkerRun = st.lastCheckerRun;
+      if (checkerRun) {
+        this._applyDiagnosticMarkers(checkerRun.markers);
       }
 
       // lineNumbers option
