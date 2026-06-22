@@ -9,6 +9,24 @@ export interface RegisterServiceWorkerOptions {
   onUpdateAvailable?: (registration: ServiceWorkerRegistration) => void;
 }
 
+/**
+ * Apply a waiting service-worker update: tell the waiting worker to take over
+ * (it listens for `SKIP_WAITING`), then reload once it controls the page. This
+ * is user-initiated, so it is safe to call when the user has accepted a reload.
+ * Falls back to a plain reload if there is no waiting worker.
+ */
+export function applyServiceWorkerUpdate(registration: ServiceWorkerRegistration): void {
+  const waiting = registration.waiting;
+  if (!waiting || !('serviceWorker' in navigator)) {
+    window.location.reload();
+    return;
+  }
+  navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), {
+    once: true,
+  });
+  waiting.postMessage({ type: 'SKIP_WAITING' });
+}
+
 export async function registerAppServiceWorker(
   options: RegisterServiceWorkerOptions = {},
 ): Promise<ServiceWorkerRegistration | null> {
