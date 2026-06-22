@@ -45,9 +45,16 @@ function createBFSBackend(fsName: string, options?: Record<string, unknown>): Pr
 // Canonical mount layout + IndexedDB persistence
 // ---------------------------------------------------------------------------
 
-// Module-level reference to the root MountableFileSystem for dynamic mounting
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _rootMFS: any = null;
+/**
+ * The filesystem owned by a single thread: the Node-compat FS API plus the
+ * library mounter that holds this thread's mount state. BrowserFS's `install`
+ * is an irreducibly per-thread global, so there is one of these per thread
+ * (main and the OpenSCAD worker each create their own).
+ */
+export interface EditorFs {
+  fs: FS;
+  libraries: LibraryMounter;
+}
 
 /**
  * Initialises BrowserFS with the canonical four-partition VFS:
@@ -56,13 +63,14 @@ let _rootMFS: any = null;
  *   /tmp       — per-compile scratch space (InMemory, discarded per job)
  *   /fonts     — font archive (ZipFS from fonts.zip, mounted once at init)
  *
- * Returns the Node-compat FS API (`BFSRequire('fs')`).
+ * Returns the Node-compat FS API plus a LibraryMounter that owns this thread's
+ * mount state (no module-level singletons).
  */
 export async function createEditorFS({
   allowPersistence,
 }: {
   allowPersistence: boolean;
-}): Promise<FS> {
+}): Promise<EditorFs> {
   const browserFS = getBrowserFS();
   // Fonts are always pre-loaded — needed for any text() call in OpenSCAD
   const fontsBuf = await fetchAssetBytes(resolveRuntimeAssetUrl('libraries/fonts.zip'));
@@ -78,7 +86,7 @@ export async function createEditorFS({
   const libsFS = await createBFSBackend('InMemory');
   const tmpFS = await createBFSBackend('InMemory');
 
-  _rootMFS = await createBFSBackend('MountableFileSystem', {
+  const rootMFS = await createBFSBackend('MountableFileSystem', {
     '/': rootFS,
     '/home': homeFS,
     '/libraries': libsFS,
@@ -88,7 +96,7 @@ export async function createEditorFS({
 
   const ctx = typeof window === 'object' ? window : self;
   browserFS.install(ctx);
-  await browserFS.initialize(_rootMFS);
+  await browserFS.initialize(rootMFS);
 
   // storage budget warning for standalone mode
   if (allowPersistence && 'storage' in navigator) {
@@ -98,7 +106,7 @@ export async function createEditorFS({
     }
   }
 
-  return browserFS.BFSRequire('fs');
+  return { fs: browserFS.BFSRequire('fs'), libraries: new LibraryMounter(rootMFS) };
 }
 
 // ---------------------------------------------------------------------------
@@ -117,73 +125,77 @@ export function extractLibraryNames(source: string): string[] {
   return [...names];
 }
 
-// Per-thread cache of already-mounted library ZIPs
-const mountedLibraryZips = new Set<string>();
-const mountingLibraryZips = new Map<string, Promise<void>>();
-
 /**
- * Fetches and mounts a single library ZIP into BrowserFS's /libraries partition.
- * No-op if already mounted (session cache). Throws if BrowserFS is not yet initialised.
+ * Owns one thread's library-mount state: the root MountableFileSystem to mount
+ * into, plus the set of already-mounted ZIPs and the in-flight mount promises
+ * (which dedupe concurrent requests). Instance-owned and unit-testable in
+ * isolation — created by createEditorFS and held by the thread (main or worker)
+ * for its lifetime so the cache persists across compiles.
  */
-async function fetchAndMountLibrary(name: string): Promise<void> {
-  if (mountedLibraryZips.has(name)) return;
-  const inFlight = mountingLibraryZips.get(name);
-  if (inFlight) return inFlight;
+export class LibraryMounter {
+  private readonly mounted = new Set<string>();
+  private readonly mounting = new Map<string, Promise<void>>();
 
-  const mountPromise = (async () => {
-    const archive = zipArchives.find((a) => a.name === name);
-    if (!archive) return; // unknown library — skip silently
-    if (!_rootMFS)
-      throw new Error('[filesystem] createEditorFS() must be called before mountDemandLibraries()');
-    const browserFS = getBrowserFS();
-    const buf = await fetchAssetBytes(resolveRuntimeAssetUrl(archive.zipPath));
-    const zipFS = await createBFSBackend('ZipFS', {
-      zipData: browserFS.BFSRequire('buffer').Buffer.from(buf),
-    });
-    if (mountedLibraryZips.has(name)) return;
-    try {
-      _rootMFS.mount(archive.mountPath, zipFS);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (!message.includes('Mount point') || !message.includes('already taken')) {
-        throw error;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  constructor(private readonly rootMFS: any) {}
+
+  /**
+   * Fetches and mounts a single library ZIP into the /libraries partition.
+   * No-op if already mounted (session cache); concurrent calls share one mount.
+   */
+  private async fetchAndMount(name: string): Promise<void> {
+    if (this.mounted.has(name)) return;
+    const inFlight = this.mounting.get(name);
+    if (inFlight) return inFlight;
+
+    const mountPromise = (async () => {
+      const archive = zipArchives.find((a) => a.name === name);
+      if (!archive) return; // unknown library — skip silently
+      const browserFS = getBrowserFS();
+      const buf = await fetchAssetBytes(resolveRuntimeAssetUrl(archive.zipPath));
+      const zipFS = await createBFSBackend('ZipFS', {
+        zipData: browserFS.BFSRequire('buffer').Buffer.from(buf),
+      });
+      if (this.mounted.has(name)) return;
+      try {
+        this.rootMFS.mount(archive.mountPath, zipFS);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        if (!message.includes('Mount point') || !message.includes('already taken')) {
+          throw error;
+        }
       }
+      this.mounted.add(name);
+    })();
+
+    this.mounting.set(name, mountPromise);
+    try {
+      await mountPromise;
+    } finally {
+      this.mounting.delete(name);
     }
-    mountedLibraryZips.add(name);
-  })();
-
-  mountingLibraryZips.set(name, mountPromise);
-  try {
-    await mountPromise;
-  } finally {
-    mountingLibraryZips.delete(name);
   }
-}
 
-/**
- * Parses library names from SCAD source texts, fetches and mounts only those
- * referenced. `extraNames` allows the caller to force-mount additional libraries
- * (e.g. when the active source path itself lives inside a library directory).
- * Returns the resolved set of mounted library names.
- */
-export async function mountDemandLibraries(
-  sourceTexts: string[],
-  extraNames: string[] = [],
-): Promise<string[]> {
-  const needed = [...new Set([...sourceTexts.flatMap(extractLibraryNames), ...extraNames])];
-  await Promise.all(needed.map(fetchAndMountLibrary));
-  return needed.filter((n) => mountedLibraryZips.has(n));
-}
+  /**
+   * Parses library names from SCAD source texts, fetches and mounts only those
+   * referenced. `extraNames` force-mounts additional libraries (e.g. when the
+   * active source path itself lives inside a library directory). Returns the
+   * resolved set of mounted library names.
+   */
+  async mountDemandLibraries(sourceTexts: string[], extraNames: string[] = []): Promise<string[]> {
+    const needed = [...new Set([...sourceTexts.flatMap(extractLibraryNames), ...extraNames])];
+    await Promise.all(needed.map((n) => this.fetchAndMount(n)));
+    return needed.filter((n) => this.mounted.has(n));
+  }
 
-/**
- * Eagerly mounts all library archives on the main thread so the full editor UI
- * can browse and complete against the entire /libraries tree.
- *
- * This is intentionally only used by editor mode. Embed/customizer shells keep
- * using worker-side demand loading.
- */
-export async function preloadEditorLibraries(): Promise<void> {
-  await Promise.all(zipArchives.map((a) => fetchAndMountLibrary(a.name)));
+  /**
+   * Eagerly mounts all library archives so the full editor UI can browse and
+   * complete against the entire /libraries tree. Used by editor mode only;
+   * embed/customizer shells keep using worker-side demand loading.
+   */
+  async preloadAll(): Promise<void> {
+    await Promise.all(zipArchives.map((a) => this.fetchAndMount(a.name)));
+  }
 }
 
 // ---------------------------------------------------------------------------

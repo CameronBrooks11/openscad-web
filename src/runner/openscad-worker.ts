@@ -2,7 +2,7 @@
 
 /// <reference lib="webworker" />
 
-import { createEditorFS, mountDemandLibraries, symlinkLibraries } from '../fs/filesystem.ts';
+import { createEditorFS, symlinkLibraries, type EditorFs } from '../fs/filesystem.ts';
 import { markPerf, measurePerf } from '../perf/runtime-performance.ts';
 import { ensureWorkerBrowserFSLoaded } from '../runtime/browserfs-runtime.ts';
 import { createRuntime, OpenSCADRuntime } from './openscad-runtime.ts';
@@ -52,9 +52,10 @@ function createJobRuntime(): Promise<OpenSCADRuntime> {
   });
 }
 
-// BrowserFS is initialized once per worker runtime.
+// BrowserFS is initialized once per worker runtime; this worker owns its
+// LibraryMounter for its lifetime so the mount cache persists across jobs.
 // The per-instance WASM FS mounts (mkdir + mount + symlinks) are re-done for every fresh WASM instance.
-let editorFSInitialized = false;
+let editorFs: EditorFs | null = null;
 
 /**
  * Mounts the BrowserFS canonical partitions into the given WASM FS instance:
@@ -109,14 +110,13 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
       // Demand-load only the libraries referenced in the source texts
       let libraryNames: string[] = [];
       if (mountArchives) {
-        if (!editorFSInitialized) {
+        if (!editorFs) {
           markPerf('osc:worker-fs-init-start');
           const fsStart = performance.now();
-          await createEditorFS({ allowPersistence: false });
+          editorFs = await createEditorFS({ allowPersistence: false });
           markPerf('osc:worker-fs-init-end');
           perf.workerFsInitMillis = performance.now() - fsStart;
           measurePerf('osc:worker-fs-init', 'osc:worker-fs-init-start', 'osc:worker-fs-init-end');
-          editorFSInitialized = true;
         }
         const sourceTexts = sources.map((s) => s.content).filter((c): c is string => c != null);
         // Also ensure the library is mounted if the active source path is inside /libraries/<name>/
@@ -126,7 +126,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
           .map((p) => p.split('/')[2])
           .filter(Boolean);
         const libraryMountStart = performance.now();
-        libraryNames = await mountDemandLibraries(sourceTexts, extraNames);
+        libraryNames = await editorFs.libraries.mountDemandLibraries(sourceTexts, extraNames);
         perf.workerLibraryMountMillis = performance.now() - libraryMountStart;
       }
 
