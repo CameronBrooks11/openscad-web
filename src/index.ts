@@ -10,6 +10,7 @@ import { ensureBrowserFSLoaded, getBrowserFS } from './runtime/browserfs-runtime
 import { loadBootConfig, mergeConfigIntoSearch } from './runtime/boot-config.ts';
 import { registerAppServiceWorker } from './runtime/service-worker.ts';
 import { readStateFromFragment, writeStateInFragment } from './state/fragment-state.ts';
+import { readPersistedState, writePersistedState } from './state/persisted-state.ts';
 import { createInitialState } from './state/initial-state.ts';
 import { parseUrlMode } from './state/url-mode.ts';
 import { setModel } from './state/model-context.ts';
@@ -95,19 +96,9 @@ window.addEventListener('load', async () => {
 
   if (isInStandaloneMode()) {
     const bfs: FS = getBrowserFS().BFSRequire('fs');
-    try {
-      const data = JSON.parse(
-        new TextDecoder('utf-8').decode(bfs.readFileSync('/home/state.json')),
-      );
-      const { view, params, preview } = data;
-      persistedState = { view, params, preview };
-    } catch (e) {
-      console.log('Failed to read the persisted state from local storage.', e);
-    }
+    persistedState = readPersistedState(bfs);
     statePersister = {
-      set: async ({ view, params, preview }) => {
-        bfs.writeFile('/home/state.json', JSON.stringify({ view, params, preview }));
-      },
+      set: async (state) => writePersistedState(bfs, state),
     };
   } else {
     persistedState = await readStateFromFragment();
