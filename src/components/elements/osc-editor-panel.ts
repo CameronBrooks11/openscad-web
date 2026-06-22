@@ -13,8 +13,9 @@ import { getParentDir, join } from '../../fs/filesystem.ts';
 import { defaultSourcePath, getBlankProjectState } from '../../state/initial-state.ts';
 import { buildUrlForStateParams } from '../../state/fragment-state.ts';
 import { registerOpenSCADLanguage } from '../../language/openscad-register-language.ts';
-import { toMonacoMarkers } from '../../language/diagnostic-markers.ts';
+import { groupMarkersByPath } from '../../language/diagnostic-markers.ts';
 import { markPerf, measurePerf } from '../../perf/runtime-performance.ts';
+import type { Diagnostic } from '../../diagnostics.ts';
 import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
 
@@ -48,13 +49,8 @@ export class OscEditorPanel extends LitElement {
     // Sync editor content when active path changes or source is externally modified
     if (this._editor && this._monaco) {
       const checkerRun = st.lastCheckerRun;
-      const editorModel = this._editor.getModel();
-      if (editorModel && checkerRun) {
-        this._monaco.editor.setModelMarkers(
-          editorModel,
-          'openscad',
-          toMonacoMarkers(checkerRun.markers),
-        );
+      if (checkerRun) {
+        this._applyDiagnosticMarkers(checkerRun.markers);
       }
 
       // If path changed, update the editor model
@@ -80,6 +76,39 @@ export class OscEditorPanel extends LitElement {
       }
     }
   };
+
+  /**
+   * Route each diagnostic to the editor model for its file, so a multi-file
+   * project shows each file's markers on its own model instead of dumping them
+   * all on the active one. Diagnostics with no path — or whose file has no open
+   * model — fall back to the active model. Every model is cleared first so a file
+   * whose diagnostics were resolved doesn't keep stale markers.
+   */
+  private _applyDiagnosticMarkers(diagnostics: Diagnostic[]) {
+    const monaco = this._monaco;
+    const editor = this._editor;
+    if (!monaco || !editor) return;
+    const activeModel = editor.getModel();
+
+    const byModel = new Map<monacoTypes.editor.ITextModel, monacoTypes.editor.IMarkerData[]>();
+    const route = (
+      model: monacoTypes.editor.ITextModel,
+      markers: monacoTypes.editor.IMarkerData[],
+    ) => {
+      const existing = byModel.get(model);
+      if (existing) existing.push(...markers);
+      else byModel.set(model, [...markers]);
+    };
+    for (const [path, markers] of groupMarkersByPath(diagnostics)) {
+      const model =
+        (path ? monaco.editor.getModel(monaco.Uri.parse(`file://${path}`)) : null) ?? activeModel;
+      if (model) route(model, markers);
+    }
+
+    for (const model of monaco.editor.getModels()) {
+      monaco.editor.setModelMarkers(model, 'openscad', byModel.get(model) ?? []);
+    }
+  }
 
   private _closeMenu = (e: MouseEvent) => {
     if (!e.composedPath().includes(this)) this._menuOpen = false;
@@ -191,13 +220,8 @@ export class OscEditorPanel extends LitElement {
 
     // Apply initial markers
     const checkerRun = st.lastCheckerRun;
-    const editorModelInstance = editor.getModel();
-    if (editorModelInstance && checkerRun) {
-      monaco.editor.setModelMarkers(
-        editorModelInstance,
-        'openscad',
-        toMonacoMarkers(checkerRun.markers),
-      );
+    if (checkerRun) {
+      this._applyDiagnosticMarkers(checkerRun.markers);
     }
 
     // ResizeObserver to keep Monaco sized correctly
