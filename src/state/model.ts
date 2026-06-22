@@ -1,6 +1,6 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import { checkSyntax, render, RenderArgs, RenderOutput } from '../runner/actions.ts';
+import { checkSyntax, render, RenderArgs } from '../runner/actions.ts';
 import {
   MultiLayoutComponentId,
   SingleLayoutComponentId,
@@ -17,11 +17,10 @@ import { ProjectStore } from './project-store.ts';
 import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
 import { isExpectedJobCancellation, ProcessStreams } from '../runner/openscad-runner.ts';
 import { is2DFormatExtension } from './formats.ts';
-import { parseOff } from '../io/import_off.ts';
-import { export3MF } from '../io/export_3mf.ts';
-import chroma from 'chroma-js';
 import { isUserFacingOperationError } from '../user-facing-errors.ts';
 import { applyUserFacingError } from './apply-user-facing-error.ts';
+import { ExportService } from './services/export-service.ts';
+import type { ServiceContext } from './services/service-context.ts';
 
 /** Debounce window for durable-state persistence (coalesces rapid edits/drags). */
 const PERSIST_DEBOUNCE_MS = 500;
@@ -39,6 +38,8 @@ const durableSlice = (state: State): PersistedSlice => ({
 export class Model extends EventTarget {
   /** Owns project-source logic (lookup, edits, file ops, ZIP import/export). */
   private readonly projectStore: ProjectStore;
+  private readonly serviceCtx: ServiceContext;
+  private readonly exportService: ExportService;
 
   constructor(
     private fs: ProjectFileSystem,
@@ -51,6 +52,20 @@ export class Model extends EventTarget {
     this.projectStore = new ProjectStore(fs);
     this._prevSources = state.params.sources;
     this._lastPersistedJson = JSON.stringify(durableSlice(state));
+    this.serviceCtx = this.buildServiceContext();
+    this.exportService = new ExportService(this.serviceCtx);
+  }
+
+  /** The shared surface the extracted services read state and mutate through. */
+  private buildServiceContext(): ServiceContext {
+    return {
+      getState: () => this.state,
+      mutate: (f) => this.mutate(f),
+      getSourceRevision: () => this._sourceRevision,
+      getActiveSource: () => this.source,
+      host: this.host,
+      fs: this.fs,
+    };
   }
 
   // Sequence counters identifying the latest in-flight operation of each kind.
@@ -428,116 +443,8 @@ export class Model extends EventTarget {
     });
   }
 
-  async export() {
-    if (this.state.output) {
-      const normalPassThrough =
-        (this.state.is2D && this.state.params.exportFormat2D === 'svg') ||
-        (!this.state.is2D && this.state.params.exportFormat3D === 'off');
-
-      const glbPassThrough =
-        !this.state.is2D &&
-        this.state.params.exportFormat3D === 'glb' &&
-        (this.state.output.displayFile?.name.endsWith('.glb') ?? false) &&
-        this.state.output.displayFileURL != null;
-
-      if (normalPassThrough || glbPassThrough) {
-        this.mutate((s) => (s.export = s.output));
-        if (glbPassThrough) {
-          this.host.download(
-            this.state.output.displayFileURL!,
-            this.state.output.displayFile!.name,
-          );
-        } else {
-          this.host.download(this.state.output.outFileURL, this.state.output.outFile.name);
-        }
-        return;
-      }
-    }
-    if (
-      !this.state.is2D &&
-      this.state.params.exportFormat3D == '3mf' &&
-      !this.state.params.extruderColors
-    ) {
-      if (!this.state.params.skipMultimaterialPrompt) {
-        this.mutate((_s) => (this.state.view.extruderPickerVisibility = 'exporting'));
-        return;
-      }
-    }
-    this.mutate((s) => {
-      s.currentRunLogs ??= [];
-      s.exporting = true;
-      s.error = undefined;
-      s.errorDetails = undefined;
-    });
-
-    try {
-      if (!this.state.output?.outFile || !this.state.output?.outFileURL) {
-        throw new Error('No output file to export');
-      }
-
-      const { features, exportFormat2D, exportFormat3D } = this.state.params;
-      const exportFormat = this.state.is2D ? exportFormat2D : exportFormat3D;
-      let output: RenderOutput;
-      if (exportFormat === '3mf') {
-        const start = performance.now();
-        const data = parseOff(await this.state.output.outFile.text());
-        const exportedData = export3MF(
-          data,
-          this.state.params.extruderColors?.map((c) => chroma(c)),
-        );
-        const elapsedMillis = performance.now() - start;
-        output = {
-          outFile: new File([exportedData], this.state.output.outFile.name.replace('.off', '.3mf')),
-          elapsedMillis,
-          logText: '',
-          markers: [],
-        };
-      } else {
-        output = await render({
-          mountArchives: false,
-          scadPath: '/export.scad',
-          sources: [
-            {
-              path: '/export.scad',
-              content: `import("${this.state.output?.outFile.name}");`,
-            },
-            {
-              path: this.state.output?.outFile.name,
-              url: this.state.output?.outFileURL,
-            },
-          ],
-          extraArgs: [],
-          isPreview: false,
-          features,
-          renderFormat: exportFormat,
-          streamsCallback: this.rawStreamsCallback.bind(this),
-        })({ now: true });
-      }
-
-      const outFileURL = this.host.createObjectURL(output.outFile);
-      this.mutate((s) => {
-        s.exporting = false;
-        if (s.export?.outFileURL?.startsWith('blob:') ?? false) {
-          this.host.revokeObjectURL(s.export!.outFileURL);
-        }
-        s.export = {
-          outFile: output.outFile,
-          outFileURL,
-          elapsedMillis: output.elapsedMillis,
-          formattedElapsedMillis: formatMillis(output.elapsedMillis),
-          formattedOutFileSize: formatBytes(output.outFile.size),
-        };
-        this.host.download(s.export.outFileURL, output.outFile.name);
-      });
-    } catch (err) {
-      this.mutate((s) => {
-        s.exporting = false;
-        if (!isUserFacingOperationError(err)) {
-          console.error('Error while exporting:', err);
-        }
-        applyUserFacingError(s, err, 'export');
-      });
-    }
+  export() {
+    return this.exportService.export();
   }
 
   /** Creates a new empty .scad file in /home/ and activates it. */
