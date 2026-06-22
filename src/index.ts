@@ -1,6 +1,6 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
-import { createEditorFS, preloadEditorLibraries } from './fs/filesystem.ts';
+import { createEditorFS } from './fs/filesystem.ts';
 import {
   getBootstrapPrefetchSpecifiers,
   injectBootstrapPrefetchHints,
@@ -87,14 +87,14 @@ window.addEventListener('load', async () => {
   await ensureBrowserFSLoaded();
 
   markPerf('osc:main-fs-init-start');
-  const fs = await createEditorFS({ allowPersistence: isInStandaloneMode() });
+  const { fs, libraries } = await createEditorFS({ allowPersistence: isInStandaloneMode() });
   markPerf('osc:main-fs-init-end');
   measurePerf('osc:main-fs-init', 'osc:main-fs-init-start', 'osc:main-fs-init-end');
   setFS(fs);
 
   if (shouldPreloadEditorLibraries(urlModeResult.mode)) {
     markPerf('osc:libraries-preload-start');
-    await preloadEditorLibraries();
+    await libraries.preloadAll();
     markPerf('osc:libraries-preload-end');
     measurePerf(
       'osc:libraries-preload',
