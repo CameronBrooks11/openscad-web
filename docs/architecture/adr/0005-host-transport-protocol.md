@@ -63,7 +63,7 @@ worker.
 - Queries: `getDiagnostics`, `getArtifact{artifactId}`, `getLogs`.
 - Values validated by a shared `OpenScadValue` type before `-D` building (#122).
 - Each committed output → `{artifactId, operationId, sourceRevision, format,
-  mediaType, size}`; `getArtifact(artifactId)` returns the exact bytes that op
+mediaType, size}`; `getArtifact(artifactId)` returns the exact bytes that op
   produced. L0's `setCamera`/viewer events are the viewer-facing subset of L1.
 
 ### Transport bindings
