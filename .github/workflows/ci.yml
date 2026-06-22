@@ -71,6 +71,9 @@ jobs:
         env:
           PUBLIC_URL: /openscad-web/
 
+      - name: Check bundle budgets
+        run: npm run check:budgets
+
   publish-artifact:
     runs-on: ubuntu-24.04
     env:
