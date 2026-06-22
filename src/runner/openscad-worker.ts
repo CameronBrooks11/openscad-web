@@ -97,7 +97,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
   }
 
   if (msg.type === 'compile') {
-    const { id, sources, args, outputPaths, mountArchives } = msg as CompileRequest;
+    const { id, sources, args, outputPaths, mountArchives, revision } = msg as CompileRequest;
     currentJobId = id;
     const mergedOutputs: MergedOutput[] = [];
     currentMergedOutputs = mergedOutputs;
@@ -185,6 +185,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
             mergedOutputs,
             elapsedMillis,
             perf,
+            revision,
           } satisfies CompileError);
           return;
         }
@@ -213,6 +214,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
         mergedOutputs,
         elapsedMillis,
         perf,
+        revision,
       } satisfies CompileResult);
     } catch (err) {
       const elapsedMillis = performance.now() - start;
@@ -227,6 +229,7 @@ self.addEventListener('message', async (e: MessageEvent<WorkerRequest>) => {
         mergedOutputs,
         elapsedMillis,
         perf,
+        revision,
       } satisfies CompileError);
     } finally {
       currentJobId = null;

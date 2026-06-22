@@ -403,3 +403,103 @@ describe('Model — expected cancellation handling', () => {
     expect(mockRender).not.toHaveBeenCalled();
   });
 });
+
+// ---------------------------------------------------------------------------
+// describe: stale-result rejection by source revision (#56)
+// ---------------------------------------------------------------------------
+
+describe('Model — stale-result rejection (#56)', () => {
+  const glb = () => new File(['x'], 'test.glb', { type: 'model/gltf-binary' });
+
+  it('drops a render result carrying a superseded source revision', async () => {
+    mockRender.mockReturnValueOnce(
+      // 99999 can never match the live counter (it starts at 0 and only this
+      // test's single render runs), so the result is stale and must be dropped.
+      vi.fn().mockResolvedValue({
+        outFile: glb(),
+        logText: '',
+        markers: [],
+        elapsedMillis: 0,
+        revision: 99999,
+      }),
+    );
+
+    await model.render({ isPreview: false, now: true });
+    await nextTicks();
+
+    expect(model.state.output).toBeUndefined();
+    // The dropped result must still release the spinner it owns, or the UI
+    // (Render/Export buttons, viewer overlay) stays stuck unrecoverably.
+    expect(model.state.rendering).toBeFalsy();
+  });
+
+  it('applies a render result whose revision matches the current revision', async () => {
+    // No source change since construction, so the live revision is still 0.
+    mockRender.mockReturnValueOnce(
+      vi.fn().mockResolvedValue({
+        outFile: glb(),
+        logText: '',
+        markers: [],
+        elapsedMillis: 0,
+        revision: 0,
+      }),
+    );
+
+    await model.render({ isPreview: false, now: true });
+    await nextTicks();
+
+    expect(model.state.output).toBeDefined();
+  });
+
+  it('applies a render result with no revision (pre-revision worker)', async () => {
+    // The default mock omits `revision`; an absent revision is treated as fresh.
+    await model.render({ isPreview: false, now: true });
+    await nextTicks();
+
+    expect(model.state.output).toBeDefined();
+  });
+
+  it('clears the spinner when an in-flight render is invalidated by newFile()', async () => {
+    // Reproduces the real trigger: a render is in flight when the user creates a
+    // new file, which bumps the source revision without dispatching a new render.
+    let resolveRender!: (v: unknown) => void;
+    mockRender.mockReturnValueOnce(
+      vi.fn().mockReturnValue(
+        new Promise((r) => {
+          resolveRender = r;
+        }),
+      ),
+    );
+
+    const renderPromise = model.render({ isPreview: false, now: true });
+    await nextTicks(1);
+    expect(model.state.rendering).toBe(true);
+
+    model.newFile(); // bumps the revision; does not dispatch a render
+
+    // The in-flight render now lands, stamped with the pre-newFile revision (0).
+    resolveRender({ outFile: glb(), logText: '', markers: [], elapsedMillis: 0, revision: 0 });
+    await renderPromise;
+    await nextTicks();
+
+    expect(model.state.output).toBeUndefined();
+    expect(model.state.rendering).toBeFalsy();
+  });
+
+  it('drops a stale syntax result instead of applying its checker run', async () => {
+    mockCheckSyntax.mockReturnValueOnce(
+      vi.fn().mockResolvedValue({
+        logText: 'STALE',
+        markers: [],
+        parameterSet: undefined,
+        revision: 99999,
+      }),
+    );
+
+    await model.checkSyntax();
+    await nextTicks();
+
+    expect(model.state.lastCheckerRun).toBeUndefined();
+    expect(model.state.checkingSyntax).toBeFalsy();
+  });
+});

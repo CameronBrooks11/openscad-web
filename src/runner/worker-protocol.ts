@@ -6,6 +6,13 @@ export type CompileRequest = {
   args: string[];
   outputPaths: string[];
   mountArchives: boolean;
+  /**
+   * Monotonic source/project revision of the inputs. Echoed back on the result
+   * so a consumer can drop a result produced from inputs that have since
+   * changed. Optional so a host/worker pair across a deploy boundary still
+   * interoperate (an absent revision is treated as "not stale").
+   */
+  revision?: number;
 };
 
 export type CancelRequest = {
@@ -33,6 +40,8 @@ export type CompileResult = {
   mergedOutputs: MergedOutput[];
   elapsedMillis: number;
   perf?: CompilePerfStats;
+  /** Echo of the originating CompileRequest.revision (see there). */
+  revision?: number;
 };
 export type CompileError = {
   type: 'error';
@@ -41,6 +50,8 @@ export type CompileError = {
   mergedOutputs: MergedOutput[];
   elapsedMillis: number;
   perf?: CompilePerfStats;
+  /** Echo of the originating CompileRequest.revision (see there). */
+  revision?: number;
 };
 
 export type MergedOutput = { stdout?: string; stderr?: string; error?: string };

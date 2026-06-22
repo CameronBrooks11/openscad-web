@@ -14,14 +14,16 @@ const syntaxDelay = 300;
 type SyntaxCheckArgs = {
   activePath: string;
   sources: Source[];
+  revision?: number;
 };
 type SyntaxCheckOutput = {
   logText: string;
   markers: Diagnostic[];
   parameterSet?: ParameterSet;
+  revision?: number;
 };
 export const checkSyntax = turnIntoDelayableExecution(syntaxDelay, (sargs: SyntaxCheckArgs) => {
-  const { activePath, sources } = sargs;
+  const { activePath, sources, revision } = sargs;
 
   const outFile = 'out.json';
   const job = spawnOpenSCAD(
@@ -30,6 +32,7 @@ export const checkSyntax = turnIntoDelayableExecution(syntaxDelay, (sargs: Synta
       inputs: sources,
       args: buildOpenScadArgs({ scadPath: activePath, outFile, exportFormat: 'param' }),
       outputPaths: [outFile],
+      revision,
     },
     (_streams) => {},
     'syntax',
@@ -63,6 +66,7 @@ export const checkSyntax = turnIntoDelayableExecution(syntaxDelay, (sargs: Synta
             },
           }),
           parameterSet,
+          revision: result.revision,
         });
       } catch (e) {
         if (!isExpectedJobCancellation(e)) {
@@ -81,6 +85,7 @@ export type RenderOutput = {
   logText: string;
   markers: Diagnostic[];
   elapsedMillis: number;
+  revision?: number;
 };
 
 export type RenderArgs = {
@@ -95,6 +100,7 @@ export type RenderArgs = {
   renderFormat: keyof typeof VALID_EXPORT_FORMATS_2D | keyof typeof VALID_EXPORT_FORMATS_3D;
   streamsCallback: (ps: ProcessStreams) => void;
   backend?: 'manifold' | 'cgal';
+  revision?: number;
 };
 
 /** Maximum array-nesting depth accepted for a customizer value. */
@@ -182,6 +188,7 @@ export const render = turnIntoDelayableExecution(renderDelay, (renderArgs: Rende
     renderFormat,
     streamsCallback,
     backend,
+    revision,
   } = renderArgs;
 
   const prefixLines: string[] = [];
@@ -220,6 +227,7 @@ export const render = turnIntoDelayableExecution(renderDelay, (renderArgs: Rende
       inputs: sources.map((s) => (s.path === scadPath ? { path: s.path, content } : s)),
       args,
       outputPaths: [outFile],
+      revision,
     },
     streamsCallback,
     isPreview ? 'preview' : 'render',
@@ -267,7 +275,13 @@ export const render = turnIntoDelayableExecution(renderDelay, (renderArgs: Rende
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const blob = new Blob([content as any]);
         const outFile = new File([blob], fileName, { type });
-        resolve({ outFile, logText, markers, elapsedMillis: result.elapsedMillis });
+        resolve({
+          outFile,
+          logText,
+          markers,
+          elapsedMillis: result.elapsedMillis,
+          revision: result.revision,
+        });
       } catch (e) {
         if (!isExpectedJobCancellation(e)) {
           console.error(e);

@@ -51,6 +51,7 @@ export class Model extends EventTarget {
   ) {
     super();
     this.projectStore = new ProjectStore(fs);
+    this._prevSources = state.params.sources;
     this._lastPersistedJson = JSON.stringify(durableSlice(state));
   }
 
@@ -62,6 +63,14 @@ export class Model extends EventTarget {
   private _previewSeq = 0;
   private _renderSeq = 0;
   private _syntaxSeq = 0;
+
+  // Monotonic source/project revision (#56). Bumped centrally in setState
+  // whenever params.sources changes identity, stamped onto each compile request,
+  // and checked when a result lands: a result produced from a since-superseded
+  // revision is dropped. This is source-identity defense complementing the
+  // call-ordering sequence guards above.
+  private _sourceRevision = 0;
+  private _prevSources: State['params']['sources'];
 
   // FSAPI write-back handles, keyed by source path (Chromium only). Scoping the
   // handle to a path keeps `saveProject()` writing back to the source the handle
@@ -93,6 +102,13 @@ export class Model extends EventTarget {
   }
 
   private setState(state: State) {
+    // bubbleUpDeepMutations gives params.sources a fresh identity exactly when
+    // its contents change (and not on view/var-only edits), so a reference
+    // change here is a reliable "the project sources changed" signal.
+    if (state.params.sources !== this._prevSources) {
+      this._prevSources = state.params.sources;
+      this._sourceRevision++;
+    }
     this.state = state;
     this.schedulePersist();
     this.setStateCallback?.(state);
@@ -379,8 +395,12 @@ export class Model extends EventTarget {
       const checkerRun = await checkSyntax({
         activePath: this.state.params.activePath,
         sources: this.state.params.sources,
+        revision: this._sourceRevision,
       })({ now: false });
       if (!isCurrent()) return; // a newer syntax check superseded this one
+      if (checkerRun?.revision !== undefined && checkerRun.revision !== this._sourceRevision) {
+        return; // sources changed since this check was requested — drop the stale result
+      }
       this.mutate((s) => {
         s.lastCheckerRun = checkerRun;
         s.parameterSet = checkerRun?.parameterSet;
@@ -680,10 +700,19 @@ export class Model extends EventTarget {
       renderFormat: is2D ? this.state.params.exportFormat2D : 'off',
       streamsCallback: this.rawStreamsCallback.bind(this),
       backend: this.state.params.backend,
+      revision: this._sourceRevision,
     };
     try {
       const output = await render(renderArgs)({ now });
       if (!isCurrent()) return; // a newer render/preview superseded this one
+      if (output.revision !== undefined && output.revision !== this._sourceRevision) {
+        // Sources changed since this render was requested — drop the stale result.
+        // Unlike the supersession case above, no newer call owns this spinner
+        // flag, so we must clear it ourselves or it stays stuck (e.g. after
+        // newFile(), which bumps the revision without dispatching a new render).
+        this.mutate((s) => setRendering(s, false));
+        return;
+      }
       const displayFile = output.outFile;
       if (output.outFile.name.endsWith('.svg') || output.outFile.name.endsWith('.dxf')) {
         is2D = true;
