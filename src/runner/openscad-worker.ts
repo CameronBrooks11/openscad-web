@@ -167,8 +167,9 @@ async function runCompile(msg: CompileRequest): Promise<void> {
             console.error(`File ${source.path} does not exist!`);
           }
         } else {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const content = await fetchSource(rt.FS, source as any, { baseUrl: appBaseUrl });
+          // `source` is a flat WireSource ({ path, content?: string | Uint8Array,
+          // url? }) — exactly what fetchSource accepts, so no cast is needed.
+          const content = await fetchSource(rt.FS, source, { baseUrl: appBaseUrl });
           // A nested source (e.g. /home/lib/x.scad) needs its parent dirs to
           // exist before writeFile; mkdir is idempotent on existing dirs.
           for (const dir of ancestorDirsOf(source.path)) rt.mkdir(dir);

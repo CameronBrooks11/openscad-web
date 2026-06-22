@@ -285,3 +285,46 @@ describe('fetchSource external URL policy', () => {
     ).rejects.toThrow('source URL must be same-origin relative/absolute.');
   });
 });
+
+describe('fetchSource byte handling', () => {
+  it('passes Uint8Array content through unchanged (no text corruption)', async () => {
+    const bytes = new Uint8Array([0, 1, 2, 255, 128, 10]);
+    const fsStub = { readFileSync: vi.fn() } as unknown as FS;
+    const out = await fetchSource(fsStub, { path: '/home/asset.bin', content: bytes });
+    // Same bytes, byte-for-byte — not stringified/encoded.
+    expect(Array.from(out)).toEqual([0, 1, 2, 255, 128, 10]);
+  });
+
+  it('encodes string content as UTF-8', async () => {
+    const fsStub = { readFileSync: vi.fn() } as unknown as FS;
+    const out = await fetchSource(fsStub, { path: '/home/a.scad', content: 'cube();' });
+    expect(new TextDecoder().decode(out)).toBe('cube();');
+  });
+
+  it('preserves byteOffset/byteLength when reading a subarray view from the fs', async () => {
+    // A backing buffer where the file's bytes are a window in the middle.
+    const backing = new Uint8Array([99, 99, 10, 20, 30, 99]);
+    const view = backing.subarray(2, 5); // [10,20,30], byteOffset 2, length 3
+    const fsStub = { readFileSync: vi.fn(() => view) } as unknown as FS;
+
+    const out = await fetchSource(fsStub, { path: '/home/asset.bin' });
+
+    // Must be exactly the window, not the whole backing buffer.
+    expect(Array.from(out)).toEqual([10, 20, 30]);
+  });
+
+  it('reads a non-Uint8Array view (DataView) at its exact window', async () => {
+    const backing = new Uint8Array([7, 8, 9, 10]).buffer;
+    const fsStub = { readFileSync: vi.fn(() => new DataView(backing, 1, 2)) } as unknown as FS;
+    const out = await fetchSource(fsStub, { path: '/home/asset.bin' });
+    expect(Array.from(out)).toEqual([8, 9]);
+  });
+
+  it('wraps a bare ArrayBuffer from the fs', async () => {
+    const fsStub = {
+      readFileSync: vi.fn(() => new Uint8Array([1, 2, 3]).buffer),
+    } as unknown as FS;
+    const out = await fetchSource(fsStub, { path: '/home/asset.bin' });
+    expect(Array.from(out)).toEqual([1, 2, 3]);
+  });
+});
