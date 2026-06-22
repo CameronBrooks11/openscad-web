@@ -1,7 +1,7 @@
 import { checkSyntax, render, type RenderArgs } from '../../runner/actions.ts';
 import { isExpectedJobCancellation, type ProcessStreams } from '../../runner/openscad-runner.ts';
 import { isUserFacingOperationError } from '../../user-facing-errors.ts';
-import { fetchSource, formatBytes, formatMillis, readFileAsDataURL } from '../../utils.ts';
+import { fetchSource, formatBytes, formatMillis } from '../../utils.ts';
 import { applyUserFacingError } from '../apply-user-facing-error.ts';
 import type { State } from '../app-state.ts';
 import { is2DFormatExtension } from '../formats.ts';
@@ -213,9 +213,6 @@ export class CompileCoordinator {
       backend: this.ctx.getState().params.backend,
       revision: this.ctx.getSourceRevision(),
     };
-    // Hoisted so the catch can revoke it if readFileAsDataURL throws after the
-    // blob URL was created (otherwise the object URL would leak).
-    let outFileURL: string | undefined;
     try {
       const output = await render(renderArgs)({ now });
       if (!isCurrent()) return; // a newer render/preview superseded this one
@@ -227,26 +224,11 @@ export class CompileCoordinator {
         this.ctx.mutate((s) => setRendering(s, false));
         return;
       }
-      const displayFile = output.outFile;
-      if (output.outFile.name.endsWith('.svg') || output.outFile.name.endsWith('.dxf')) {
-        is2D = true;
-      } else {
-        is2D = false;
-      }
-      outFileURL = this.ctx.host.createObjectURL(output.outFile);
-      const displayFileURL = displayFile && (await readFileAsDataURL(displayFile));
-      // readFileAsDataURL is asynchronous; the sources may have changed while it
-      // ran. Re-check before committing so a stale artifact never lands in state,
-      // and revoke the blob URL we created if we bail.
-      if (!isCurrent()) {
-        this.ctx.host.revokeObjectURL(outFileURL);
-        return; // a newer render/preview superseded this one — it owns the spinner
-      }
-      if (output.revision !== undefined && output.revision !== this.ctx.getSourceRevision()) {
-        this.ctx.host.revokeObjectURL(outFileURL);
-        this.ctx.mutate((s) => setRendering(s, false));
-        return;
-      }
+      is2D = output.outFile.name.endsWith('.svg') || output.outFile.name.endsWith('.dxf');
+      // Everything from the staleness checks above to the commit below is
+      // synchronous (the viewer reads the OFF File directly and uses outFileURL
+      // for SVG), so no newer render can land in between — no recheck needed.
+      const outFileURL = this.ctx.host.createObjectURL(output.outFile);
       this.ctx.mutate((s) => {
         setRendering(s, false);
         s.error = undefined;
@@ -259,16 +241,11 @@ export class CompileCoordinator {
         if (s.output?.outFileURL?.startsWith('blob:') ?? false) {
           this.ctx.host.revokeObjectURL(s.output!.outFileURL);
         }
-        if (s.output?.displayFileURL?.startsWith('blob:') ?? false) {
-          this.ctx.host.revokeObjectURL(s.output!.displayFileURL!);
-        }
 
         s.output = {
           isPreview: isPreview,
           outFile: output.outFile,
-          outFileURL: outFileURL!, // assigned above before any path reaching here
-          displayFile,
-          displayFileURL,
+          outFileURL,
           elapsedMillis: output.elapsedMillis,
           formattedElapsedMillis: formatMillis(output.elapsedMillis),
           formattedOutFileSize: formatBytes(output.outFile.size),
@@ -279,9 +256,6 @@ export class CompileCoordinator {
         }
       });
     } catch (err) {
-      // If the blob URL was created before the failure (readFileAsDataURL threw),
-      // revoke it so it doesn't leak.
-      if (outFileURL) this.ctx.host.revokeObjectURL(outFileURL);
       if (!isCurrent()) return; // superseded — the newer call owns the spinner state
       this.ctx.mutate((s) => {
         setRendering(s, false);

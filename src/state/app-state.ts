@@ -24,8 +24,6 @@ export type Source = {
 export interface FileOutput {
   outFile: File;
   outFileURL: string;
-  displayFile?: File;
-  displayFileURL?: string;
   elapsedMillis: number;
   formattedElapsedMillis: string;
   formattedOutFileSize: string;

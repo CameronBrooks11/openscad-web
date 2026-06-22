@@ -5,19 +5,12 @@ import type { ServiceContext } from '../service-context.ts';
 import type { State } from '../../app-state.ts';
 
 // render() is `factory(renderArgs)({ now })` → Promise<RenderOutput>; we drive the
-// promise it returns. readFileAsDataURL is the async artifact step whose await is
-// where a source change can sneak in — we control it to exercise the recheck.
+// promise it returns and the source revision to exercise the staleness drop.
 const renderImpl = vi.fn();
-const readFileAsDataURL = vi.fn();
 
 vi.mock('../../../runner/actions.ts', () => ({
   render: (renderArgs: unknown) => (opts: unknown) => renderImpl(renderArgs, opts),
   checkSyntax: vi.fn(),
-}));
-
-vi.mock('../../../utils.ts', async (importActual) => ({
-  ...(await importActual<typeof import('../../../utils.ts')>()),
-  readFileAsDataURL: (file: unknown) => readFileAsDataURL(file),
 }));
 
 function makeContext(revision: number) {
@@ -72,13 +65,11 @@ function renderOutput(revision: number) {
 describe('CompileCoordinator render staleness', () => {
   beforeEach(() => {
     renderImpl.mockReset();
-    readFileAsDataURL.mockReset();
   });
 
   it('commits the result and revokes nothing on the happy path', async () => {
     const { ctx, state, host } = makeContext(1);
     renderImpl.mockResolvedValue(renderOutput(1));
-    readFileAsDataURL.mockResolvedValue('data:text/plain;base64,c29saWQ=');
 
     await new CompileCoordinator(ctx).render({ isPreview: false, now: true });
 
@@ -88,32 +79,39 @@ describe('CompileCoordinator render staleness', () => {
     expect(state.rendering).toBe(false);
   });
 
-  it('drops a result gone stale during readFileAsDataURL and revokes the blob URL', async () => {
-    const { ctx, state, host, setRevision } = makeContext(1);
+  it('drops a result whose revision is stale and never creates a blob URL', async () => {
+    // The render was requested at revision 1, but the sources moved to 2 by the
+    // time the result arrives (e.g. the user edited while rendering).
+    const { ctx, state, host } = makeContext(2);
     renderImpl.mockResolvedValue(renderOutput(1));
-    // The source changes while the data URL is being read: bump the revision
-    // mid-await so the recheck after readFileAsDataURL sees a newer revision.
-    readFileAsDataURL.mockImplementation(async () => {
-      setRevision(2);
-      return 'data:text/plain;base64,c29saWQ=';
-    });
 
     await new CompileCoordinator(ctx).render({ isPreview: false, now: true });
 
     expect(state.output).toBeUndefined();
-    expect(host.revokeObjectURL).toHaveBeenCalledWith('blob:fake-url');
+    // The stale result is dropped before any object URL is created, so there is
+    // nothing to leak or revoke.
+    expect(host.createObjectURL).not.toHaveBeenCalled();
+    expect(host.revokeObjectURL).not.toHaveBeenCalled();
     expect(host.playCompletionChime).not.toHaveBeenCalled();
     expect(state.rendering).toBe(false);
   });
 
-  it('revokes the blob URL when readFileAsDataURL throws', async () => {
+  it('revokes the previous output blob URL when committing a new result', async () => {
     const { ctx, state, host } = makeContext(1);
+    // Seed a prior committed output with a blob URL.
+    (state as unknown as { output: State['output'] }).output = {
+      isPreview: false,
+      outFile: new File(['old'], 'old.off'),
+      outFileURL: 'blob:old-url',
+      elapsedMillis: 0,
+      formattedElapsedMillis: '0ms',
+      formattedOutFileSize: '1 B',
+    };
     renderImpl.mockResolvedValue(renderOutput(1));
-    readFileAsDataURL.mockRejectedValue(new Error('read failed'));
 
     await new CompileCoordinator(ctx).render({ isPreview: false, now: true });
 
-    expect(state.output).toBeUndefined();
-    expect(host.revokeObjectURL).toHaveBeenCalledWith('blob:fake-url');
+    expect(host.revokeObjectURL).toHaveBeenCalledWith('blob:old-url');
+    expect(state.output?.outFileURL).toBe('blob:fake-url');
   });
 });
