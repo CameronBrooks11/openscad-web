@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  contentOf,
   fromFragment,
   fromWire,
   toFragment,
@@ -142,6 +143,25 @@ describe('round-trip: toWire(fromWire(x)) === x for real source shapes', () => {
     for (const s of sources) {
       expect(fromWire(toWire(s))).toEqual(s);
     }
+  });
+});
+
+describe('contentOf', () => {
+  it('returns inline text for a text source', () => {
+    expect(contentOf({ kind: 'text', path: '/a.scad', content: 'cube();' })).toBe('cube();');
+  });
+
+  it('returns loaded content for a remote source, undefined when unloaded', () => {
+    expect(contentOf({ kind: 'remote', path: '/a', url: 'u', content: 'c' })).toBe('c');
+    expect(contentOf({ kind: 'remote', path: '/a', url: 'u' })).toBeUndefined();
+  });
+
+  it('returns undefined for sources whose content is not in-memory text', () => {
+    expect(contentOf({ kind: 'local', path: '/a.scad' })).toBeUndefined();
+    expect(contentOf({ kind: 'archive', path: '/lib/', url: 'z' })).toBeUndefined();
+    expect(
+      contentOf({ kind: 'binary', path: '/a.stl', content: new Uint8Array([1]) }),
+    ).toBeUndefined();
   });
 });
 

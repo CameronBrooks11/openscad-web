@@ -3,10 +3,17 @@
 import type { Diagnostic } from '../diagnostics.ts';
 import { ParameterSet } from './customizer-types.ts';
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
+import type { SerializableSource } from './project-source.ts';
 
 export type MultiLayoutComponentId = 'editor' | 'viewer' | 'customizer';
 export type SingleLayoutComponentId = MultiLayoutComponentId;
 
+/**
+ * The flat, untagged source shape used at the worker/runner boundary and in the
+ * serialized fragment / state.json. In-memory project state uses the typed
+ * `ProjectSource` union (see project-source.ts) and converts to this flat shape
+ * at those boundaries.
+ */
 export type Source = {
   // If path ends w/ /, it's a directory, and URL should contain a ZIP file that can be mounted
   path: string;
@@ -27,7 +34,7 @@ export interface FileOutput {
 export interface State {
   params: {
     activePath: string;
-    sources: Source[];
+    sources: SerializableSource[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vars?: { [name: string]: any };
     features: string[];

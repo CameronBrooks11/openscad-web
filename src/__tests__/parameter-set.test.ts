@@ -18,7 +18,7 @@ import { ParameterSet, NumberParameter } from '../state/customizer-types.ts';
 const minimalState: State = {
   params: {
     activePath: '/test.scad',
-    sources: [{ path: '/test.scad', content: 'myChoice = 2; // [0:No, 2:Yes]' }],
+    sources: [{ kind: 'text', path: '/test.scad', content: 'myChoice = 2; // [0:No, 2:Yes]' }],
     features: [],
     exportFormat2D: 'svg',
     exportFormat3D: 'stl',

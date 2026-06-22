@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ProjectFileSystem } from '../../fs/project-filesystem.ts';
-import type { Source, State } from '../app-state.ts';
+import type { State } from '../app-state.ts';
+import type { SerializableSource } from '../project-source.ts';
 import { readPersistedState, writePersistedState } from '../persisted-state.ts';
 
 // An in-memory stand-in for the BrowserFS home partition.
@@ -20,7 +21,7 @@ function fakeFs(initial: Record<string, string> = {}) {
   return { fs, files };
 }
 
-function baseState(sources: Source[]): State {
+function baseState(sources: SerializableSource[]): State {
   return {
     params: {
       activePath: sources[0]?.path ?? '/home/playground.scad',
@@ -42,12 +43,17 @@ function baseState(sources: Source[]): State {
 const STATE_PATH = '/home/state.json';
 
 describe('persisted-state on-disk compatibility (#56)', () => {
-  it('round-trips every source shape verbatim (flat keys, order preserved)', () => {
-    const sources: Source[] = [
-      { path: '/home/main.scad', content: 'cube(10);' },
-      { path: '/home/loaded.scad', url: 'http://localhost/loaded.scad', content: 'module a(){}' },
-      { path: '/home/unloaded.scad', url: 'http://localhost/unloaded.scad' },
-      { path: '/home/lib/', url: 'http://localhost/lib.zip' },
+  it('round-trips every source shape (union in memory, order preserved)', () => {
+    const sources: SerializableSource[] = [
+      { kind: 'text', path: '/home/main.scad', content: 'cube(10);' },
+      {
+        kind: 'remote',
+        path: '/home/loaded.scad',
+        url: 'http://localhost/loaded.scad',
+        content: 'module a(){}',
+      },
+      { kind: 'remote', path: '/home/unloaded.scad', url: 'http://localhost/unloaded.scad' },
+      { kind: 'archive', path: '/home/lib/', url: 'http://localhost/lib.zip' },
     ];
     const { fs } = fakeFs();
 
@@ -80,15 +86,20 @@ describe('persisted-state on-disk compatibility (#56)', () => {
 
     const restored = readPersistedState(fs);
 
+    // The flat on-disk sources are classified into the typed union on read —
+    // the load-bearing normalization for existing standalone users.
     expect(restored?.params.sources).toEqual([
-      { path: '/home/playground.scad', content: 'sphere(5);' },
-      { path: '/home/remote.scad', url: 'http://localhost/remote.scad' },
+      { kind: 'text', path: '/home/playground.scad', content: 'sphere(5);' },
+      { kind: 'remote', path: '/home/remote.scad', url: 'http://localhost/remote.scad' },
     ]);
   });
 
   it('writes the durable slice as flat JSON with no discriminant keys', () => {
     const { fs, files } = fakeFs();
-    writePersistedState(fs, baseState([{ path: '/home/a.scad', content: 'cube();' }]));
+    writePersistedState(
+      fs,
+      baseState([{ kind: 'text', path: '/home/a.scad', content: 'cube();' }]),
+    );
 
     const onDisk = JSON.parse(files.get(STATE_PATH)!);
     expect(Object.keys(onDisk).sort()).toEqual(['params', 'preview', 'view']);
@@ -99,7 +110,7 @@ describe('persisted-state on-disk compatibility (#56)', () => {
 
   it('persists only the durable slice (drops transient runtime fields)', () => {
     const { fs, files } = fakeFs();
-    const state = baseState([{ path: '/home/a.scad', content: 'cube();' }]);
+    const state = baseState([{ kind: 'text', path: '/home/a.scad', content: 'cube();' }]);
     state.rendering = true;
     state.error = 'boom';
     state.output = { isPreview: true } as State['output'];

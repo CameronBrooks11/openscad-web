@@ -33,7 +33,7 @@ function baseState(): State {
   return {
     params: {
       activePath: defaultSourcePath,
-      sources: [{ path: defaultSourcePath, content: 'cube(1);' }],
+      sources: [{ kind: 'text', path: defaultSourcePath, content: 'cube(1);' }],
       features: [],
       exportFormat2D: 'svg',
       exportFormat3D: 'stl',

@@ -2,6 +2,7 @@
 
 import defaultScad from './default-scad.ts';
 import { State } from './app-state.ts';
+import { fromFragment } from './project-source.ts';
 
 export const defaultSourcePath = '/home/playground.scad';
 export const defaultModelColor = '#f9d72c';
@@ -36,7 +37,7 @@ export function createInitialState(
     initialState = {
       params: {
         activePath,
-        sources: [{ path: activePath, content, url }],
+        sources: [fromFragment({ path: activePath, content, url })],
         features: [],
         exportFormat2D: 'svg',
         exportFormat3D: 'stl',

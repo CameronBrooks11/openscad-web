@@ -4,6 +4,7 @@ import { resolveExternalSourceUrl } from '../external-source.ts';
 import { State } from './app-state.ts';
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
 import { validateArray, validateBoolean, validateString, validateStringEnum } from '../utils.ts';
+import { fromFragment, toFragment, type FragmentSource } from './project-source.ts';
 import { createInitialState, defaultModelColor, defaultSourcePath } from './initial-state.ts';
 
 function validateVars(v: unknown): State['params']['vars'] {
@@ -23,15 +24,18 @@ function validateSourceUrl(value: unknown): string | undefined {
 }
 
 function validateSources(value: unknown): State['params']['sources'] {
-  return validateArray(
-    value as State['params']['sources'],
-    (src) => ({
+  // Validate into the flat wire shape, then classify into the typed union. The
+  // on-the-wire fragment stays flat (no `kind`); see encodeStateParamsAsFragment.
+  const flat = validateArray(
+    value as FragmentSource[],
+    (src): FragmentSource => ({
       path: validateString(src?.path, () => defaultSourcePath),
       content: src?.content != null ? validateString(src.content) : undefined,
       url: validateSourceUrl(src?.url),
     }),
     () => [{ path: defaultSourcePath, content: '' }],
   );
+  return flat.map(fromFragment);
 }
 
 export async function buildUrlForStateParams(state: State) {
@@ -72,7 +76,9 @@ async function decompressString(compressedInput: string): Promise<string> {
 
 export function encodeStateParamsAsFragment(state: State) {
   const json = JSON.stringify({
-    params: state.params,
+    // Flatten the typed source union back to the flat on-the-wire shape so the
+    // encoded fragment stays byte-compatible with previously-shared URLs.
+    params: { ...state.params, sources: state.params.sources.map(toFragment) },
     view: state.view,
     preview: state.preview,
   });

@@ -48,7 +48,7 @@ function createTestState(content = 'cube(10);'): State {
   return {
     params: {
       activePath: defaultSourcePath,
-      sources: [{ path: defaultSourcePath, content }],
+      sources: [{ kind: 'text', path: defaultSourcePath, content }],
       features: [],
       exportFormat2D: 'svg',
       exportFormat3D: 'stl',
@@ -187,7 +187,7 @@ describe('Model — render triggering', () => {
     model.mutate((s) => {
       s.params.sources = [
         ...s.params.sources,
-        { path: '/home/other.scad', content: 'cylinder(5,3);' },
+        { kind: 'text', path: '/home/other.scad', content: 'cylinder(5,3);' },
       ];
     });
     vi.clearAllMocks(); // reset call counts after the above mutation
@@ -201,7 +201,11 @@ describe('Model — render triggering', () => {
     model.mutate((s) => {
       s.params.sources = [
         ...s.params.sources,
-        { path: '/home/image.svg', content: '<svg xmlns="http://www.w3.org/2000/svg"></svg>' },
+        {
+          kind: 'text',
+          path: '/home/image.svg',
+          content: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+        },
       ];
     });
     vi.clearAllMocks();
@@ -219,7 +223,11 @@ describe('Model — render triggering', () => {
       s.params.exportFormat2D = 'dxf';
       s.params.sources = [
         ...s.params.sources,
-        { path: '/home/image.svg', content: '<svg xmlns="http://www.w3.org/2000/svg"></svg>' },
+        {
+          kind: 'text',
+          path: '/home/image.svg',
+          content: '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+        },
       ];
     });
     vi.clearAllMocks();
@@ -385,7 +393,9 @@ describe('Model — expected cancellation handling', () => {
         ...createTestState(undefined),
         params: {
           activePath: defaultSourcePath,
-          sources: [{ path: defaultSourcePath, url: 'https://example.com/model.scad' }],
+          sources: [
+            { kind: 'remote', path: defaultSourcePath, url: 'https://example.com/model.scad' },
+          ],
           features: [],
           exportFormat2D: 'svg',
           exportFormat3D: 'stl',

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProjectFileSystem } from '../project-filesystem.ts';
 import { ProjectStore } from '../../state/project-store.ts';
+import { contentOf } from '../../state/project-source.ts';
 import { fetchSource } from '../../utils.ts';
 
 // A minimal in-memory implementation providing ONLY the two methods of the
@@ -25,10 +26,14 @@ function memFs(initial: Record<string, string> = {}): ProjectFileSystem {
 describe('ProjectFileSystem contract (#62 Slice B)', () => {
   it('ProjectStore operates on a bare two-method filesystem', () => {
     const store = new ProjectStore(memFs({ '/a.scad': 'A' }));
-    const snapshot = store.openFile([{ path: '/x.scad', content: 'x' }], '/x.scad', '/a.scad');
+    const snapshot = store.openFile(
+      [{ kind: 'text', path: '/x.scad', content: 'x' }],
+      '/x.scad',
+      '/a.scad',
+    );
     // openFile reads /a.scad through readFileSync and adds it to the sources.
     expect(snapshot?.activePath).toBe('/a.scad');
-    expect(snapshot?.sources.find((s) => s.path === '/a.scad')?.content).toBe('A');
+    expect(contentOf(snapshot!.sources.find((s) => s.path === '/a.scad')!)).toBe('A');
   });
 
   it('ProjectStore.newFile writes through the contract', () => {

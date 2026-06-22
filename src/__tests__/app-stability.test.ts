@@ -7,7 +7,7 @@ import { State } from '../state/app-state.ts';
 const minimalState: State = {
   params: {
     activePath: '/test.scad',
-    sources: [{ path: '/test.scad', content: 'cube(10);' }],
+    sources: [{ kind: 'text', path: '/test.scad', content: 'cube(10);' }],
     features: [],
     exportFormat2D: 'svg',
     exportFormat3D: 'stl',

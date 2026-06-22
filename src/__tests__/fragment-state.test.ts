@@ -6,6 +6,7 @@ import {
   buildUrlForStateParams,
   encodeStateParamsAsFragment,
 } from '../state/fragment-state.ts';
+import { contentOf } from '../state/project-source.ts';
 
 // ---------------------------------------------------------------------------
 // BUG-5 — readStateFromFragment reads view?.layout?.showAxis instead of view?.showAxes
@@ -114,7 +115,7 @@ describe('round-trip: encodeStateParamsAsFragment → readStateFromFragment', ()
     const restored = await readStateFromFragment();
 
     expect(restored?.params.activePath).toBe('/home/playground.scad');
-    expect(restored?.params.sources?.[0].content).toBe('cube(10);');
+    expect(contentOf(restored!.params.sources[0])).toBe('cube(10);');
     expect(restored?.params.exportFormat2D).toBe('dxf');
     expect(restored?.params.exportFormat3D).toBe('off');
     expect(restored?.params.vars).toEqual({ size: 20 });
@@ -205,13 +206,13 @@ describe('fragment-state — edge cases (T2)', () => {
     window.location.hash = '#blank';
     const state = await readStateFromFragment();
     expect(state).not.toBeNull();
-    expect(state?.params.sources[0]?.content).toBe('');
+    expect(contentOf(state!.params.sources[0])).toBe('');
   });
 
   it('src= fragment produces state with the given source', async () => {
     window.location.hash = '#src=' + encodeURIComponent('cylinder(5, 3);');
     const state = await readStateFromFragment();
-    expect(state?.params.sources[0]?.content).toBe('cylinder(5, 3);');
+    expect(contentOf(state!.params.sources[0])).toBe('cylinder(5, 3);');
   });
 
   it('rejects legacy #url fragments that target cross-origin sources', async () => {
@@ -243,7 +244,10 @@ describe('fragment-state — edge cases (T2)', () => {
 
     const state = await readStateFromFragment();
 
-    expect(state?.params.sources[0]?.url).toBe('http://localhost/fixtures/test.scad');
+    {
+      const s0 = state!.params.sources[0];
+      expect(s0.kind === 'remote' ? s0.url : undefined).toBe('http://localhost/fixtures/test.scad');
+    }
   });
 });
 
@@ -292,16 +296,26 @@ describe('fragment backward-compat fixtures (#56)', () => {
     const state = createInitialState(null, { content: 'cube(10);' });
     // A same-origin absolute url is canonicalized to itself (no drift).
     state.params.sources = [
-      { path: '/main.scad', content: 'include <lib.scad>' },
-      { path: '/lib.scad', url: 'http://localhost/lib.scad', content: 'module lib(){}' },
+      { kind: 'text', path: '/main.scad', content: 'include <lib.scad>' },
+      {
+        kind: 'remote',
+        path: '/lib.scad',
+        url: 'http://localhost/lib.scad',
+        content: 'module lib(){}',
+      },
     ];
 
     history.replaceState(null, '', '#' + (await encodeStateParamsAsFragment(state)));
     const restored = await readStateFromFragment();
 
     expect(restored?.params.sources).toEqual([
-      { path: '/main.scad', content: 'include <lib.scad>', url: undefined },
-      { path: '/lib.scad', url: 'http://localhost/lib.scad', content: 'module lib(){}' },
+      { kind: 'text', path: '/main.scad', content: 'include <lib.scad>' },
+      {
+        kind: 'remote',
+        path: '/lib.scad',
+        url: 'http://localhost/lib.scad',
+        content: 'module lib(){}',
+      },
     ]);
   });
 
@@ -312,16 +326,16 @@ describe('fragment backward-compat fixtures (#56)', () => {
     // The two discriminant edges most at risk in a future union migration: a
     // url-only remote (no content yet) and a trailing-slash archive directory.
     state.params.sources = [
-      { path: '/r.scad', url: 'http://localhost/r.scad' },
-      { path: '/lib/', url: 'http://localhost/lib.zip' },
+      { kind: 'remote', path: '/r.scad', url: 'http://localhost/r.scad' },
+      { kind: 'archive', path: '/lib/', url: 'http://localhost/lib.zip' },
     ];
 
     history.replaceState(null, '', '#' + (await encodeStateParamsAsFragment(state)));
     const restored = await readStateFromFragment();
 
     expect(restored?.params.sources).toEqual([
-      { path: '/r.scad', url: 'http://localhost/r.scad', content: undefined },
-      { path: '/lib/', url: 'http://localhost/lib.zip', content: undefined },
+      { kind: 'remote', path: '/r.scad', url: 'http://localhost/r.scad' },
+      { kind: 'archive', path: '/lib/', url: 'http://localhost/lib.zip' },
     ]);
   });
 
@@ -330,16 +344,47 @@ describe('fragment backward-compat fixtures (#56)', () => {
     const createInitialState = (await import('../state/initial-state.ts')).createInitialState;
     const state = createInitialState(null, { content: 'a' });
     state.params.sources = [
-      { path: '/a.scad', content: 'a();' },
-      { path: '/b.scad', content: 'b();' },
-      { path: '/c.scad', content: 'c();' },
+      { kind: 'text', path: '/a.scad', content: 'a();' },
+      { kind: 'text', path: '/b.scad', content: 'b();' },
+      { kind: 'text', path: '/c.scad', content: 'c();' },
     ];
 
     history.replaceState(null, '', '#' + (await encodeStateParamsAsFragment(state)));
     const restored = await readStateFromFragment();
 
     expect(restored?.params.sources.map((s) => s.path)).toEqual(['/a.scad', '/b.scad', '/c.scad']);
-    expect(restored?.params.sources.map((s) => s.content)).toEqual(['a();', 'b();', 'c();']);
+    expect(restored?.params.sources.map((s) => contentOf(s))).toEqual(['a();', 'b();', 'c();']);
+  });
+
+  it('encodes the fragment with flat, kind-less sources (bookmarked-URL compatibility)', async () => {
+    mockMatchMedia();
+    const createInitialState = (await import('../state/initial-state.ts')).createInitialState;
+    const state = createInitialState(null, { content: 'cube(10);' });
+    state.params.sources = [
+      { kind: 'text', path: '/a.scad', content: 'a();' },
+      { kind: 'remote', path: '/r.scad', url: 'http://localhost/r.scad' },
+    ];
+
+    // Decode the gzip+base64 fragment back to its raw JSON and assert the
+    // serialized sources are the FLAT shape (no `kind`), so URLs shared by this
+    // build remain readable by older deploys and vice versa.
+    const fragment = await encodeStateParamsAsFragment(state);
+    const raw = new TextDecoder().decode(
+      await new Response(
+        new ReadableStream({
+          start(controller) {
+            controller.enqueue(Uint8Array.from(atob(fragment), (c) => c.charCodeAt(0)));
+            controller.close();
+          },
+        }).pipeThrough(new DecompressionStream('gzip')),
+      ).arrayBuffer(),
+    );
+    const parsed = JSON.parse(raw);
+    expect(parsed.params.sources).toEqual([
+      { path: '/a.scad', content: 'a();' },
+      { path: '/r.scad', url: 'http://localhost/r.scad' },
+    ]);
+    expect(raw).not.toContain('"kind"');
   });
 
   it('decodes an uncompressed (legacy, non-gzip) JSON fragment', async () => {
@@ -358,7 +403,7 @@ describe('fragment backward-compat fixtures (#56)', () => {
 
     expect(state?.params.activePath).toBe('/legacy.scad');
     expect(state?.params.sources).toEqual([
-      { path: '/legacy.scad', content: 'legacy();', url: undefined },
+      { kind: 'text', path: '/legacy.scad', content: 'legacy();' },
     ]);
   });
 
@@ -378,7 +423,7 @@ describe('fragment backward-compat fixtures (#56)', () => {
     const state = await readStateFromFragment();
 
     expect(state?.params.sources).toEqual([
-      { path: '/old.scad', content: 'cube(1);', url: undefined },
+      { kind: 'text', path: '/old.scad', content: 'cube(1);' },
     ]);
   });
 
@@ -396,7 +441,7 @@ describe('fragment backward-compat fixtures (#56)', () => {
     const state = await readStateFromFragment();
 
     expect(state?.params.sources).toEqual([
-      { path: '/home/playground.scad', content: 'cube(2);', url: undefined },
+      { kind: 'text', path: '/home/playground.scad', content: 'cube(2);' },
     ]);
   });
 });
