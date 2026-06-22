@@ -34,11 +34,12 @@ class FakeWorker {
   onmessage: ((e: MessageEvent) => void) | null = null;
   onerror: ((e: ErrorEvent) => void) | null = null;
 
-  postMessage(msg: { type: string; id: string }) {
+  postMessage(msg: { type: string; id: string; revision?: number }) {
     if (msg.type !== 'compile') return;
     const spec = _workerSpecs.shift();
     if (!spec) throw new Error('FakeWorker: no spec queued for this compile call');
     const mergedOutputs = (spec.stderrLines ?? []).map((text) => ({ stderr: text }));
+    // Mirror the real worker: echo the request's revision back on the response.
     const response =
       spec.responseType === 'error'
         ? {
@@ -48,6 +49,7 @@ class FakeWorker {
             mergedOutputs,
             elapsedMillis: 0,
             perf: spec.perf,
+            revision: msg.revision,
           }
         : {
             type: 'result' as const,
@@ -57,6 +59,7 @@ class FakeWorker {
             mergedOutputs,
             elapsedMillis: 0,
             perf: spec.perf,
+            revision: msg.revision,
           };
     // Deliver asynchronously (mirrors real Worker MessageEvent timing)
     setTimeout(() => this.onmessage?.({ data: response } as MessageEvent), 0);
@@ -218,5 +221,30 @@ describe('spawnOpenSCAD', () => {
     expect(snapshot.metrics).toContainEqual(
       expect.objectContaining({ name: 'osc:worker-wasm-init', duration: 44 }),
     );
+  });
+
+  it('threads the request revision through to the result (#56)', async () => {
+    _workerSpecs.push({ exitCode: 0 });
+    const result = await spawnOpenSCAD(
+      { mountArchives: true, args: ['m.scad'], revision: 7 },
+      vi.fn(),
+    );
+    expect(result.revision).toBe(7);
+  });
+
+  it('threads the request revision through to an error result (#56)', async () => {
+    _workerSpecs.push({ responseType: 'error', message: 'boom' });
+    const result = await spawnOpenSCAD(
+      { mountArchives: true, args: ['m.scad'], revision: 9 },
+      vi.fn(),
+    );
+    expect(result.error).toBe('boom');
+    expect(result.revision).toBe(9);
+  });
+
+  it('leaves revision undefined when none is requested (pre-revision host)', async () => {
+    _workerSpecs.push({ exitCode: 0 });
+    const result = await spawnOpenSCAD({ mountArchives: true, args: ['m.scad'] }, vi.fn());
+    expect(result.revision).toBeUndefined();
   });
 });

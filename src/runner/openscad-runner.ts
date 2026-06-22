@@ -24,6 +24,8 @@ export type OpenSCADInvocation = {
   inputs?: Source[];
   args: string[];
   outputPaths?: string[];
+  /** Source/project revision stamped onto the request; echoed on the result. */
+  revision?: number;
 };
 
 export type OpenSCADInvocationResults = {
@@ -33,6 +35,8 @@ export type OpenSCADInvocationResults = {
   mergedOutputs: MergedOutputs;
   elapsedMillis: number;
   perf?: CompilePerfStats;
+  /** Revision echoed back from the worker (see OpenSCADInvocation.revision). */
+  revision?: number;
 };
 
 export type ProcessStreams = { stderr: string } | { stdout: string };
@@ -129,6 +133,7 @@ function handleWorkerMessage(e: MessageEvent<WorkerResponse>, generation: number
       mergedOutputs: r.mergedOutputs,
       elapsedMillis: r.elapsedMillis,
       perf: r.perf,
+      revision: r.revision,
     });
   } else if (msg.type === 'error') {
     const r = msg as CompileError;
@@ -141,6 +146,7 @@ function handleWorkerMessage(e: MessageEvent<WorkerResponse>, generation: number
       mergedOutputs: r.mergedOutputs,
       elapsedMillis: r.elapsedMillis,
       perf: r.perf,
+      revision: r.revision,
     });
   } else if (msg.type === 'stdout') {
     const r = msg as CompileStdout;
@@ -258,6 +264,7 @@ export function spawnOpenSCAD(
       args: invocation.args,
       outputPaths: invocation.outputPaths ?? [],
       mountArchives: invocation.mountArchives,
+      revision: invocation.revision,
     };
     worker.postMessage(request);
 
