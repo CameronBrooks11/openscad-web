@@ -2,7 +2,7 @@
 
 import { fetchExternalSourceBytes } from './external-source.ts';
 import { ProjectFileSystem } from './fs/project-filesystem.ts';
-import { Source } from './state/app-state.ts';
+import type { WireSource } from './state/project-source.ts';
 
 export function mapObject<T, R>(
   o: Record<string, T>,
@@ -183,22 +183,39 @@ export function downloadUrl(url: string, filename: string) {
   link.parentNode?.removeChild(link);
 }
 
+/**
+ * View a BufferSource as a Uint8Array without copying, preserving its exact
+ * window. `new Uint8Array(view.buffer)` is wrong for a view with a non-zero
+ * byteOffset or a byteLength shorter than its backing buffer (e.g. a Buffer
+ * slice from BrowserFS) — it would expose the whole underlying buffer.
+ *
+ * The result may alias the input's memory, so callers must treat fetchSource's
+ * bytes as read-only (every current consumer does: worker FS write, zip, decode).
+ */
+function asUint8Array(data: BufferSource): Uint8Array {
+  if (data instanceof Uint8Array) return data; // already a correctly-bounded view
+  if (ArrayBuffer.isView(data))
+    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  return new Uint8Array(data); // ArrayBuffer
+}
+
 export async function fetchSource(
   fs: ProjectFileSystem,
-  { content, path, url }: Source,
+  { content, path, url }: WireSource,
   { baseUrl }: { baseUrl?: string } = {},
 ): Promise<Uint8Array> {
   const isText = path.endsWith('.scad') || path.endsWith('.json');
   if (content != null) {
-    return new TextEncoder().encode(content);
+    // Bytes are canonical: pass binary content through unchanged. Encoding it as
+    // text (the previous behaviour) stringified the array and corrupted it.
+    return content instanceof Uint8Array ? content : new TextEncoder().encode(content);
   } else if (url) {
     const data = await fetchExternalSourceBytes(url, { baseUrl });
     if (!isText) return data;
-    content = new TextDecoder().decode(data);
-    return new TextEncoder().encode(content.replace(/\r\n/g, '\n'));
+    const text = new TextDecoder().decode(data);
+    return new TextEncoder().encode(text.replace(/\r\n/g, '\n'));
   } else if (path) {
-    const data = fs.readFileSync(path);
-    return new Uint8Array('buffer' in data ? data.buffer : data);
+    return asUint8Array(fs.readFileSync(path));
   } else {
     throw new Error('Invalid source: ' + JSON.stringify({ path, content, url }));
   }
