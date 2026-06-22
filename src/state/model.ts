@@ -11,6 +11,7 @@ import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
 import { bubbleUpDeepMutations } from './deep-mutate.ts';
 import { fetchSource, formatBytes, formatMillis, readFileAsDataURL } from '../utils.ts';
 import { openLocalFile, saveViaHandle } from '../fs/filesystem.ts';
+import { ProjectFileSystem } from '../fs/project-filesystem.ts';
 import { ProjectStore } from './project-store.ts';
 import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
 import { isExpectedJobCancellation, ProcessStreams } from '../runner/openscad-runner.ts';
@@ -42,7 +43,7 @@ export class Model extends EventTarget {
   private readonly projectStore: ProjectStore;
 
   constructor(
-    private fs: FS,
+    private fs: ProjectFileSystem,
     public state: State,
     private setStateCallback?: (state: State) => void,
     private statePersister?: StatePersister,

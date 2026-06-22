@@ -1,5 +1,6 @@
 import JSZip from 'jszip';
 import { Source } from './app-state.ts';
+import { ProjectFileSystem } from '../fs/project-filesystem.ts';
 import { fetchSource } from '../utils.ts';
 import {
   MAX_PROJECT_FILE_COUNT,
@@ -21,7 +22,7 @@ export interface ProjectSnapshot {
  * returned snapshot and drive any follow-up (e.g. recompiling).
  */
 export class ProjectStore {
-  constructor(private fs: FS) {}
+  constructor(private fs: ProjectFileSystem) {}
 
   /** Content of the active source, or '' if absent/not yet loaded. */
   activeContent(sources: Source[], activePath: string): string {
