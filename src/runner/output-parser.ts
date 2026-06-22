@@ -45,6 +45,7 @@ export function parseMergedOutputs(
       endColumn: 1000,
       message: error,
       severity: 'error',
+      path: file,
     });
   };
   const shiftSourceName = opts.shiftSourceLines && opts.shiftSourceLines.sourcePath;
@@ -85,6 +86,7 @@ export function parseMergedOutputs(
           endColumn: 1000,
           message: warning,
           severity: 'warning',
+          path: file,
         });
         continue;
       }

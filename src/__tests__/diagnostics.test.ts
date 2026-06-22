@@ -5,7 +5,7 @@ import {
   hasErrorDiagnostic,
   type Diagnostic,
 } from '../diagnostics.ts';
-import { toMonacoMarkers } from '../language/diagnostic-markers.ts';
+import { groupMarkersByPath, toMonacoMarkers } from '../language/diagnostic-markers.ts';
 
 function diag(severity: Diagnostic['severity'], line = 1): Diagnostic {
   return {
@@ -57,5 +57,29 @@ describe('toMonacoMarkers adapter (#55)', () => {
   it('round-trips the optional source field', () => {
     const [marker] = toMonacoMarkers([{ ...diag('warning'), source: 'openscad' }]);
     expect(marker.source).toBe('openscad');
+  });
+});
+
+describe('groupMarkersByPath', () => {
+  const withPath = (p: string | undefined, line: number): Diagnostic => ({
+    ...diag('error', line),
+    path: p,
+  });
+
+  it('groups markers by file path, preserving per-file order', () => {
+    const groups = groupMarkersByPath([
+      withPath('/home/a.scad', 1),
+      withPath('/home/b.scad', 2),
+      withPath('/home/a.scad', 3),
+    ]);
+    expect([...groups.keys()]).toEqual(['/home/a.scad', '/home/b.scad']);
+    expect(groups.get('/home/a.scad')!.map((m) => m.startLineNumber)).toEqual([1, 3]);
+    expect(groups.get('/home/b.scad')!.map((m) => m.startLineNumber)).toEqual([2]);
+  });
+
+  it('collects path-less diagnostics under the undefined key', () => {
+    const groups = groupMarkersByPath([withPath(undefined, 9), withPath('/home/a.scad', 1)]);
+    expect(groups.get(undefined)!.map((m) => m.startLineNumber)).toEqual([9]);
+    expect(groups.get('/home/a.scad')!).toHaveLength(1);
   });
 });

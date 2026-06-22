@@ -14,6 +14,12 @@ export interface Diagnostic {
   endColumn: number;
   /** Optional source/tool that produced the diagnostic. */
   source?: string;
+  /**
+   * File the diagnostic belongs to, as reported by the compiler (e.g.
+   * `/home/playground.scad`). Lets a host route the marker to the right editor
+   * model instead of dumping every file's diagnostics on the active one.
+   */
+  path?: string;
 }
 
 const SEVERITY_RANK: Record<DiagnosticSeverity, number> = { info: 0, warning: 1, error: 2 };

@@ -29,3 +29,44 @@ describe('parseMergedOutputs – skipLines shifts marker line numbers (BUG-3)', 
     expect(markers[0].startLineNumber).toBe(4);
   });
 });
+
+describe('parseMergedOutputs – diagnostics carry the source file path', () => {
+  it('populates path from a parser-error line', () => {
+    const markers = parseMergedOutputs(mockOutputs(3), {
+      shiftSourceLines: { sourcePath: '/playground.scad', skipLines: 0 },
+    });
+    expect(markers[0].path).toBe('/playground.scad');
+    expect(markers[0].severity).toBe('error');
+  });
+
+  it('populates path for a different (non-active) file so it can route there', () => {
+    const markers = parseMergedOutputs(
+      [
+        {
+          stderr: 'ERROR: Parser error in file "/home/lib.scad", line 7: bad token',
+          stdout: undefined,
+          error: undefined,
+        },
+      ],
+      { shiftSourceLines: { sourcePath: '/home/main.scad', skipLines: 2 } },
+    );
+    // Not the active file, so the line is NOT shifted by skipLines.
+    expect(markers[0].path).toBe('/home/lib.scad');
+    expect(markers[0].startLineNumber).toBe(7);
+  });
+
+  it('populates path on warnings', () => {
+    const markers = parseMergedOutputs(
+      [
+        {
+          stderr: 'WARNING: Ignoring unknown variable, in file /home/main.scad, line 4',
+          stdout: undefined,
+          error: undefined,
+        },
+      ],
+      { shiftSourceLines: { sourcePath: '/home/main.scad', skipLines: 0 } },
+    );
+    expect(markers[0].severity).toBe('warning');
+    expect(markers[0].path).toBe('/home/main.scad');
+  });
+});
