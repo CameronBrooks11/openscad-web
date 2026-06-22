@@ -15,6 +15,9 @@ vi.mock('../../../io/import_off.ts', () => ({ parseOff: vi.fn(() => ({})) }));
 vi.mock('../../../io/export_3mf.ts', () => ({
   export3MF: vi.fn(() => new Uint8Array([1, 2, 3])),
 }));
+vi.mock('../../../io/export_glb.ts', () => ({
+  exportGLB: vi.fn(async () => new Uint8Array([4, 5, 6]).buffer),
+}));
 vi.mock('chroma-js', () => ({ default: vi.fn((c: string) => c) }));
 
 import { renderExport as _mockRenderExport, type RenderOutput } from '../../../runner/actions.ts';
@@ -97,14 +100,16 @@ describe('ExportService', () => {
     expect(mockRenderExport).not.toHaveBeenCalled();
   });
 
-  it('downloads the display file on a glb pass-through', async () => {
+  it('converts to glb in-browser (no worker render) and downloads a .glb', async () => {
     const { ctx, host } = makeCtx({
       is2D: false,
       exportFormat3D: 'glb',
-      output: fileOutput('m.glb', 'blob:glb'),
+      output: fileOutput('m.off'),
     });
     await new ExportService(ctx).export();
-    expect(host.download).toHaveBeenCalledWith('blob:glb', 'm.glb');
+    expect(host.download).toHaveBeenCalledTimes(1);
+    expect(host.download.mock.calls[0][1]).toBe('m.glb');
+    // GLB is produced from the OFF in-browser, not via a worker render.
     expect(mockRenderExport).not.toHaveBeenCalled();
   });
 
