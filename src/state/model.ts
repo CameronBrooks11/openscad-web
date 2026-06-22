@@ -20,11 +20,8 @@ import { is2DFormatExtension } from './formats.ts';
 import { parseOff } from '../io/import_off.ts';
 import { export3MF } from '../io/export_3mf.ts';
 import chroma from 'chroma-js';
-import {
-  isUserFacingOperationError,
-  normalizeOperationFailure,
-  UserFacingOperation,
-} from '../user-facing-errors.ts';
+import { isUserFacingOperationError } from '../user-facing-errors.ts';
+import { applyUserFacingError } from './apply-user-facing-error.ts';
 
 /** Debounce window for durable-state persistence (coalesces rapid edits/drags). */
 const PERSIST_DEBOUNCE_MS = 500;
@@ -179,18 +176,6 @@ export class Model extends EventTarget {
       s.error = undefined;
       s.errorDetails = undefined;
     });
-  }
-
-  private applyUserFacingError(s: State, error: unknown, operation: UserFacingOperation) {
-    const normalized = normalizeOperationFailure(error, operation);
-    s.error = normalized.message;
-    s.errorDetails = normalized.details;
-    if (normalized.markers || normalized.logText) {
-      s.lastCheckerRun = {
-        logText: normalized.logText ?? '',
-        markers: normalized.markers ?? [],
-      };
-    }
   }
 
   setFormats(
@@ -369,7 +354,7 @@ export class Model extends EventTarget {
         // Only surface the error if this fetch is still for the active file.
         if (requestedPath === this.state.params.activePath) {
           this.mutate((s) => {
-            this.applyUserFacingError(s, err, 'source');
+            applyUserFacingError(s, err, 'source');
           });
         }
         return;
@@ -421,7 +406,7 @@ export class Model extends EventTarget {
           console.error('Error while checking syntax:', err);
         }
         this.mutate((s) => {
-          this.applyUserFacingError(s, err, 'syntax');
+          applyUserFacingError(s, err, 'syntax');
         });
       }
     } finally {
@@ -550,7 +535,7 @@ export class Model extends EventTarget {
         if (!isUserFacingOperationError(err)) {
           console.error('Error while exporting:', err);
         }
-        this.applyUserFacingError(s, err, 'export');
+        applyUserFacingError(s, err, 'export');
       });
     }
   }
@@ -589,7 +574,7 @@ export class Model extends EventTarget {
       this.processSource();
     } catch (err) {
       this.mutate((s) => {
-        this.applyUserFacingError(s, err, 'model');
+        applyUserFacingError(s, err, 'model');
       });
     }
   }
@@ -638,7 +623,7 @@ export class Model extends EventTarget {
         this.host.download(this.host.createObjectURL(file), file.name);
       } catch (err) {
         this.mutate((s) => {
-          this.applyUserFacingError(s, err, 'model');
+          applyUserFacingError(s, err, 'model');
         });
       }
     }
@@ -769,7 +754,7 @@ export class Model extends EventTarget {
           if (!isUserFacingOperationError(err)) {
             console.error('Error while doing ' + (isPreview ? 'preview' : 'rendering') + ':', err);
           }
-          this.applyUserFacingError(s, err, isPreview ? 'preview' : 'render');
+          applyUserFacingError(s, err, isPreview ? 'preview' : 'render');
         }
       });
     }
