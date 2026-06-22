@@ -41,6 +41,8 @@ export default defineConfig({
         'src/fs/**/*.ts',
         'src/language/**/*.ts',
         'src/runner/**/*.ts',
+        'src/embed/protocol.ts',
+        'src/utils.ts',
         'src/runtime/asset-urls.ts',
         'src/runtime/boot-config.ts',
         'scripts/deploy-configure.mjs',
@@ -48,7 +50,19 @@ export default defineConfig({
       ],
       exclude: ['src/**/__tests__/**', 'scripts/**/__tests__/**', 'src/**/*.d.ts'],
       thresholds: {
+        // Global baseline across all included files.
         lines: 45,
+        // Per-module gates for the critical modules this epic introduced or
+        // hardened (#67): the scheduler/validators (utils), the path validator,
+        // the project store, the embed protocol, and the project-source
+        // contracts. Each sits a few points below current coverage so a real
+        // regression fails CI while small, fully-covered edits do not. Raise a
+        // gate when coverage rises; never lower one to make a regression pass.
+        'src/utils.ts': { statements: 66, branches: 58, functions: 75, lines: 66 },
+        'src/fs/project-path.ts': { statements: 95, branches: 95, functions: 100, lines: 95 },
+        'src/embed/protocol.ts': { statements: 95, branches: 90, functions: 100, lines: 95 },
+        'src/state/project-store.ts': { statements: 80, branches: 78, functions: 90, lines: 80 },
+        'src/state/project-source.ts': { statements: 95, branches: 95, functions: 100, lines: 95 },
       },
     },
   },
