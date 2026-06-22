@@ -79,6 +79,9 @@ export class OscViewerPanel extends LitElement {
     this._lastSvgPreviewUrl = svgUrl;
     try {
       const hash = await imageToThumbhash(svgUrl);
+      // A newer SVG output superseded this one while hashing — don't overwrite
+      // its preview with this stale hash.
+      if (this._lastSvgPreviewUrl !== svgUrl) return;
       this._model.mutate((s) => {
         s.preview = { thumbhash: hash };
       });

@@ -38,6 +38,10 @@ export class OscGeometryViewer extends LitElement {
   private _ro: ResizeObserver | null = null;
   private _container: HTMLDivElement | null = null;
   private _loadedOffText: string | null = null;
+  // Monotonic load id: a newer _loadGeometry supersedes an older one whose
+  // thumbnail hashing is still in flight, so a slow older hash cannot overwrite
+  // the newer geometry's preview.
+  private _loadSeq = 0;
   private _toastTimer: ReturnType<typeof setTimeout> | null = null;
 
   override firstUpdated() {
@@ -93,6 +97,7 @@ export class OscGeometryViewer extends LitElement {
     const scene = this._scene;
     if (!scene) return;
     this._loadedOffText = offText;
+    const loadSeq = ++this._loadSeq;
     try {
       const geometry = offToBufferGeometry(parseOff(offText));
       scene.loadGeometry(geometry, this.color);
@@ -102,7 +107,8 @@ export class OscGeometryViewer extends LitElement {
       scene.renderOnce();
       const dataUrl = scene.renderer.domElement.toDataURL('image/png');
       const thumbhash = await imageToThumbhash(dataUrl);
-      if (this._scene !== scene) return; // torn down during hashing
+      // Bail if torn down OR superseded by a newer geometry while hashing.
+      if (this._scene !== scene || this._loadSeq !== loadSeq) return;
       this.dispatchEvent(new CustomEvent('geometry-loaded', { detail: { thumbhash } }));
     } catch (err) {
       console.error('Error loading OFF geometry:', err);
