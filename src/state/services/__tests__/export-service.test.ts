@@ -203,6 +203,104 @@ describe('ExportService', () => {
     expect(host.download).not.toHaveBeenCalled();
   });
 
+  it('a pass-through export supersedes an in-flight async export (no stale download, spinner cleared)', async () => {
+    const { ctx, host, getState } = makeCtx({
+      is2D: false,
+      exportFormat3D: 'stl',
+      output: fileOutput('m.off'),
+    });
+    const svc = new ExportService(ctx);
+
+    let resolveFirst!: (v: RenderOutput) => void;
+    mockRenderExport.mockReturnValueOnce(
+      vi.fn(() => new Promise<RenderOutput>((r) => (resolveFirst = r))),
+    );
+
+    const p1 = svc.export(); // token 1 — STL conversion hangs, exporting=true
+    // User switches to a pass-through format (OFF) and exports again.
+    ctx.mutate((s) => {
+      s.params.exportFormat3D = 'off';
+    });
+    await svc.export(); // token 2 — pass-through downloads the OFF, supersedes token 1
+
+    resolveFirst({
+      outFile: new File(['x'], 'first.stl'),
+      logText: '',
+      markers: [],
+      elapsedMillis: 1,
+    });
+    await p1;
+
+    // Only the OFF pass-through downloaded; the stale STL was dropped.
+    expect(host.download.mock.calls.map((c) => c[1])).toEqual(['m.off']);
+    expect(getState().exporting).toBe(false);
+  });
+
+  it('the 3MF picker supersedes an in-flight async export (no stale download, spinner cleared)', async () => {
+    const { ctx, host, getState } = makeCtx({
+      is2D: false,
+      exportFormat3D: 'stl',
+      output: fileOutput('m.off'),
+    });
+    const svc = new ExportService(ctx);
+
+    let resolveFirst!: (v: RenderOutput) => void;
+    mockRenderExport.mockReturnValueOnce(
+      vi.fn(() => new Promise<RenderOutput>((r) => (resolveFirst = r))),
+    );
+
+    const p1 = svc.export(); // token 1 — exporting=true
+    // User switches to 3MF (no extruder colors) and exports → the picker shows.
+    ctx.mutate((s) => {
+      s.params.exportFormat3D = '3mf';
+    });
+    await svc.export(); // token 2 — picker branch
+
+    resolveFirst({
+      outFile: new File(['x'], 'first.stl'),
+      logText: '',
+      markers: [],
+      elapsedMillis: 1,
+    });
+    await p1;
+
+    expect(getState().view.extruderPickerVisibility).toBe('exporting');
+    expect(host.download).not.toHaveBeenCalled(); // stale async dropped; picker just shows
+    expect(getState().exporting).toBe(false);
+  });
+
+  it('a stale async failure does not clobber the current export', async () => {
+    const { ctx, host, getState } = makeCtx({
+      is2D: false,
+      exportFormat3D: 'stl',
+      output: fileOutput('m.off'),
+    });
+    const svc = new ExportService(ctx);
+
+    let rejectFirst!: (e: unknown) => void;
+    const secondInner = vi.fn().mockResolvedValue({
+      outFile: new File(['ok'], 'second.stl'),
+      logText: '',
+      markers: [],
+      elapsedMillis: 1,
+    });
+    mockRenderExport
+      .mockReturnValueOnce(vi.fn(() => new Promise<RenderOutput>((_r, rej) => (rejectFirst = rej))))
+      .mockReturnValueOnce(secondInner);
+
+    const p1 = svc.export(); // token 1 — hangs
+    const p2 = svc.export(); // token 2 — resolves and commits
+    await p2;
+    // The stale first export now fails with a non-cancellation error.
+    rejectFirst(new Error('boom'));
+    await p1;
+
+    // The current export's success is untouched: no error surfaced, only its download.
+    expect(getState().error).toBeUndefined();
+    expect(getState().exporting).toBe(false);
+    expect(host.download.mock.calls.map((c) => c[1])).toEqual(['second.stl']);
+  });
+
   it('clears exporting and surfaces an error when there is no output to convert', async () => {
     const { ctx, getState } = makeCtx({ is2D: false, exportFormat3D: 'stl', output: undefined });
     await new ExportService(ctx).export();
