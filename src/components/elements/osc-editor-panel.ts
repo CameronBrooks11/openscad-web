@@ -246,9 +246,14 @@ export class OscEditorPanel extends LitElement {
     const items: Array<{ path: string; label: string; group: string }> = [];
 
     for (const { path } of st.params.sources) {
-      const parent = getParentDir(path);
-      if (parent === '/' || parent === '/home') {
-        items.push({ path, label: path.split('/').pop() ?? path, group: 'My Files' });
+      if (path.endsWith('/')) continue; // archive/dir mount, not an editable file
+      const underHome = path.startsWith('/home/');
+      // Include every project file under /home (at any depth) plus top-level
+      // files. Nested files keep a relative label (e.g. `lib/part.scad`) so they
+      // are distinguishable in the dropdown.
+      if (underHome || getParentDir(path) === '/') {
+        const label = underHome ? path.slice('/home/'.length) : (path.split('/').pop() ?? path);
+        items.push({ path, label, group: 'My Files' });
       }
     }
 

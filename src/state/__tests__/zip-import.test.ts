@@ -39,6 +39,7 @@ function makeMockFs() {
   return {
     readFileSync: vi.fn(() => new Uint8Array(0)),
     writeFile: vi.fn(),
+    mkdirSync: vi.fn(),
     isFile: vi.fn(() => false),
   };
 }
@@ -90,6 +91,20 @@ describe('importProjectZip validation (#50)', () => {
     expect(mockFs.writeFile).toHaveBeenCalledWith('/home/main.scad', 'cube(2);');
     expect(mockFs.writeFile).toHaveBeenCalledWith('/home/lib/util.scad', 'x');
     expect(model.state.params.activePath).toBe('/home/main.scad');
+  });
+
+  it('creates parent directories (mkdir -p) for nested archive entries', async () => {
+    mockLoadAsync.mockResolvedValue(fakeZip({ 'a/b/c.scad': 'x' }));
+
+    await model.importProjectZip(new ArrayBuffer(0));
+
+    // Parents created outermost-first before the nested file is written.
+    expect(mockFs.mkdirSync).toHaveBeenCalledWith('/home');
+    expect(mockFs.mkdirSync).toHaveBeenCalledWith('/home/a');
+    expect(mockFs.mkdirSync).toHaveBeenCalledWith('/home/a/b');
+    expect(mockFs.writeFile).toHaveBeenCalledWith('/home/a/b/c.scad', 'x');
+    const dirOrder = mockFs.mkdirSync.mock.calls.map((c) => c[0]);
+    expect(dirOrder).toEqual(['/home', '/home/a', '/home/a/b']);
     expect(model.state.error).toBeUndefined();
   });
 

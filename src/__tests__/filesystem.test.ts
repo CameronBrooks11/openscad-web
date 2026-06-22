@@ -1,6 +1,7 @@
 // Unit tests for Phase 2 filesystem layer — F2/F3/F7 exit criteria
 
 import {
+  ancestorDirsOf,
   clearHomeDirectory,
   extractLibraryNames,
   getParentDir,
@@ -22,6 +23,12 @@ describe('filesystem path helpers', () => {
     expect(join('.', 'file.scad')).toBe('file.scad');
     expect(join('/home/', 'project')).toBe('/home/project');
     expect(join('/home/project', '.')).toBe('/home/project');
+  });
+
+  it('ancestorDirsOf returns each parent directory outermost-first, excluding root', () => {
+    expect(ancestorDirsOf('/home/lib/sub/x.scad')).toEqual(['/home', '/home/lib', '/home/lib/sub']);
+    expect(ancestorDirsOf('/home/x.scad')).toEqual(['/home']);
+    expect(ancestorDirsOf('/x.scad')).toEqual([]);
   });
 });
 

@@ -2,7 +2,12 @@
 
 /// <reference lib="webworker" />
 
-import { createEditorFS, symlinkLibraries, type EditorFs } from '../fs/filesystem.ts';
+import {
+  ancestorDirsOf,
+  createEditorFS,
+  symlinkLibraries,
+  type EditorFs,
+} from '../fs/filesystem.ts';
 import { markPerf, measurePerf } from '../perf/runtime-performance.ts';
 import { createSerialQueue } from './serial-queue.ts';
 import { ensureWorkerBrowserFSLoaded } from '../runtime/browserfs-runtime.ts';
@@ -164,6 +169,9 @@ async function runCompile(msg: CompileRequest): Promise<void> {
         } else {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const content = await fetchSource(rt.FS, source as any, { baseUrl: appBaseUrl });
+          // A nested source (e.g. /home/lib/x.scad) needs its parent dirs to
+          // exist before writeFile; mkdir is idempotent on existing dirs.
+          for (const dir of ancestorDirsOf(source.path)) rt.mkdir(dir);
           rt.writeFile(source.path, content);
         }
       } catch (err) {

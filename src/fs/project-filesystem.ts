@@ -11,4 +11,10 @@
 export interface ProjectFileSystem {
   readFileSync(path: string): BufferSource;
   writeFile(path: string, content: string): void;
+  /**
+   * Create a single directory. Optional because most consumers never need it;
+   * the real BrowserFS-backed `FS` provides it. Callers create parents in order
+   * (mkdir -p) and ignore an already-exists error.
+   */
+  mkdirSync?(path: string): void;
 }
