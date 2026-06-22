@@ -35,8 +35,6 @@ function fileOutput(name: string, url = 'blob:out'): State['output'] {
     isPreview: false,
     outFile: f,
     outFileURL: url,
-    displayFile: f,
-    displayFileURL: url,
     elapsedMillis: 0,
     formattedElapsedMillis: '0ms',
     formattedOutFileSize: '1 B',
