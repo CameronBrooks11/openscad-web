@@ -213,6 +213,9 @@ export class CompileCoordinator {
       backend: this.ctx.getState().params.backend,
       revision: this.ctx.getSourceRevision(),
     };
+    // Hoisted so the catch can revoke it if readFileAsDataURL throws after the
+    // blob URL was created (otherwise the object URL would leak).
+    let outFileURL: string | undefined;
     try {
       const output = await render(renderArgs)({ now });
       if (!isCurrent()) return; // a newer render/preview superseded this one
@@ -230,8 +233,20 @@ export class CompileCoordinator {
       } else {
         is2D = false;
       }
-      const outFileURL = this.ctx.host.createObjectURL(output.outFile);
+      outFileURL = this.ctx.host.createObjectURL(output.outFile);
       const displayFileURL = displayFile && (await readFileAsDataURL(displayFile));
+      // readFileAsDataURL is asynchronous; the sources may have changed while it
+      // ran. Re-check before committing so a stale artifact never lands in state,
+      // and revoke the blob URL we created if we bail.
+      if (!isCurrent()) {
+        this.ctx.host.revokeObjectURL(outFileURL);
+        return; // a newer render/preview superseded this one — it owns the spinner
+      }
+      if (output.revision !== undefined && output.revision !== this.ctx.getSourceRevision()) {
+        this.ctx.host.revokeObjectURL(outFileURL);
+        this.ctx.mutate((s) => setRendering(s, false));
+        return;
+      }
       this.ctx.mutate((s) => {
         setRendering(s, false);
         s.error = undefined;
@@ -251,7 +266,7 @@ export class CompileCoordinator {
         s.output = {
           isPreview: isPreview,
           outFile: output.outFile,
-          outFileURL,
+          outFileURL: outFileURL!, // assigned above before any path reaching here
           displayFile,
           displayFileURL,
           elapsedMillis: output.elapsedMillis,
@@ -264,6 +279,9 @@ export class CompileCoordinator {
         }
       });
     } catch (err) {
+      // If the blob URL was created before the failure (readFileAsDataURL threw),
+      // revoke it so it doesn't leak.
+      if (outFileURL) this.ctx.host.revokeObjectURL(outFileURL);
       if (!isCurrent()) return; // superseded — the newer call owns the spinner state
       this.ctx.mutate((s) => {
         setRendering(s, false);
