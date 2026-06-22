@@ -36,6 +36,13 @@ export class ExportService {
 
   async export() {
     const { mutate, host } = this.ctx;
+    // Claim the export token at entry — before any early return — so that EVERY
+    // export (pass-through, picker, or async conversion) supersedes an in-flight
+    // one. Each terminal path below checks ownership and explicitly settles the
+    // `exporting` spinner so a superseded export can neither commit a stale
+    // result nor leave the spinner stuck.
+    const token = ++this._exportSeq;
+    const isCurrent = () => this._exportSeq === token;
     // Snapshot is safe: export never mutates output/params/is2D, only the
     // export/exporting/error/log/view fields it writes via the mutate callback.
     const state = this.ctx.getState();
@@ -47,18 +54,26 @@ export class ExportService {
         (!state.is2D && state.params.exportFormat3D === 'off');
 
       if (normalPassThrough) {
-        mutate((s) => (s.export = s.output));
+        // Synchronous, so this export stays current through commit. Clear
+        // `exporting` to take ownership from any async export it just superseded.
+        mutate((s) => {
+          s.exporting = false;
+          s.export = s.output;
+        });
         host.download(state.output.outFileURL, state.output.outFile.name);
         return;
       }
     }
     if (!state.is2D && state.params.exportFormat3D == '3mf' && !state.params.extruderColors) {
       if (!state.params.skipMultimaterialPrompt) {
-        mutate((_s) => (state.view.extruderPickerVisibility = 'exporting'));
+        // Showing the picker ends this export request; take spinner ownership.
+        mutate((s) => {
+          s.exporting = false;
+          s.view.extruderPickerVisibility = 'exporting';
+        });
         return;
       }
     }
-    const token = ++this._exportSeq;
     mutate((s) => {
       s.currentRunLogs ??= [];
       s.exporting = true;
@@ -127,7 +142,7 @@ export class ExportService {
 
       // A newer export superseded this one while its conversion ran; it owns the
       // exporting flag and will commit/download its own result. Drop this one.
-      if (this._exportSeq !== token) return;
+      if (!isCurrent()) return;
 
       const outFileURL = host.createObjectURL(output.outFile);
       mutate((s) => {
@@ -148,6 +163,9 @@ export class ExportService {
       // A superseded export rejects with the delayable's cancellation; that is
       // expected supersession, not a failure — the newer export owns the spinner.
       if (isExpectedJobCancellation(err)) return;
+      // A stale export that fails for any other reason must not clobber the
+      // current export's spinner or surface its obsolete error.
+      if (!isCurrent()) return;
       mutate((s) => {
         s.exporting = false;
         if (!isUserFacingOperationError(err)) {
