@@ -2,8 +2,8 @@ import chroma from 'chroma-js';
 
 import { export3MF } from '../../io/export_3mf.ts';
 import { parseOff } from '../../io/import_off.ts';
-import { render, type RenderOutput } from '../../runner/actions.ts';
-import type { ProcessStreams } from '../../runner/openscad-runner.ts';
+import { renderExport, type RenderOutput } from '../../runner/actions.ts';
+import { isExpectedJobCancellation, type ProcessStreams } from '../../runner/openscad-runner.ts';
 import { isUserFacingOperationError } from '../../user-facing-errors.ts';
 import { formatBytes, formatMillis } from '../../utils.ts';
 import { applyUserFacingError } from '../apply-user-facing-error.ts';
@@ -18,6 +18,11 @@ import type { ServiceContext } from './service-context.ts';
  */
 export class ExportService {
   constructor(private ctx: ServiceContext) {}
+
+  // Identifies the latest export. A superseded export (e.g. a second click, or
+  // the 3MF path which does not run through the delayable) must not clobber the
+  // newer one's result/download when its async work finally settles.
+  private _exportSeq = 0;
 
   private rawStreamsCallback(ps: ProcessStreams) {
     this.ctx.mutate((s) => {
@@ -61,6 +66,7 @@ export class ExportService {
         return;
       }
     }
+    const token = ++this._exportSeq;
     mutate((s) => {
       s.currentRunLogs ??= [];
       s.exporting = true;
@@ -91,7 +97,7 @@ export class ExportService {
           markers: [],
         };
       } else {
-        output = await render({
+        output = await renderExport({
           mountArchives: false,
           scadPath: '/export.scad',
           sources: [
@@ -108,9 +114,14 @@ export class ExportService {
           isPreview: false,
           features,
           renderFormat: exportFormat,
+          priority: 'export',
           streamsCallback: this.rawStreamsCallback.bind(this),
         })({ now: true });
       }
+
+      // A newer export superseded this one while its conversion ran; it owns the
+      // exporting flag and will commit/download its own result. Drop this one.
+      if (this._exportSeq !== token) return;
 
       const outFileURL = host.createObjectURL(output.outFile);
       mutate((s) => {
@@ -128,6 +139,9 @@ export class ExportService {
         host.download(s.export.outFileURL, output.outFile.name);
       });
     } catch (err) {
+      // A superseded export rejects with the delayable's cancellation; that is
+      // expected supersession, not a failure — the newer export owns the spinner.
+      if (isExpectedJobCancellation(err)) return;
       mutate((s) => {
         s.exporting = false;
         if (!isUserFacingOperationError(err)) {

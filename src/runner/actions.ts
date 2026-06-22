@@ -1,7 +1,12 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import type { Diagnostic } from '../diagnostics.ts';
-import { ProcessStreams, isExpectedJobCancellation, spawnOpenSCAD } from './openscad-runner.ts';
+import {
+  ProcessStreams,
+  isExpectedJobCancellation,
+  spawnOpenSCAD,
+  type JobPriority,
+} from './openscad-runner.ts';
 import { processMergedOutputs } from './output-parser.ts';
 import { AbortablePromise, turnIntoDelayableExecution } from '../utils.ts';
 import { Source } from '../state/app-state.ts';
@@ -101,6 +106,12 @@ export type RenderArgs = {
   streamsCallback: (ps: ProcessStreams) => void;
   backend?: 'manifold' | 'cgal';
   revision?: number;
+  /**
+   * Host-side scheduling priority. Defaults to preview/render by `isPreview`;
+   * export passes `'export'` so it preempts background work and is not preempted
+   * by it. (See the separate `renderExport` delayable below.)
+   */
+  priority?: JobPriority;
 };
 
 /** Maximum array-nesting depth accepted for a customizer value. */
@@ -176,7 +187,7 @@ export function buildOpenScadArgs(request: OpenScadArgsRequest): string[] {
   return args;
 }
 
-export const render = turnIntoDelayableExecution(renderDelay, (renderArgs: RenderArgs) => {
+const renderJob = (renderArgs: RenderArgs) => {
   const {
     scadPath,
     sources,
@@ -189,6 +200,7 @@ export const render = turnIntoDelayableExecution(renderDelay, (renderArgs: Rende
     streamsCallback,
     backend,
     revision,
+    priority,
   } = renderArgs;
 
   const prefixLines: string[] = [];
@@ -230,7 +242,7 @@ export const render = turnIntoDelayableExecution(renderDelay, (renderArgs: Rende
       revision,
     },
     streamsCallback,
-    isPreview ? 'preview' : 'render',
+    priority ?? (isPreview ? 'preview' : 'render'),
   );
 
   return AbortablePromise<RenderOutput>((resolve, reject) => {
@@ -292,4 +304,14 @@ export const render = turnIntoDelayableExecution(renderDelay, (renderArgs: Rende
 
     return () => job.kill();
   });
-});
+};
+
+// Preview and full render share one delayable instance: they debounce and
+// supersede each other (only one geometry compile should be live at a time).
+export const render = turnIntoDelayableExecution(renderDelay, renderJob);
+
+// Export gets its OWN delayable instance so it does not share the supersession
+// signal with preview/render — an auto-preview must not cancel an in-flight
+// export, nor an export an in-flight preview. Callers pass `priority: 'export'`
+// for host-side scheduling precedence.
+export const renderExport = turnIntoDelayableExecution(renderDelay, renderJob);
