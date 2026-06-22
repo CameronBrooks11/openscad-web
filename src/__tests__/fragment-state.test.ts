@@ -127,6 +127,96 @@ describe('round-trip: encodeStateParamsAsFragment → readStateFromFragment', ()
   });
 });
 
+// ---------------------------------------------------------------------------
+// Durable round-trip for previously-dropped fields: backend, autoCompile,
+// skipMultimaterialPrompt (params) and customizerGroupsCollapsed, camera (view).
+// The decoder used to silently drop these even though the encoder wrote them.
+// ---------------------------------------------------------------------------
+
+describe('round-trip: previously-dropped durable fields', () => {
+  function mockMatchMedia() {
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      configurable: true,
+      value: vi.fn().mockImplementation((query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      })),
+    });
+  }
+
+  it('round-trips backend, autoCompile, skipMultimaterialPrompt, customizerGroupsCollapsed, camera', async () => {
+    mockMatchMedia();
+    const createInitialState = (await import('../state/initial-state.ts')).createInitialState;
+    const state = createInitialState(null, { content: 'cube(10);' });
+    state.params.backend = 'cgal';
+    state.params.autoCompile = false;
+    state.params.skipMultimaterialPrompt = true;
+    state.view.customizerGroupsCollapsed = true;
+    state.view.camera = { position: [1, 2, 3], target: [4, 5, 6], zoom: 1.5 };
+
+    history.replaceState(null, '', '#' + (await encodeStateParamsAsFragment(state)));
+    const restored = await readStateFromFragment();
+
+    expect(restored?.params.backend).toBe('cgal');
+    expect(restored?.params.autoCompile).toBe(false);
+    expect(restored?.params.skipMultimaterialPrompt).toBe(true);
+    expect(restored?.view.customizerGroupsCollapsed).toBe(true);
+    expect(restored?.view.camera).toEqual({ position: [1, 2, 3], target: [4, 5, 6], zoom: 1.5 });
+  });
+
+  it('preserves tri-state: an absent autoCompile stays undefined (not coerced to false)', async () => {
+    mockMatchMedia();
+    const createInitialState = (await import('../state/initial-state.ts')).createInitialState;
+    const state = createInitialState(null, { content: 'cube(10);' });
+    // Leave autoCompile/backend/camera unset.
+    expect(state.params.autoCompile).toBeUndefined();
+
+    history.replaceState(null, '', '#' + (await encodeStateParamsAsFragment(state)));
+    const restored = await readStateFromFragment();
+
+    // undefined means "auto-compile on by default"; coercing to false would
+    // silently disable it for every shared URL that never set the flag.
+    expect(restored?.params.autoCompile).toBeUndefined();
+    expect(restored?.params.backend).toBeUndefined();
+    expect(restored?.view.camera).toBeUndefined();
+    expect(restored?.view.customizerGroupsCollapsed).toBeUndefined();
+  });
+
+  it('rejects a malformed camera (drops to undefined rather than storing junk)', async () => {
+    window.location.hash =
+      '#' +
+      encodeURIComponent(
+        JSON.stringify({
+          params: {
+            activePath: '/test.scad',
+            features: [],
+            sources: [{ path: '/test.scad', content: 'cube(10);' }],
+            exportFormat2D: 'svg',
+            exportFormat3D: 'stl',
+          },
+          view: {
+            logs: false,
+            layout: { mode: 'multi', editor: true, viewer: true, customizer: false },
+            color: '#aabbcc',
+            showAxes: true,
+            lineNumbers: false,
+            camera: { position: [1, 2], target: 'nope', zoom: 'x' },
+          },
+        }),
+      );
+
+    const state = await readStateFromFragment();
+    expect(state?.view.camera).toBeUndefined();
+  });
+});
+
 describe('buildUrlForStateParams – must be async (BUG-6)', () => {
   it('returns a Promise (not a string with "[object Promise]" in it)', async () => {
     // Mock matchMedia so createInitialState doesn't throw

@@ -16,6 +16,30 @@ function validateVars(v: unknown): State['params']['vars'] {
   );
 }
 
+// Preserve tri-state: an absent boolean stays `undefined` (its "use the default"
+// meaning) rather than collapsing to `false`. validateBoolean() coerces absent to
+// false, which would, e.g., wrongly disable autoCompile (default-on) for any
+// shared URL that never set it.
+function validateOptionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function validateCamera(value: unknown): State['view']['camera'] {
+  if (value == null || typeof value !== 'object') return undefined;
+  const c = value as Record<string, unknown>;
+  const triple = (t: unknown): [number, number, number] | undefined =>
+    Array.isArray(t) &&
+    t.length === 3 &&
+    t.every((n) => typeof n === 'number' && Number.isFinite(n))
+      ? [t[0] as number, t[1] as number, t[2] as number]
+      : undefined;
+  const position = triple(c.position);
+  const target = triple(c.target);
+  const zoom = typeof c.zoom === 'number' && Number.isFinite(c.zoom) ? c.zoom : undefined;
+  if (!position || !target || zoom === undefined) return undefined;
+  return { position, target, zoom };
+}
+
 function validateSourceUrl(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   return resolveExternalSourceUrl(value, {
@@ -42,7 +66,10 @@ export async function buildUrlForStateParams(state: State) {
   return `${location.protocol}//${location.host}${location.pathname}#${await encodeStateParamsAsFragment(state)}`;
 }
 export async function writeStateInFragment(state: State) {
-  history.replaceState(state, '', '#' + (await encodeStateParamsAsFragment(state)));
+  // Pass null, not `state`: nothing reads history.state, and `state` carries
+  // non-serializable runtime fields (output File/blob handles) that would bloat
+  // or break the structured clone on every fragment write.
+  history.replaceState(null, '', '#' + (await encodeStateParamsAsFragment(state)));
 }
 async function compressString(input: string): Promise<string> {
   return btoa(
@@ -139,6 +166,9 @@ export async function readStateFromFragment(): Promise<State | null> {
           extruderColors: Array.isArray(params?.extruderColors)
             ? validateArray(params.extruderColors, validateString)
             : undefined,
+          backend: validateStringEnum(params?.backend, ['manifold', 'cgal'], (_s) => undefined),
+          autoCompile: validateOptionalBoolean(params?.autoCompile),
+          skipMultimaterialPrompt: validateOptionalBoolean(params?.skipMultimaterialPrompt),
         },
         preview: preview
           ? {
@@ -165,6 +195,8 @@ export async function readStateFromFragment(): Promise<State | null> {
             customizer: validateBoolean(view?.layout['customizer']),
           },
           collapsedCustomizerTabs: validateArray(view?.collapsedCustomizerTabs, validateString),
+          customizerGroupsCollapsed: validateOptionalBoolean(view?.customizerGroupsCollapsed),
+          camera: validateCamera(view?.camera),
           color: validateString(view?.color, () => defaultModelColor),
           showAxes: validateBoolean(view?.showAxes, () => true),
           lineNumbers: validateBoolean(view?.lineNumbers, () => false),
