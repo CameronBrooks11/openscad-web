@@ -9,18 +9,20 @@ import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
 import './osc-viewer-panel.ts';
 import './osc-customizer-panel.ts';
+import { validateInbound, outbound, isTrustedOrigin } from '../../embed/protocol.ts';
 
 // ---------------------------------------------------------------------------
-// postMessage protocol (host → iframe)
+// postMessage protocol — see src/embed/protocol.ts and docs/EMBED.md
 // ---------------------------------------------------------------------------
-type SetModelMsg = { type: 'setModel'; source: string };
-type SetVarMsg = { type: 'setVar'; name: string; value: unknown };
-type GetVarsMsg = { type: 'getVars'; requestId?: string };
-type InboundMsg = SetModelMsg | SetVarMsg | GetVarsMsg;
 
-function notifyHost(type: string, targetOrigin: string, payload?: Record<string, unknown>) {
+function notifyHost(
+  type: string,
+  targetOrigin: string,
+  payload?: Record<string, unknown>,
+  transfer?: Transferable[],
+) {
   if (window.parent !== window) {
-    window.parent.postMessage({ type, ...payload }, targetOrigin);
+    window.parent.postMessage(outbound(type, payload), targetOrigin, transfer ?? []);
   }
 }
 
@@ -35,6 +37,16 @@ function coerceUrlVars(vars: Record<string, string>): Record<string, unknown> {
     }
   }
   return result;
+}
+
+/** Durable artifact descriptor sent to the host instead of a blob URL. */
+function artifactMeta(file: File): Record<string, unknown> {
+  const dot = file.name.lastIndexOf('.');
+  return {
+    name: file.name,
+    size: file.size,
+    format: dot >= 0 ? file.name.slice(dot + 1).toLowerCase() : '',
+  };
 }
 
 function getVarsSnapshot(st: State): Record<string, unknown> {
@@ -86,16 +98,27 @@ export class OscEmbedShell extends LitElement {
   private _lastSentParamSet: object | null = null;
   private _lastSentRenderURL: string | null = null;
   private _lastSentVars: Record<string, unknown> | null | undefined = undefined;
-  private _targetOrigin() {
-    return this.urlParams?.parentOrigin ?? '*';
+  /**
+   * Resolved peer origin. When `parentOrigin` is configured we target it
+   * (explicit-origin mode); otherwise we fall back to this document's own
+   * origin (same-origin mode) — never the wildcard `'*'`, so messages are
+   * never broadcast to arbitrary origins.
+   */
+  private _peerOrigin() {
+    return this.urlParams?.parentOrigin ?? window.location.origin;
   }
-  private _notifyHost(type: string, payload?: Record<string, unknown>) {
-    notifyHost(type, this._targetOrigin(), payload);
+  private _notifyHost(type: string, payload?: Record<string, unknown>, transfer?: Transferable[]) {
+    notifyHost(type, this._peerOrigin(), payload, transfer);
   }
   private _acceptsMessage(event: MessageEvent) {
     if (event.source !== window.parent) return false;
-    const expectedOrigin = this.urlParams?.parentOrigin;
-    return expectedOrigin == null || event.origin === expectedOrigin;
+    // No default acceptance of arbitrary origins: an unconfigured embed only
+    // trusts a same-origin parent; cross-origin parents must set parentOrigin.
+    return isTrustedOrigin(
+      event.origin,
+      this.urlParams?.parentOrigin ?? null,
+      window.location.origin,
+    );
   }
   private _maybeNotifyReady(st: State) {
     if (this._readyNotified) return;
@@ -128,29 +151,68 @@ export class OscEmbedShell extends LitElement {
     if (st.output && !st.rendering && !st.previewing) {
       if (st.output.outFileURL !== this._lastSentRenderURL) {
         this._lastSentRenderURL = st.output.outFileURL;
-        this._notifyHost('renderComplete', { outFileURL: st.output.outFileURL });
+        // Send durable metadata only; the host fetches bytes on demand via
+        // `getArtifact`. A blob URL owned by the iframe document is not even
+        // usable cross-origin, so it is never leaked into the event.
+        this._notifyHost('renderComplete', { artifact: artifactMeta(st.output.outFile) });
       }
     }
   };
 
   private _messageHandler = (event: MessageEvent) => {
     if (!this._acceptsMessage(event)) return;
-    const msg = event.data as InboundMsg;
-    if (!msg || typeof msg.type !== 'string') return;
-    if (msg.type === 'setModel') {
-      const m = msg as SetModelMsg;
-      if (typeof m.source === 'string') this._model.source = m.source;
-    } else if (msg.type === 'setVar') {
-      const m = msg as SetVarMsg;
-      if (typeof m.name === 'string') this._model.setVar(m.name, m.value as never);
-    } else if (msg.type === 'getVars') {
-      const m = msg as GetVarsMsg;
-      this._notifyHost('varsSnapshot', {
-        vars: getVarsSnapshot(this._model.state),
-        ...(typeof m.requestId === 'string' ? { requestId: m.requestId } : {}),
+    const result = validateInbound(event.data);
+    if (!result.ok) {
+      this._notifyHost('error', {
+        code: result.code,
+        reason: result.reason,
+        ...(result.requestId ? { requestId: result.requestId } : {}),
       });
+      return;
+    }
+    const msg = result.message;
+    const requestId = msg.requestId;
+    const ack = requestId ? { requestId } : {};
+    switch (msg.type) {
+      case 'setModel':
+        this._model.source = msg.source;
+        this._notifyHost('ack', ack);
+        break;
+      case 'setVar':
+        this._model.setVar(msg.name, msg.value as never);
+        this._notifyHost('ack', ack);
+        break;
+      case 'getVars':
+        this._notifyHost('varsSnapshot', {
+          vars: getVarsSnapshot(this._model.state),
+          ...(requestId ? { requestId } : {}),
+        });
+        break;
+      case 'getArtifact':
+        void this._sendArtifact(requestId);
+        break;
     }
   };
+
+  /** Respond to `getArtifact` with the current render bytes (transferred). */
+  private async _sendArtifact(requestId: string | undefined) {
+    const output = this._model.state.output;
+    if (!output) {
+      this._notifyHost('artifact', { available: false, ...(requestId ? { requestId } : {}) });
+      return;
+    }
+    const bytes = await output.outFile.arrayBuffer();
+    this._notifyHost(
+      'artifact',
+      {
+        available: true,
+        ...artifactMeta(output.outFile),
+        bytes,
+        ...(requestId ? { requestId } : {}),
+      },
+      [bytes],
+    );
+  }
 
   override connectedCallback() {
     super.connectedCallback();

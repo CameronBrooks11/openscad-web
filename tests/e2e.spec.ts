@@ -629,7 +629,7 @@ test.describe('embed mode', () => {
     await page.evaluate(() => {
       const iframe = document.getElementById('embed-frame') as HTMLIFrameElement | null;
       iframe?.contentWindow?.postMessage(
-        { type: 'setVar', name: 'myVar', value: 20 },
+        { protocolVersion: 2, type: 'setVar', name: 'myVar', value: 20 },
         window.location.origin,
       );
     });
@@ -654,7 +654,7 @@ test.describe('embed mode', () => {
     await page.evaluate(() => {
       const iframe = document.getElementById('embed-frame') as HTMLIFrameElement | null;
       iframe?.contentWindow?.postMessage(
-        { type: 'getVars', requestId: 'checkout' },
+        { protocolVersion: 2, type: 'getVars', requestId: 'checkout' },
         window.location.origin,
       );
     });
@@ -686,6 +686,83 @@ test.describe('embed mode', () => {
     expect(varsChangedMessage?.data?.vars).toMatchObject({ myVar: 20 });
     expect(varsSnapshotMessage?.data?.requestId).toBe('checkout');
     expect(varsSnapshotMessage?.data?.vars).toMatchObject({ myVar: 20 });
+  });
+
+  test('acknowledges valid commands, rejects malformed ones, and serves artifact bytes on request', async ({
+    page,
+  }) => {
+    const source = 'cube(10);';
+
+    await loadEmbedHost(page, buildEmbedUrl({ source, parentOrigin: appOrigin }));
+    const frame = await getEmbedFrame(page);
+
+    await waitForEmbedViewer(frame);
+    await waitForEmbedMessage(page, 'ready');
+    await waitForEmbedMessage(page, 'renderComplete');
+
+    // A valid command is acknowledged with the echoed requestId.
+    await page.evaluate(() => {
+      const iframe = document.getElementById('embed-frame') as HTMLIFrameElement | null;
+      iframe?.contentWindow?.postMessage(
+        { protocolVersion: 2, type: 'setVar', name: 'x', value: 1, requestId: 'ok-1' },
+        window.location.origin,
+      );
+    });
+    await waitForEmbedMessage(page, 'ack');
+
+    // An unversioned message is rejected with a structured error.
+    await page.evaluate(() => {
+      const iframe = document.getElementById('embed-frame') as HTMLIFrameElement | null;
+      iframe?.contentWindow?.postMessage(
+        { type: 'setVar', name: 'x', value: 2, requestId: 'bad-1' },
+        window.location.origin,
+      );
+    });
+    await waitForEmbedMessage(page, 'error');
+
+    // getArtifact returns the render bytes as a transferred ArrayBuffer.
+    await page.evaluate(() => {
+      const iframe = document.getElementById('embed-frame') as HTMLIFrameElement | null;
+      iframe?.contentWindow?.postMessage(
+        { protocolVersion: 2, type: 'getArtifact', requestId: 'art-1' },
+        window.location.origin,
+      );
+    });
+    await waitForEmbedMessage(page, 'artifact');
+
+    const messages = await getEmbedMessages(page);
+    const ackMsg = messages.find((m) => m.data?.type === 'ack');
+    expect(ackMsg?.data?.requestId).toBe('ok-1');
+    expect(ackMsg?.data?.protocolVersion).toBe(2);
+
+    const errMsg = messages.find((m) => m.data?.type === 'error');
+    expect(errMsg?.data?.code).toBe('unsupported-version');
+    expect(errMsg?.data?.requestId).toBe('bad-1');
+
+    const renderComplete = messages.find((m) => m.data?.type === 'renderComplete');
+    expect(renderComplete?.data?.artifact).toEqual(
+      expect.objectContaining({ name: expect.any(String) }),
+    );
+    expect('outFileURL' in (renderComplete?.data ?? {})).toBe(false);
+
+    // The transferred ArrayBuffer does not survive serialization back to Node,
+    // so inspect it inside the page realm.
+    const artifact = await page.evaluate(() => {
+      const messages = (
+        window as Window & {
+          __embedMessages?: Array<{
+            data?: { type?: string; available?: boolean; bytes?: ArrayBuffer };
+          }>;
+        }
+      ).__embedMessages;
+      const msg = messages?.find((m) => m?.data?.type === 'artifact');
+      return {
+        available: msg?.data?.available ?? false,
+        byteLength: msg?.data?.bytes?.byteLength ?? 0,
+      };
+    });
+    expect(artifact.available).toBe(true);
+    expect(artifact.byteLength).toBeGreaterThan(0);
   });
 
   test('rejects host messages when parentOrigin does not match the real parent origin', async ({
@@ -742,7 +819,10 @@ test.describe('embed mode', () => {
 
     await page.evaluate((src) => {
       const iframe = document.getElementById('embed-frame') as HTMLIFrameElement | null;
-      iframe?.contentWindow?.postMessage({ type: 'setModel', source: src }, window.location.origin);
+      iframe?.contentWindow?.postMessage(
+        { protocolVersion: 2, type: 'setModel', source: src },
+        window.location.origin,
+      );
     }, replacedSource);
 
     await waitForEmbedMessageCount(page, 'renderComplete', 2);
