@@ -4,6 +4,15 @@ OpenSCAD Web supports a hosted iframe integration via `?mode=embed`.
 
 This document describes the parent/iframe `postMessage` contract, origin-handling expectations, and the recommended integration pattern for storefront or product-page embeds.
 
+## Protocol version
+
+The messaging protocol is versioned. The current version is **2** (`EMBED_PROTOCOL_VERSION`).
+
+- Every **inbound** message (host → iframe) **must** carry `protocolVersion: 2`. Messages without it, or with a different version, are rejected with a structured `error` (see below). There is no implicit acceptance of unversioned/legacy messages.
+- Every **outbound** message (iframe → host) carries `protocolVersion: 2`.
+
+> **Breaking change (v1 → v2):** v1 accepted unversioned messages and, when `parentOrigin` was omitted, accepted control messages from any parent origin and broadcast outbound messages to `'*'`. v2 requires the version field, defaults to same-origin trust, never uses the wildcard, and replaces the `renderComplete` blob URL with durable metadata plus an explicit `getArtifact` request. Update integrations accordingly.
+
 ## URL Parameters
 
 Embed mode is enabled with:
@@ -17,7 +26,7 @@ Supported embed-specific query parameters:
 - `model`: optional external model URL; same-origin paths and cross-origin `https://` URLs are allowed
 - `controls=true`: show the built-in customizer panel
 - `download=true`: show the built-in download button
-- `parentOrigin=https://host.example.com`: optional origin hardening for parent/iframe messaging
+- `parentOrigin=https://host.example.com`: the trusted parent origin (see [Security Model](#security-model))
 
 `parentOrigin` must be an absolute `http://` or `https://` origin. Paths, query strings, and fragments are ignored and normalized to the origin.
 
@@ -25,53 +34,60 @@ Supported embed-specific query parameters:
 
 ### Host → iframe
 
-| Type       | Payload                                            | Description                                    |
-| ---------- | -------------------------------------------------- | ---------------------------------------------- |
-| `setModel` | `{ type: 'setModel', source: string }`             | Replace the current model with raw source text |
-| `setVar`   | `{ type: 'setVar', name: string, value: unknown }` | Set one customizer variable                    |
-| `getVars`  | `{ type: 'getVars', requestId?: string }`          | Request the current effective variable map     |
+Every inbound message must include `protocolVersion: 2`. A `requestId` is optional but recommended; it is echoed back on the corresponding `ack` / `error` / response.
+
+| Type          | Payload (in addition to `protocolVersion`, optional `requestId`) | Description                                    |
+| ------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
+| `setModel`    | `{ type: 'setModel', source: string }`                           | Replace the current model with raw source text |
+| `setVar`      | `{ type: 'setVar', name: string, value: unknown }`               | Set one customizer variable                    |
+| `getVars`     | `{ type: 'getVars' }`                                            | Request the current effective variable map     |
+| `getArtifact` | `{ type: 'getArtifact' }`                                        | Request the bytes of the latest render output  |
+
+Limits (oversized messages are rejected with a `too-large` error):
+
+- `setModel.source` ≤ 5 MiB
+- `setVar.name` ≤ 256 chars; `setVar.value` ≤ 64 KiB JSON-encoded
 
 Notes:
 
-- `setModel` is a source-text replacement API, not a URL-loading API.
-- External URL loading remains attached to the `model=` boot flow, not `postMessage`.
+- `setModel` is a source-text replacement API, not a URL-loading API. External URL loading remains attached to the `model=` boot flow, not `postMessage`.
+- `setModel` and `setVar` are acknowledged with an `ack` message.
 
 ### iframe → host
 
-| Type                 | Payload                                        | Description                                              |
-| -------------------- | ---------------------------------------------- | -------------------------------------------------------- |
-| `ready`              | `{ type: 'ready', vars, parameterSet? }`       | Initial embed state is ready for host interaction        |
-| `varsChanged`        | `{ type: 'varsChanged', vars }`                | Effective variable map changed                           |
-| `parameterSetLoaded` | `{ type: 'parameterSetLoaded', parameterSet }` | Parameter metadata is available                          |
-| `varsSnapshot`       | `{ type: 'varsSnapshot', vars, requestId? }`   | Response to `getVars`                                    |
-| `renderComplete`     | `{ type: 'renderComplete', outFileURL }`       | A render finished and produced a new output blob URL     |
-| `stateChange`        | `{ type: 'stateChange', error }`               | Legacy error event used for external model-load failures |
+| Type                 | Payload (in addition to `protocolVersion`)                                   | Description                                                       |
+| -------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `ready`              | `{ type: 'ready', vars, parameterSet? }`                                     | Initial embed state is ready for host interaction                 |
+| `ack`                | `{ type: 'ack', requestId? }`                                                | A `setModel` / `setVar` command was applied                       |
+| `error`              | `{ type: 'error', code, reason, requestId? }`                                | An inbound message was rejected (see error codes)                 |
+| `varsChanged`        | `{ type: 'varsChanged', vars }`                                              | Effective variable map changed                                    |
+| `parameterSetLoaded` | `{ type: 'parameterSetLoaded', parameterSet }`                               | Parameter metadata is available                                   |
+| `varsSnapshot`       | `{ type: 'varsSnapshot', vars, requestId? }`                                 | Response to `getVars`                                             |
+| `renderComplete`     | `{ type: 'renderComplete', artifact: { name, size, format } }`               | A render finished; metadata only — fetch bytes with `getArtifact` |
+| `artifact`           | `{ type: 'artifact', available, name?, size?, format?, bytes?, requestId? }` | Response to `getArtifact`; `bytes` is a transferred `ArrayBuffer` |
+| `stateChange`        | `{ type: 'stateChange', error }`                                             | Error event used for external model-load failures                 |
+
+Error `code` values: `malformed`, `unsupported-version`, `unknown-type`, `invalid-payload`, `too-large`.
 
 Notes:
 
 - `ready` fires once.
 - `varsChanged` carries the current effective values, including parameter defaults when available.
-- `parameterSetLoaded` may arrive after `ready`.
-- if the host needs a fully default-expanded variable map for a parameterized model, call `getVars` after `parameterSetLoaded`.
-- `stateChange` is retained for backward compatibility.
+- `parameterSetLoaded` may arrive after `ready`. If the host needs a fully default-expanded variable map for a parameterized model, call `getVars` after `parameterSetLoaded`.
+- `renderComplete` no longer includes a blob URL. Call `getArtifact` to receive the output bytes as a transferred `ArrayBuffer` (`artifact.available === false` if no render output exists yet).
 
 ## Security Model
 
-### Parent origin hardening
+### Origin trust
 
-If `parentOrigin` is provided:
+The trusted peer origin is:
 
-- outbound messages are posted only to that origin
-- inbound messages are accepted only when:
-  - `event.source === window.parent`
-  - `event.origin === parentOrigin`
+- the configured `parentOrigin`, if set (**explicit-origin mode**); otherwise
+- this document's own origin (**same-origin mode**).
 
-If `parentOrigin` is omitted:
+Inbound messages are accepted only when `event.source === window.parent` **and** `event.origin` equals the trusted peer origin. Outbound messages are posted only to the trusted peer origin — never the wildcard `'*'`.
 
-- outbound messages use `'*'`
-- inbound messages only check `event.source === window.parent`
-
-For production embeds, prefer setting `parentOrigin` explicitly.
+Consequently, a **cross-origin** parent must set `parentOrigin` to exchange messages; without it, only a same-origin parent is trusted. There is no default acceptance of arbitrary parent origins.
 
 ### Host-side validation
 
@@ -81,6 +97,7 @@ The parent page should still validate messages before acting on them:
 window.addEventListener('message', (event) => {
   if (event.source !== iframe.contentWindow) return;
   if (event.origin !== 'https://your-app.example.com') return;
+  if (event.data?.protocolVersion !== 2) return;
   // handle event.data
 });
 ```
@@ -104,16 +121,16 @@ See [docs/SECURITY.md](./SECURITY.md) for the current baseline CSP guidance.
 
 <script>
   const iframe = document.getElementById('osc');
+  const APP_ORIGIN = 'https://example.com';
   const currentVars = {};
 
   window.addEventListener('message', (event) => {
     if (event.source !== iframe.contentWindow) return;
-    if (event.origin !== 'https://example.com') return;
+    if (event.origin !== APP_ORIGIN) return;
+    if (event.data?.protocolVersion !== 2) return;
 
     switch (event.data.type) {
       case 'ready':
-        Object.assign(currentVars, event.data.vars || {});
-        break;
       case 'varsChanged':
       case 'varsSnapshot':
         Object.assign(currentVars, event.data.vars || {});
@@ -122,7 +139,21 @@ See [docs/SECURITY.md](./SECURITY.md) for the current baseline CSP guidance.
         console.log('Parameter metadata:', event.data.parameterSet);
         break;
       case 'renderComplete':
-        console.log('Output blob URL:', event.data.outFileURL);
+        console.log('Render ready:', event.data.artifact);
+        // request the bytes when you actually need them:
+        send({ type: 'getArtifact', requestId: 'dl-1' });
+        break;
+      case 'artifact':
+        if (event.data.available) {
+          const blob = new Blob([event.data.bytes]);
+          // e.g. trigger a download or upload the bytes
+        }
+        break;
+      case 'ack':
+        console.log('applied', event.data.requestId);
+        break;
+      case 'error':
+        console.error('embed error', event.data.code, event.data.reason);
         break;
       case 'stateChange':
         console.error(event.data.error);
@@ -130,21 +161,16 @@ See [docs/SECURITY.md](./SECURITY.md) for the current baseline CSP guidance.
     }
   });
 
+  function send(msg) {
+    iframe.contentWindow.postMessage({ protocolVersion: 2, ...msg }, APP_ORIGIN);
+  }
+
   function setVar(name, value) {
-    iframe.contentWindow.postMessage({ type: 'setVar', name, value }, 'https://example.com');
+    send({ type: 'setVar', name, value, requestId: 'v-' + name });
   }
 
   function refreshVars() {
-    iframe.contentWindow.postMessage(
-      { type: 'getVars', requestId: 'checkout' },
-      'https://example.com',
-    );
+    send({ type: 'getVars', requestId: 'checkout' });
   }
 </script>
 ```
-
-## Blob URL Lifetime
-
-`renderComplete.outFileURL` is a blob URL owned by the iframe document.
-
-If the host page fetches or reuses blob URLs over time, it should revoke old URLs with `URL.revokeObjectURL()` when they are no longer needed to avoid memory leaks.
