@@ -16,6 +16,7 @@ import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
 import { applyUserFacingError } from './apply-user-facing-error.ts';
 import { CompileCoordinator } from './services/compile-coordinator.ts';
 import { ExportService } from './services/export-service.ts';
+import { LayoutController } from './services/layout-controller.ts';
 import type { ServiceContext } from './services/service-context.ts';
 
 /** Debounce window for durable-state persistence (coalesces rapid edits/drags). */
@@ -37,6 +38,7 @@ export class Model extends EventTarget {
   private readonly serviceCtx: ServiceContext;
   private readonly exportService: ExportService;
   private readonly compile: CompileCoordinator;
+  private readonly layout: LayoutController;
 
   constructor(
     private fs: ProjectFileSystem,
@@ -52,6 +54,7 @@ export class Model extends EventTarget {
     this.serviceCtx = this.buildServiceContext();
     this.exportService = new ExportService(this.serviceCtx);
     this.compile = new CompileCoordinator(this.serviceCtx);
+    this.layout = new LayoutController(this.serviceCtx);
   }
 
   /** The shared surface the extracted services read state and mutate through. */
@@ -205,73 +208,23 @@ export class Model extends EventTarget {
   }
 
   set logsVisible(value: boolean) {
-    if (value) {
-      if (this.state.view.layout.mode === 'single') {
-        this.changeSingleVisibility('editor');
-      } else {
-        this.changeMultiVisibility('editor', true);
-      }
-    }
-    this.mutate((s) => (s.view.logs = value));
+    this.layout.setLogsVisible(value);
   }
 
   isComponentFullyVisible(id: SingleLayoutComponentId) {
-    if (this.state.view.layout.mode === 'multi') {
-      return this.state.view.layout[id];
-    } else {
-      return this.state.view.layout.focus === id;
-    }
+    return this.layout.isComponentFullyVisible(id);
   }
 
   changeLayout(mode: 'multi' | 'single') {
-    if (this.state.view.layout.mode === mode) return;
-    this.mutate((s) => {
-      s.view.layout =
-        s.view.layout.mode === 'multi'
-          ? {
-              mode: 'single',
-              focus: s.view.layout.editor
-                ? 'editor'
-                : s.view.layout.viewer
-                  ? 'viewer'
-                  : 'customizer',
-            }
-          : {
-              mode: 'multi',
-              editor: s.view.layout.focus === 'editor',
-              viewer: s.view.layout.focus === 'viewer',
-              customizer: s.view.layout.focus === 'customizer',
-            };
-    });
+    this.layout.changeLayout(mode);
   }
+
   changeSingleVisibility(focus: SingleLayoutComponentId) {
-    this.mutate((s) => {
-      if (s.view.layout.mode !== 'single') throw new Error('Wrong mode');
-      s.view.layout.focus = focus;
-      if (focus !== 'editor') {
-        s.view.logs = false;
-      }
-    });
+    this.layout.changeSingleVisibility(focus);
   }
 
   changeMultiVisibility(target: MultiLayoutComponentId, visible: boolean) {
-    this.mutate((s) => {
-      if (s.view.layout.mode !== 'multi') throw new Error('Wrong mode');
-      s.view.layout[target] = visible;
-      if (
-        (s.view.layout.customizer ? 1 : 0) +
-          (s.view.layout.editor ? 1 : 0) +
-          (s.view.layout.viewer ? 1 : 0) ==
-        0
-      ) {
-        // Select at least one panel
-        // s.view.layout.editor = true;
-        s.view.layout[target] = !visible;
-        if (target === 'editor' && !visible) {
-          s.view.logs = false;
-        }
-      }
-    });
+    this.layout.changeMultiVisibility(target, visible);
   }
 
   openFile(path: string) {
