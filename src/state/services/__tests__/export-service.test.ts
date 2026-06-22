@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock the heavy compile/IO deps the format-conversion + 3MF paths touch.
 vi.mock('../../../runner/actions.ts', () => ({
-  render: vi.fn().mockReturnValue(
+  renderExport: vi.fn().mockReturnValue(
     vi.fn().mockResolvedValue({
       outFile: new File(['converted'], 'model.stl'),
       logText: '',
@@ -17,14 +17,14 @@ vi.mock('../../../io/export_3mf.ts', () => ({
 }));
 vi.mock('chroma-js', () => ({ default: vi.fn((c: string) => c) }));
 
-import { render as _mockRender } from '../../../runner/actions.ts';
+import { renderExport as _mockRenderExport, type RenderOutput } from '../../../runner/actions.ts';
 import type { State } from '../../app-state.ts';
 import { bubbleUpDeepMutations } from '../../deep-mutate.ts';
 import type { HostAdapter } from '../../web-host-adapter.ts';
 import { ExportService } from '../export-service.ts';
 import type { ServiceContext } from '../service-context.ts';
 
-const mockRender = _mockRender as ReturnType<typeof vi.fn>;
+const mockRenderExport = _mockRenderExport as ReturnType<typeof vi.fn>;
 
 function fileOutput(name: string, url = 'blob:out'): State['output'] {
   const f = new File(['x'], name);
@@ -94,7 +94,7 @@ describe('ExportService', () => {
     });
     await new ExportService(ctx).export();
     expect(host.download).toHaveBeenCalledWith('blob:out', 'm.svg');
-    expect(mockRender).not.toHaveBeenCalled();
+    expect(mockRenderExport).not.toHaveBeenCalled();
   });
 
   it('downloads the display file on a glb pass-through', async () => {
@@ -105,7 +105,7 @@ describe('ExportService', () => {
     });
     await new ExportService(ctx).export();
     expect(host.download).toHaveBeenCalledWith('blob:glb', 'm.glb');
-    expect(mockRender).not.toHaveBeenCalled();
+    expect(mockRenderExport).not.toHaveBeenCalled();
   });
 
   it('opens the multimaterial picker for 3mf without extruder colors', async () => {
@@ -116,7 +116,7 @@ describe('ExportService', () => {
     });
     await new ExportService(ctx).export();
     expect(getState().view.extruderPickerVisibility).toBe('exporting');
-    expect(mockRender).not.toHaveBeenCalled();
+    expect(mockRenderExport).not.toHaveBeenCalled();
   });
 
   it('converts to 3mf when extruder colors are set, then downloads', async () => {
@@ -139,8 +139,63 @@ describe('ExportService', () => {
       output: fileOutput('m.off'),
     });
     await new ExportService(ctx).export();
-    expect(mockRender).toHaveBeenCalledTimes(1);
+    expect(mockRenderExport).toHaveBeenCalledTimes(1);
+    // Export runs on its own scheduling priority (preempts background compiles).
+    expect(mockRenderExport.mock.calls[0][0].priority).toBe('export');
     expect(host.download).toHaveBeenCalledWith('blob:new', 'model.stl');
+  });
+
+  it('drops a superseded export result instead of clobbering the newer one', async () => {
+    const { ctx, host, getState } = makeCtx({
+      is2D: false,
+      exportFormat3D: 'stl',
+      output: fileOutput('m.off'),
+    });
+    const svc = new ExportService(ctx);
+
+    // First export's conversion hangs; the second resolves immediately.
+    let resolveFirst!: (v: RenderOutput) => void;
+    const firstInner = vi.fn(() => new Promise<RenderOutput>((r) => (resolveFirst = r)));
+    const secondInner = vi.fn().mockResolvedValue({
+      outFile: new File(['second'], 'second.stl'),
+      logText: '',
+      markers: [],
+      elapsedMillis: 1,
+    });
+    mockRenderExport.mockReturnValueOnce(firstInner).mockReturnValueOnce(secondInner);
+
+    const p1 = svc.export(); // token 1 — awaits the hanging conversion
+    const p2 = svc.export(); // token 2 — resolves and commits
+    await p2;
+    // Now let the first (superseded) export finish; its token is stale.
+    resolveFirst({
+      outFile: new File(['first'], 'first.stl'),
+      logText: '',
+      markers: [],
+      elapsedMillis: 1,
+    });
+    await p1;
+
+    // Only the newer export downloaded; the stale one was dropped.
+    expect(host.download.mock.calls.map((c) => c[1])).toEqual(['second.stl']);
+    expect(getState().exporting).toBe(false);
+  });
+
+  it('treats a superseded (cancelled) export as supersession, not a user-facing error', async () => {
+    const { ctx, host, getState } = makeCtx({
+      is2D: false,
+      exportFormat3D: 'stl',
+      output: fileOutput('m.off'),
+    });
+    // The delayable rejects a superseded call with DELAYABLE_CANCELLED_MESSAGE.
+    mockRenderExport.mockReturnValueOnce(vi.fn().mockRejectedValue(new Error('Cancelled')));
+
+    await new ExportService(ctx).export();
+
+    // No spurious error surfaced and nothing downloaded — the newer export owns
+    // the outcome.
+    expect(getState().error).toBeUndefined();
+    expect(host.download).not.toHaveBeenCalled();
   });
 
   it('clears exporting and surfaces an error when there is no output to convert', async () => {
