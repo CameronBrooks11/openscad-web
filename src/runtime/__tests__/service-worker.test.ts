@@ -4,7 +4,11 @@
 vi.mock('../build-env.ts', () => ({ isProductionBuild: () => true }));
 vi.mock('../asset-urls.ts', () => ({ resolveRuntimeAssetUrl: (p: string) => `/${p}` }));
 
-import { registerAppServiceWorker, SW_UPDATE_AVAILABLE_EVENT } from '../service-worker.ts';
+import {
+  registerAppServiceWorker,
+  applyServiceWorkerUpdate,
+  SW_UPDATE_AVAILABLE_EVENT,
+} from '../service-worker.ts';
 
 type FakeWorker = { state: string; onstatechange: (() => void) | null };
 type FakeRegistration = {
@@ -100,5 +104,57 @@ describe('registerAppServiceWorker update flow (#53)', () => {
     expect(reloadSpy).not.toHaveBeenCalled();
 
     window.removeEventListener(SW_UPDATE_AVAILABLE_EVENT, listener);
+  });
+});
+
+describe('applyServiceWorkerUpdate (#78)', () => {
+  let reloadSpy: ReturnType<typeof vi.fn>;
+  const realLocation = window.location;
+
+  beforeEach(() => {
+    reloadSpy = vi.fn();
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: { reload: reloadSpy },
+    });
+  });
+
+  afterEach(() => {
+    Object.defineProperty(window, 'location', { configurable: true, value: realLocation });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (navigator as any).serviceWorker;
+  });
+
+  it('posts SKIP_WAITING to the waiting worker and reloads on controllerchange', () => {
+    const postMessage = vi.fn();
+    let controllerChangeHandler: (() => void) | undefined;
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: {
+        addEventListener: vi.fn((type: string, handler: () => void) => {
+          if (type === 'controllerchange') controllerChangeHandler = handler;
+        }),
+      },
+    });
+    const registration = { waiting: { postMessage } } as unknown as ServiceWorkerRegistration;
+
+    applyServiceWorkerUpdate(registration);
+
+    expect(postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
+    expect(reloadSpy).not.toHaveBeenCalled(); // not until the new worker takes control
+
+    controllerChangeHandler?.();
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads directly when there is no waiting worker', () => {
+    Object.defineProperty(navigator, 'serviceWorker', {
+      configurable: true,
+      value: { addEventListener: vi.fn() },
+    });
+    const registration = { waiting: null } as unknown as ServiceWorkerRegistration;
+
+    applyServiceWorkerUpdate(registration);
+    expect(reloadSpy).toHaveBeenCalledTimes(1);
   });
 });

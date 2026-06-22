@@ -14,6 +14,7 @@ import './osc-editor-panel.ts';
 import './osc-viewer-panel.ts';
 import './osc-customizer-panel.ts';
 import './osc-footer.ts';
+import './osc-update-banner.ts';
 
 @customElement('osc-app-shell')
 export class OscAppShell extends LitElement {
@@ -155,6 +156,7 @@ export class OscAppShell extends LitElement {
             : ''}
         </div>
         <osc-footer></osc-footer>
+        <osc-update-banner></osc-update-banner>
       `;
     } else {
       // Single panel mode — stack all, use z-index to show focused
@@ -195,6 +197,7 @@ export class OscAppShell extends LitElement {
           ></osc-customizer-panel>
         </div>
         <osc-footer></osc-footer>
+        <osc-update-banner></osc-update-banner>
       `;
     }
   }

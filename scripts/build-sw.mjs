@@ -64,6 +64,18 @@ try {
     ],
   });
 
+  // generateSW already emits a `SKIP_WAITING` message listener in the worker,
+  // so the app can let the user apply a waiting update on demand (see
+  // applyServiceWorkerUpdate / osc-update-banner, #78) even though
+  // skipWaiting:false keeps it from auto-activating. The update banner depends
+  // on that handler — fail the build if a Workbox change ever drops it.
+  const swContents = await fs.readFile(swDest, 'utf8');
+  if (!swContents.includes('SKIP_WAITING')) {
+    throw new Error(
+      '[build-sw] generated sw.js has no SKIP_WAITING handler; the update-on-reload flow (#78) would break.',
+    );
+  }
+
   if (result.warnings.length > 0) {
     for (const warning of result.warnings) {
       console.warn(`[build-sw] ${warning}`);
