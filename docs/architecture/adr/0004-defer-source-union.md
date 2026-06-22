@@ -1,6 +1,11 @@
 # ADR 0004 — Defer the `Source` discriminated union
 
-**Status:** Deferred (#56)
+**Status:** Implemented — the decomposed effort the decision called for has
+landed. The `ProjectSource` union is the canonical state type with byte-compatible
+flat-shape conversions at the fragment/`state.json`/worker boundaries, and source
+revisions are stamped onto compile requests/results and checked before applying
+(#56 closed; revision stamping in #99). Binary _project_ assets remain out of
+scope (the byte path is hardened, but the import feature is deferred — see #121).
 
 ## Context
 
