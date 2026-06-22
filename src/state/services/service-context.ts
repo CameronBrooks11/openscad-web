@@ -1,0 +1,30 @@
+import type { ProjectFileSystem } from '../../fs/project-filesystem.ts';
+import type { State } from '../app-state.ts';
+import type { HostAdapter } from '../web-host-adapter.ts';
+
+/**
+ * The slice of `Model` that extracted domain services depend on. Model wires
+ * every service to a single shared context so services read state and route all
+ * writes through `mutate` (the central funnel that fires the `'state'` event,
+ * schedules persistence, and bumps the source revision) — never touching those
+ * concerns directly.
+ */
+export interface ServiceContext {
+  /**
+   * The current app state. Each `mutate` replaces the top-level state identity
+   * (deep-mutate bubbles new identities along the changed spine), so a held
+   * reference goes stale across a mutation — call `getState()` again, or only
+   * snapshot fields no subsequent mutation in scope will touch.
+   */
+  getState(): State;
+  /** Apply a mutation; returns true if state changed. */
+  mutate(f: (state: State) => void): boolean;
+  /** Monotonic source/project revision (bumped centrally on source change). */
+  getSourceRevision(): number;
+  /** Content of the active source ('' if absent or not yet loaded). */
+  getActiveSource(): string;
+  /** Browser side effects (object URLs, downloads, completion chime, base URL). */
+  readonly host: HostAdapter;
+  /** The project filesystem (narrow read/write surface). */
+  readonly fs: ProjectFileSystem;
+}
