@@ -614,6 +614,21 @@ test.describe('worker integration', () => {
 });
 
 test.describe('embed mode', () => {
+  test('does not load the Monaco editor bundle (#68)', async ({ page }) => {
+    const requested: string[] = [];
+    page.on('request', (req) => requested.push(req.url()));
+
+    await loadEmbedHost(page, buildEmbedUrl({ source: 'cube(10);', parentOrigin: appOrigin }));
+    const frame = await getEmbedFrame(page);
+    await waitForEmbedViewer(frame);
+    await waitForEmbedMessage(page, 'renderComplete');
+
+    // The editor shell (and its Monaco chunk + stylesheet) must never be fetched
+    // for the reduced embed surface.
+    const monacoRequests = requested.filter((u) => /\/monaco-[^/]*\.(js|css)/.test(u));
+    expect(monacoRequests).toEqual([]);
+  });
+
   test('supports host messaging and emits the documented lifecycle events', async ({ page }) => {
     const source = 'myVar = 10;\ncube(myVar);';
 

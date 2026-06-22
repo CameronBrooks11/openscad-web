@@ -22,14 +22,13 @@ import { State, StatePersister } from './state/app-state.ts';
 import { markPerf, measurePerf } from './perf/runtime-performance.ts';
 import { openSCADWasmUrl } from './runner/openscad-asset-urls.ts';
 import './index.css';
-import 'monaco-editor/min/vs/editor/editor.main.css';
 
 import debug from 'debug';
 
-// Import all Lit shell elements so they register themselves
-import './components/elements/osc-app-shell.ts';
-import './components/elements/osc-embed-shell.ts';
-import './components/elements/osc-customizer-shell.ts';
+// Shell elements are imported dynamically per boot mode (see the mode branch
+// below) so a reduced surface — embed or customizer — never loads the editor
+// shell and therefore never pulls in Monaco. The Monaco stylesheet moved into
+// osc-editor-panel for the same reason.
 
 const log = debug('app:log');
 
@@ -68,6 +67,19 @@ window.addEventListener('load', async () => {
   }
 
   markPerf('osc:app-bootstrap-start', { standalone: isInStandaloneMode() });
+
+  // Kick off the mode's shell module download now so it (and, for the editor,
+  // the Monaco chunk) loads in parallel with the service-worker registration,
+  // filesystem init, and model construction below — it is awaited just before
+  // mounting. This keeps the eager initial chunk small without serializing the
+  // shell load behind the boot work.
+  const shellModule =
+    urlModeResult.mode === 'customizer'
+      ? import('./components/elements/osc-customizer-shell.ts')
+      : urlModeResult.mode === 'embed'
+        ? import('./components/elements/osc-embed-shell.ts')
+        : import('./components/elements/osc-app-shell.ts');
+
   await registerAppServiceWorker();
 
   registerCustomAppHeightCSSProperty();
@@ -111,6 +123,9 @@ window.addEventListener('load', async () => {
   const model = new Model(fs, initialState, undefined, statePersister);
   setModel(model);
 
+  // The shell module download was started at the top of bootstrap; awaiting it
+  // here guarantees the custom element is defined before it is created/upgraded.
+  await shellModule;
   if (urlModeResult.mode === 'customizer') {
     const shell = document.createElement('osc-customizer-shell') as HTMLElement & {
       urlParams: typeof urlModeResult;
