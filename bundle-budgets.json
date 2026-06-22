@@ -1,0 +1,9 @@
+{
+  "_comment": "Gzipped-size budgets (KB) enforced in CI by scripts/check-bundle-budgets.mjs (#68). These bound regressions of the boot-critical artifacts; update deliberately when a size change is intended and understood. Monaco and Three.js currently share the initial app JS chunk — split them into named chunks to budget separately.",
+  "budgets": [
+    { "label": "initial app JS", "pattern": "assets/index-*.js", "maxGzipKB": 1024 },
+    { "label": "app CSS", "pattern": "assets/index-*.css", "maxGzipKB": 115 },
+    { "label": "openscad worker", "pattern": "assets/openscad-worker-*.js", "maxGzipKB": 110 },
+    { "label": "openscad WASM", "pattern": "assets/openscad-*.wasm", "maxGzipKB": 3072 }
+  ]
+}
