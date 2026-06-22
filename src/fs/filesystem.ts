@@ -19,6 +19,25 @@ export function join(a: string, b: string): string {
   return b === '.' ? a : `${a}/${b}`;
 }
 
+/**
+ * The absolute ancestor directories of an absolute file path, outermost first
+ * and excluding the filesystem root. For `/home/lib/sub/x.scad` →
+ * `['/home', '/home/lib', '/home/lib/sub']`. Used to `mkdir -p` before writing a
+ * nested file (each `mkdir` is idempotent on an existing dir). A top-level file
+ * like `/x.scad` yields `[]` (only root, which always exists).
+ */
+export function ancestorDirsOf(filePath: string): string[] {
+  const segments = filePath.split('/').filter(Boolean);
+  segments.pop(); // drop the filename
+  const dirs: string[] = [];
+  let cur = '';
+  for (const seg of segments) {
+    cur += '/' + seg;
+    dirs.push(cur);
+  }
+  return dirs;
+}
+
 // ---------------------------------------------------------------------------
 // Low-level BrowserFS backend factory
 // ---------------------------------------------------------------------------

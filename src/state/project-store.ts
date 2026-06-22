@@ -1,4 +1,5 @@
 import JSZip from 'jszip';
+import { ancestorDirsOf } from '../fs/filesystem.ts';
 import { ProjectFileSystem } from '../fs/project-filesystem.ts';
 import { contentOf, type SerializableSource } from './project-source.ts';
 import { fetchSource } from '../utils.ts';
@@ -125,12 +126,23 @@ export class ProjectStore {
       }
       files.push([safePath, content]);
     }
-    // Paths are validated above; FS write failures (e.g. a missing parent dir in
-    // the worker VFS) are best-effort and must not abort the import — the file
-    // content is still surfaced via the returned sources.
+    // Paths are validated above; FS write failures are best-effort and must not
+    // abort the import — the file content is still surfaced via the returned
+    // sources. Create each nested file's parent dirs first (mkdir -p) so a file
+    // like lib/x.scad doesn't fail to write for want of /home/lib.
     for (const [safePath, content] of files) {
+      const fullPath = `/home/${safePath}`;
       try {
-        this.fs.writeFile(`/home/${safePath}`, content);
+        if (this.fs.mkdirSync) {
+          for (const dir of ancestorDirsOf(fullPath)) {
+            try {
+              this.fs.mkdirSync(dir);
+            } catch {
+              /* already exists */
+            }
+          }
+        }
+        this.fs.writeFile(fullPath, content);
       } catch {
         /* best-effort */
       }
