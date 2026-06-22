@@ -10,21 +10,21 @@ import type { Model } from '../../state/model.ts';
 export class OscMultimaterialDialog extends LitElement {
   static override styles = css`
     dialog {
-      border: 1px solid #ccc;
+      border: 1px solid var(--osc-border);
       border-radius: 8px;
       padding: 0;
       min-width: 380px;
       max-width: 90vw;
-      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 4px 24px var(--osc-shadow);
     }
     dialog::backdrop {
-      background: rgba(0, 0, 0, 0.4);
+      background: var(--osc-overlay);
     }
     .header {
       padding: 12px 16px;
       font-weight: bold;
       font-size: 1rem;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid var(--osc-border-muted);
     }
     .body {
       padding: 16px;
@@ -32,7 +32,7 @@ export class OscMultimaterialDialog extends LitElement {
     p {
       margin: 0 0 8px;
       font-size: 0.875rem;
-      color: #555;
+      color: var(--osc-muted);
     }
     .color-row {
       display: flex;
@@ -44,37 +44,37 @@ export class OscMultimaterialDialog extends LitElement {
       width: 36px;
       height: 28px;
       padding: 0;
-      border: 1px solid #ccc;
+      border: 1px solid var(--osc-border);
       cursor: pointer;
       border-radius: 2px;
     }
     input[type='text'] {
       flex: 1;
       padding: 4px 8px;
-      border: 1px solid #ccc;
+      border: 1px solid var(--osc-border);
       border-radius: 4px;
       font-size: 0.875rem;
     }
     input[type='text'].invalid {
-      border-color: #e00;
-      background: #fff5f5;
+      border-color: var(--osc-error);
+      background: var(--osc-error-bg);
     }
     button.remove {
       background: none;
       border: none;
       cursor: pointer;
-      color: #e00;
+      color: var(--osc-error);
       font-size: 1rem;
       padding: 0 4px;
     }
     button.remove:hover {
-      color: #900;
+      color: var(--osc-error);
     }
     button.add {
       margin-top: 4px;
       padding: 4px 12px;
-      border: 1px solid #aaa;
-      background: #f5f5f5;
+      border: 1px solid var(--osc-border);
+      background: var(--osc-panel-muted);
       border-radius: 4px;
       cursor: pointer;
       font-size: 0.85rem;
@@ -85,7 +85,7 @@ export class OscMultimaterialDialog extends LitElement {
     }
     .footer {
       padding: 10px 16px;
-      border-top: 1px solid #eee;
+      border-top: 1px solid var(--osc-border-muted);
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -102,26 +102,26 @@ export class OscMultimaterialDialog extends LitElement {
     }
     button.btn {
       padding: 5px 14px;
-      border: 1px solid #bbb;
+      border: 1px solid var(--osc-border);
       border-radius: 4px;
       cursor: pointer;
       font-size: 0.85rem;
-      background: #f5f5f5;
+      background: var(--osc-panel-muted);
     }
     button.btn-primary {
-      background: #4f87c5;
-      color: #fff;
-      border-color: #4f87c5;
+      background: var(--osc-accent);
+      color: var(--osc-on-accent);
+      border-color: var(--osc-accent);
     }
     button.btn-primary:disabled {
       opacity: 0.5;
       cursor: not-allowed;
     }
     button.btn:hover:not(:disabled) {
-      background: #e8e8e8;
+      background: var(--osc-hover);
     }
     button.btn-primary:hover:not(:disabled) {
-      background: #3a72b0;
+      background: var(--osc-accent-strong);
     }
   `;
 

@@ -70,7 +70,7 @@ export class OscAppShell extends LitElement {
           width: 100%;
           height: 100%;
           overflow: hidden;
-          background: #eef3fc;
+          background: var(--osc-bg);
         }
         osc-app-shell .panels-multi {
           display: flex;
@@ -79,9 +79,9 @@ export class OscAppShell extends LitElement {
           overflow: hidden;
           min-height: 0;
           min-width: 0;
-          border-top: 1px solid #d6deec;
-          border-bottom: 1px solid #d6deec;
-          background: #d6deec;
+          border-top: 1px solid var(--osc-border);
+          border-bottom: 1px solid var(--osc-border);
+          background: var(--osc-border);
         }
         osc-app-shell .panels-single {
           display: flex;
@@ -91,9 +91,9 @@ export class OscAppShell extends LitElement {
           overflow: hidden;
           min-height: 0;
           min-width: 0;
-          border-top: 1px solid #d6deec;
-          border-bottom: 1px solid #d6deec;
-          background: #d6deec;
+          border-top: 1px solid var(--osc-border);
+          border-bottom: 1px solid var(--osc-border);
+          background: var(--osc-border);
         }
         osc-app-shell osc-editor-panel,
         osc-app-shell osc-viewer-panel,

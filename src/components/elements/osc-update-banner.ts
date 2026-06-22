@@ -27,7 +27,7 @@ export class OscUpdateBanner extends LitElement {
       border-radius: 10px;
       background: #1e293b;
       color: #f8fafc;
-      box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+      box-shadow: 0 6px 24px var(--osc-shadow);
       font-size: 0.9rem;
     }
     .msg {

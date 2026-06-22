@@ -127,15 +127,15 @@ export class OscViewerPanel extends LitElement {
         .svg-preview {
           display: block;
           object-fit: contain;
-          background: #fff;
+          background: var(--osc-viewer-bg);
         }
         .dxf-placeholder {
           display: flex;
           align-items: center;
           justify-content: center;
           padding: 24px;
-          background: #f5f7fb;
-          color: #3b4455;
+          background: var(--osc-bg);
+          color: var(--osc-fg);
           text-align: center;
           line-height: 1.5;
         }

@@ -16,7 +16,7 @@ export class OscCustomizerPanel extends LitElement {
     }
     details {
       margin: 5px 10px;
-      border: 1px solid #ccc;
+      border: 1px solid var(--osc-border);
       border-radius: 4px;
       background: rgba(255, 255, 255, 0.4);
     }
@@ -51,7 +51,7 @@ export class OscCustomizerPanel extends LitElement {
     }
     .param-caption {
       font-size: 0.75rem;
-      color: #666;
+      color: var(--osc-muted);
     }
     .param-controls {
       display: flex;
@@ -63,10 +63,10 @@ export class OscCustomizerPanel extends LitElement {
     input[type='number'],
     input[type='text'] {
       padding: 3px 6px;
-      border: 1px solid #ccc;
+      border: 1px solid var(--osc-border);
       border-radius: 4px;
       font-size: 0.85rem;
-      background: #fff;
+      background: var(--osc-panel);
     }
     input[type='range'] {
       flex: 1;
@@ -81,12 +81,12 @@ export class OscCustomizerPanel extends LitElement {
       background: none;
       border: none;
       cursor: pointer;
-      color: #888;
+      color: var(--osc-muted);
       font-size: 1rem;
       padding: 0 2px;
     }
     button.reset:hover {
-      color: #333;
+      color: var(--osc-fg);
     }
     button.reset.hidden {
       visibility: hidden;

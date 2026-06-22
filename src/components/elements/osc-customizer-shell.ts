@@ -63,11 +63,11 @@ export class OscCustomizerShell extends LitElement {
     .back-bar {
       padding: 4px 8px;
       font-size: 0.8em;
-      background: rgba(0, 0, 0, 0.05);
+      background: var(--osc-overlay-hover);
     }
     .error {
       padding: 2rem;
-      color: red;
+      color: var(--osc-error);
     }
   `;
 
