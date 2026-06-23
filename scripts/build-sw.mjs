@@ -2,34 +2,19 @@
 
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import workboxBuild from 'workbox-build';
 
 const { generateSW } = workboxBuild;
 
-const distDir = path.resolve('dist');
-const swDest = path.join(distDir, 'sw.js');
 const obsoleteArtifacts = ['openscad.js', 'openscad.wasm', 'fonts/InterVariable.woff2'];
 
-async function removeObsoleteArtifacts() {
-  for (const artifact of obsoleteArtifacts) {
-    try {
-      await fs.rm(path.join(distDir, artifact), { force: true });
-    } catch {
-      /* ignore */
-    }
-  }
-
-  try {
-    await fs.rmdir(path.join(distDir, 'fonts'));
-  } catch {
-    /* ignore */
-  }
-}
-
-try {
-  await removeObsoleteArtifacts();
-
-  const result = await generateSW({
+/**
+ * Build the Workbox `generateSW` config. Pure (no I/O) so the precache policy and
+ * the runtime-route order are unit-testable — both are correctness-critical.
+ */
+export function buildWorkboxConfig({ distDir, swDest }) {
+  return {
     mode: 'production',
     globDirectory: distDir,
     // Precache EVERYTHING in dist, including the ~9.6 MB WASM binary and the
@@ -58,17 +43,12 @@ try {
     clientsClaim: false,
     skipWaiting: false,
     // Runtime caching only applies to requests NOT served by the precache above
-    // (which already covers the WASM binary and library zips). These rules are a
-    // fallback for any same-origin request that misses the precache.
+    // (which already covers the WASM binary and library zips); these are a
+    // fallback for a same-origin request that misses the precache. Workbox uses
+    // the FIRST matching route, so the specific WASM/library CacheFirst rule must
+    // precede the broad same-origin StaleWhileRevalidate — otherwise the latter
+    // swallows every same-origin request and the CacheFirst rule is unreachable.
     runtimeCaching: [
-      {
-        urlPattern: ({ url }) => url.origin === self.location.origin,
-        handler: 'StaleWhileRevalidate',
-        options: {
-          cacheName: 'same-origin-assets',
-          expiration: { maxEntries: 200, purgeOnQuotaError: true },
-        },
-      },
       {
         urlPattern: ({ url }) =>
           url.pathname.endsWith('.wasm') || url.pathname.includes('/libraries/'),
@@ -78,8 +58,39 @@ try {
           expiration: { maxEntries: 50, purgeOnQuotaError: true },
         },
       },
+      {
+        urlPattern: ({ url }) => url.origin === self.location.origin,
+        handler: 'StaleWhileRevalidate',
+        options: {
+          cacheName: 'same-origin-assets',
+          expiration: { maxEntries: 200, purgeOnQuotaError: true },
+        },
+      },
     ],
-  });
+  };
+}
+
+async function removeObsoleteArtifacts(distDir) {
+  for (const artifact of obsoleteArtifacts) {
+    try {
+      await fs.rm(path.join(distDir, artifact), { force: true });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  try {
+    await fs.rmdir(path.join(distDir, 'fonts'));
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function runBuildSW({ distDir = path.resolve('dist') } = {}) {
+  const swDest = path.join(distDir, 'sw.js');
+  await removeObsoleteArtifacts(distDir);
+
+  const result = await generateSW(buildWorkboxConfig({ distDir, swDest }));
 
   // generateSW already emits a `SKIP_WAITING` message listener in the worker,
   // so the app can let the user apply a waiting update on demand (see
@@ -101,7 +112,17 @@ try {
   console.log(
     `[build-sw] Generated ${swDest} with ${result.count} precached entries (${result.size} bytes).`,
   );
-} catch (error) {
-  console.error(error);
-  process.exitCode = 1;
+  return result;
+}
+
+const isEntrypoint =
+  process.argv[1] != null && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isEntrypoint) {
+  try {
+    await runBuildSW();
+  } catch (error) {
+    console.error(error);
+    process.exitCode = 1;
+  }
 }
