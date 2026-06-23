@@ -1,4 +1,4 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig, devices } from '@playwright/test';
 
 const serverMode = process.env.E2E_SERVER_MODE ?? 'prod';
 const isDevelopmentServer = serverMode === 'dev';
@@ -31,10 +31,33 @@ export default defineConfig({
     headless: process.env.PLAYWRIGHT_HEADFUL !== 'true',
     screenshot: 'only-on-failure',
     trace: process.env.CI === 'true' ? 'retain-on-failure' : 'on-first-retry',
-    launchOptions: {
-      args: process.env.CI === 'true' ? ['--no-sandbox'] : [],
-    },
   },
+  // Chromium runs the full suite. Firefox runs a smaller smoke matrix (tests
+  // tagged @firefox) covering the cross-browser core — app load + WASM worker
+  // compile, syntax-error reporting, and the Blob/File + BrowserFS-fallback ZIP
+  // import path (Firefox has no File System Access API, so it exercises the
+  // fallback). Chromium-only surfaces (FS Access picker, clipboard paste) are
+  // intentionally not tagged. Firefox runs only in the default prod server mode
+  // (the main e2e job); the publish/dev runs that check path-serving stay
+  // Chromium-only. See #124.
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: { args: process.env.CI === 'true' ? ['--no-sandbox'] : [] },
+      },
+    },
+    ...(serverMode === 'prod'
+      ? [
+          {
+            name: 'firefox',
+            use: { ...devices['Desktop Firefox'] },
+            grep: /@firefox/,
+          },
+        ]
+      : []),
+  ],
   webServer: {
     command: webServerCommand,
     url: appUrl,

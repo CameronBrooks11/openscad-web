@@ -136,8 +136,8 @@ jobs:
       - name: Guard dependency install scripts
         run: npm run security:check-install-scripts
 
-      - name: Install Playwright Chromium
-        run: npx playwright install --with-deps chromium
+      - name: Install Playwright Chromium + Firefox
+        run: npx playwright install --with-deps chromium firefox
 
       - name: Cache build libs
         id: cache-libs
@@ -153,7 +153,7 @@ jobs:
         if: steps.cache-libs.outputs.cache-hit != 'true'
         run: npm run build:libs
 
-      - name: Browser E2E
+      - name: Browser E2E (Chromium full + Firefox smoke)
         run: npm run test:e2e
 
       - name: Upload Playwright artifacts
