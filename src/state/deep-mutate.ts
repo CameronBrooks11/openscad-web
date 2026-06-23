@@ -13,8 +13,43 @@ type KVEntriesMap = Map<KVObject, [string, any][]>;
  */
 export function bubbleUpDeepMutations<T extends KVObject>(o: T, mutate: (o: T) => void): T {
   const allOriginalEntries = collectObjectEntriesDeeply(o);
-  mutate(o);
+  try {
+    mutate(o);
+  } catch (e) {
+    // `mutate` edits the tree in place, so a callback that throws partway would
+    // otherwise leave the live state partially mutated *and* with no change
+    // event dispatched (the caller bails before setState). Roll every touched
+    // object back to its captured entries so a failed mutation is a no-op, then
+    // rethrow. (The proper long-term fix is explicit immutable reducers — #122.)
+    restoreOriginalEntries(allOriginalEntries);
+    throw e;
+  }
   return bubbleChangesUp(o, allOriginalEntries) as T;
+}
+
+/**
+ * Reset every captured object to exactly its original own-enumerable entries:
+ * drop keys the mutation added, restore originals (pointing back at the original
+ * child references, which are themselves restored as they were also captured),
+ * and fix array length. Objects the mutation newly created aren't captured, but
+ * become unreferenced once their would-be parents are restored.
+ */
+function restoreOriginalEntries(allOriginalEntries: KVEntriesMap) {
+  for (const [obj, entries] of allOriginalEntries) {
+    // Clear all current keys, then re-add the captured ones in their original
+    // order, so a key the callback deleted is restored in place rather than at
+    // the end — keeping JSON key order (and thus the persistence signature)
+    // stable across a rolled-back mutation.
+    for (const key of Object.keys(obj)) {
+      delete obj[key];
+    }
+    for (const [k, v] of entries) {
+      obj[k] = v;
+    }
+    if (Array.isArray(obj)) {
+      obj.length = entries.length;
+    }
+  }
 }
 
 function collectObjectEntriesDeeply(o: KVObject, out: KVEntriesMap = new Map()): KVEntriesMap {
@@ -31,6 +66,11 @@ function collectObjectEntriesDeeply(o: KVObject, out: KVEntriesMap = new Map()):
     if (v instanceof RegExp || v instanceof Blob) {
       continue;
     }
+    // Captures plain objects/arrays only. Map/Set/File (extends Blob) internals
+    // are treated as opaque, so an in-place mutation *inside* one would not be
+    // rolled back. The State tree holds none in a mutated-in-place position
+    // (e.g. output.outFile is replaced wholesale, never mutated), so this is
+    // safe today; revisit if state grows such a field.
     collectObjectEntriesDeeply(v, out);
   }
   return out;
