@@ -30,6 +30,7 @@ function makeCtx(layout: State['view']['layout'], logs = false) {
       createObjectURL: () => '',
       revokeObjectURL: () => {},
       download: () => {},
+      downloadBlob: () => {},
       playCompletionChime: () => {},
       baseUrl: () => '',
     },

@@ -350,12 +350,12 @@ export class Model extends EventTarget {
       const contentBytes = new TextEncoder().encode(content) as Uint8Array<ArrayBuffer>;
       const blob = new Blob([contentBytes], { type: 'text/plain' });
       const file = new File([blob], this.state.params.activePath.split('/').pop()!);
-      this.host.download(this.host.createObjectURL(file), file.name);
+      this.host.downloadBlob(file, file.name);
     } else {
       try {
         const blob = await this.projectStore.buildZip(this.state.params.sources);
         const file = new File([blob], 'project.zip');
-        this.host.download(this.host.createObjectURL(file), file.name);
+        this.host.downloadBlob(file, file.name);
       } catch (err) {
         this.mutate((s) => {
           applyUserFacingError(s, err, 'model');

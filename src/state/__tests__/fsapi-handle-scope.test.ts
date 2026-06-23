@@ -73,6 +73,7 @@ function mockHost(): HostAdapter {
     createObjectURL: vi.fn(() => 'blob:fake'),
     revokeObjectURL: vi.fn(),
     download: vi.fn(),
+    downloadBlob: vi.fn(),
     playCompletionChime: vi.fn(),
     baseUrl: vi.fn(() => 'http://localhost/'),
   };
@@ -115,7 +116,7 @@ describe('FSAPI handle scoping (#62)', () => {
     await model.saveProject();
 
     expect(writable.write).toHaveBeenCalledWith('cube(10);');
-    expect(host.download).not.toHaveBeenCalled();
+    expect(host.downloadBlob).not.toHaveBeenCalled();
   });
 
   it('does not reuse a stale handle after a ZIP import replaces the project', async () => {
@@ -141,7 +142,7 @@ describe('FSAPI handle scoping (#62)', () => {
     // with no handle for the active path it falls back to a download.
     await model.saveProject();
     expect(writable.write).not.toHaveBeenCalled();
-    expect(host.download).toHaveBeenCalled();
+    expect(host.downloadBlob).toHaveBeenCalled();
   });
 
   it('drops the handle even when the imported archive reuses the opened path', async () => {
@@ -165,6 +166,6 @@ describe('FSAPI handle scoping (#62)', () => {
 
     await model.saveProject();
     expect(writable.write).not.toHaveBeenCalled();
-    expect(host.download).toHaveBeenCalled();
+    expect(host.downloadBlob).toHaveBeenCalled();
   });
 });

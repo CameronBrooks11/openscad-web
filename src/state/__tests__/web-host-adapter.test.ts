@@ -58,6 +58,7 @@ function mockHost() {
     createObjectURL: vi.fn(() => 'blob:fake'),
     revokeObjectURL: vi.fn(),
     download: vi.fn(),
+    downloadBlob: vi.fn(),
     playCompletionChime: vi.fn(),
     baseUrl: vi.fn(() => 'http://localhost/'),
   };
@@ -71,6 +72,26 @@ describe('WebHostAdapter', () => {
     expect(() => host.revokeObjectURL(url)).not.toThrow();
     expect(() => host.playCompletionChime()).not.toThrow(); // no #complete-sound element -> no-op
     expect(typeof host.baseUrl()).toBe('string');
+  });
+
+  it('downloadBlob revokes the object URL it creates (no leak)', () => {
+    vi.useFakeTimers();
+    const createSpy = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake');
+    const revokeSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    try {
+      const host = new WebHostAdapter();
+      host.downloadBlob(new Blob(['x']), 'model.scad');
+      expect(createSpy).toHaveBeenCalledTimes(1);
+      // The revoke is deferred a turn so the browser can read the URL first.
+      expect(revokeSpy).not.toHaveBeenCalled();
+      vi.runAllTimers();
+      expect(revokeSpy).toHaveBeenCalledWith('blob:fake');
+    } finally {
+      vi.runAllTimers();
+      vi.useRealTimers();
+      createSpy.mockRestore();
+      revokeSpy.mockRestore();
+    }
   });
 });
 
