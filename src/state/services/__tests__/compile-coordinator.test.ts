@@ -50,6 +50,7 @@ function makeContext(revision: number) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fs: {} as any,
     backend: { spawn: vi.fn(), cancel: vi.fn(), dispose: vi.fn() },
+    sessionId: 'test-session',
   };
 
   return { ctx, state, host, setRevision: (n: number) => (rev = n) };
@@ -102,6 +103,7 @@ function makeBinaryContext(readFileSync: () => any) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fs: { readFileSync } as any,
     backend: { spawn: vi.fn(), cancel: vi.fn(), dispose: vi.fn() },
+    sessionId: 'test-session',
   };
   return { ctx, state };
 }
@@ -172,6 +174,10 @@ describe('CompileCoordinator render staleness', () => {
     expect(host.revokeObjectURL).not.toHaveBeenCalled();
     expect(host.playCompletionChime).toHaveBeenCalledTimes(1);
     expect(state.rendering).toBe(false);
+    // The committed output carries immutable artifact identity (ADR 0008).
+    expect(state.output?.artifactId).toMatch(/[0-9a-f-]{36}/);
+    expect(state.output?.operationId).toMatch(/[0-9a-f-]{36}/);
+    expect(state.output?.sourceRevision).toBe(1);
   });
 
   it('drops a result whose revision is stale and never creates a blob URL', async () => {
@@ -201,6 +207,9 @@ describe('CompileCoordinator render staleness', () => {
       elapsedMillis: 0,
       formattedElapsedMillis: '0ms',
       formattedOutFileSize: '1 B',
+      artifactId: 'art',
+      operationId: 'op',
+      sourceRevision: 0,
     };
     renderImpl.mockResolvedValue(renderOutput(1));
 

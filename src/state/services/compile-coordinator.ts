@@ -3,6 +3,7 @@ import {
   createSyntaxDelayable,
   type RenderArgs,
 } from '../../runner/actions.ts';
+import { newId } from '../../runner/compile-contract.ts';
 import { isExpectedJobCancellation, type ProcessStreams } from '../../runner/openscad-runner.ts';
 import { isUserFacingOperationError, UserFacingOperationError } from '../../user-facing-errors.ts';
 import { fetchSource, formatBytes, formatMillis } from '../../utils.ts';
@@ -233,6 +234,9 @@ export class CompileCoordinator {
     // superseded call cannot turn off the spinner a newer call is still driving.
     const token = isPreview ? ++this._previewSeq : ++this._renderSeq;
     const isCurrent = () => (isPreview ? this._previewSeq : this._renderSeq) === token;
+    // One operation id per scheduler invocation (ADR 0008). The dimension retry
+    // is a distinct recursive render(), so it mints its own — never shared.
+    const operationId = newId();
     const setRendering = (s: State, value: boolean) => {
       if (isPreview) {
         s.previewing = value;
@@ -321,6 +325,9 @@ export class CompileCoordinator {
           elapsedMillis: output.elapsedMillis,
           formattedElapsedMillis: formatMillis(output.elapsedMillis),
           formattedOutFileSize: formatBytes(output.outFile.size),
+          artifactId: newId(),
+          operationId,
+          sourceRevision: output.revision ?? this.ctx.getSourceRevision(),
         };
 
         if (!isPreview) {

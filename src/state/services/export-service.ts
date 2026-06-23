@@ -3,6 +3,7 @@ import chroma from 'chroma-js';
 import { export3MF } from '../../io/export_3mf.ts';
 import { parseOff } from '../../io/import_off.ts';
 import { createRenderExportDelayable, type RenderOutput } from '../../runner/actions.ts';
+import { newId } from '../../runner/compile-contract.ts';
 import { isExpectedJobCancellation, type ProcessStreams } from '../../runner/openscad-runner.ts';
 import { isUserFacingOperationError } from '../../user-facing-errors.ts';
 import { formatBytes, formatMillis, type AbortablePromise } from '../../utils.ts';
@@ -65,6 +66,7 @@ export class ExportService {
     // result nor leave the spinner stuck.
     const token = ++this._exportSeq;
     const isCurrent = () => this._exportSeq === token;
+    const operationId = newId(); // one per export() invocation (ADR 0008)
     // Cancel any in-flight conversion render so a superseding export — including
     // a pass-through or picker branch that never calls renderExport — drops a
     // still-queued render and promptly settles the previous export's await with a
@@ -193,6 +195,9 @@ export class ExportService {
           elapsedMillis: output.elapsedMillis,
           formattedElapsedMillis: formatMillis(output.elapsedMillis),
           formattedOutFileSize: formatBytes(output.outFile.size),
+          artifactId: newId(),
+          operationId,
+          sourceRevision: this.ctx.getSourceRevision(),
         };
         host.download(s.export.outFileURL, output.outFile.name);
       });

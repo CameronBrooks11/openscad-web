@@ -66,6 +66,9 @@ function fileOutput(name: string, url = 'blob:out'): State['output'] {
     elapsedMillis: 0,
     formattedElapsedMillis: '0ms',
     formattedOutFileSize: '1 B',
+    artifactId: 'art',
+    operationId: 'op',
+    sourceRevision: 0,
   };
 }
 
@@ -110,6 +113,7 @@ function makeCtx(partial: Partial<State['params']> & { is2D?: boolean; output?: 
     host,
     fs: { readFileSync: vi.fn(), writeFile: vi.fn() },
     backend: { spawn: vi.fn(), cancel: vi.fn(), dispose: vi.fn() },
+    sessionId: 'test-session',
   };
   return { ctx, host, getState: () => state };
 }

@@ -1,5 +1,6 @@
 import { Model } from './model.ts';
 import { WasmWorkerBackend, type CompileBackend } from '../runner/openscad-runner.ts';
+import { newId } from '../runner/compile-contract.ts';
 import type { ProjectFileSystem } from '../fs/project-filesystem.ts';
 import type { State, StatePersister } from './app-state.ts';
 import type { HostAdapter } from './web-host-adapter.ts';
@@ -12,6 +13,8 @@ import type { HostAdapter } from './web-host-adapter.ts';
  * multi-document hosts construct N.
  */
 export class OpenScadSession {
+  /** Stable session id, for routing/debug correlation of operations/artifacts. */
+  readonly id = newId();
   readonly backend: CompileBackend;
   readonly model: Model;
 
@@ -23,7 +26,15 @@ export class OpenScadSession {
     host?: HostAdapter,
   ) {
     this.backend = new WasmWorkerBackend();
-    this.model = new Model(fs, state, setStateCallback, statePersister, host, this.backend);
+    this.model = new Model(
+      fs,
+      state,
+      setStateCallback,
+      statePersister,
+      host,
+      this.backend,
+      this.id,
+    );
   }
 
   /** Kick off the initial compile (delegates to the model). */

@@ -27,6 +27,12 @@ export interface FileOutput {
   elapsedMillis: number;
   formattedElapsedMillis: string;
   formattedOutFileSize: string;
+  // Immutable artifact identity (ADR 0008). `outFile`/`outFileURL` still own the
+  // bytes + viewer URL; these add stable correlation so getArtifact(artifactId)
+  // can return the exact bytes. Transient — never persisted.
+  artifactId: string;
+  operationId: string;
+  sourceRevision: number;
 }
 
 export interface State {
