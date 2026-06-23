@@ -5,9 +5,13 @@ import {
   VIEWER_PROTOCOL_VERSION,
   validateViewerInbound,
   viewerCameraChange,
+  viewerCameraSet,
+  viewerDisposed,
   viewerError,
   viewerGeometryLoaded,
+  viewerGeometrySet,
   viewerReady,
+  viewerSettingsSet,
   type CameraPose,
 } from '../viewer-transport.ts';
 
@@ -132,5 +136,17 @@ describe('outbound builders', () => {
       reason: 'bad',
       opId: 'op9',
     });
+  });
+
+  it('correlated acks echo opId and omit it when absent', () => {
+    expect(viewerGeometrySet('a')).toEqual({ protocolVersion: v, type: 'geometry-set', opId: 'a' });
+    expect(viewerSettingsSet('b')).toEqual({
+      protocolVersion: v,
+      type: 'viewer-settings-set',
+      opId: 'b',
+    });
+    expect(viewerCameraSet('c')).toEqual({ protocolVersion: v, type: 'camera-set', opId: 'c' });
+    expect(viewerDisposed('d')).toEqual({ protocolVersion: v, type: 'disposed', opId: 'd' });
+    expect(viewerGeometrySet()).toEqual({ protocolVersion: v, type: 'geometry-set' });
   });
 });

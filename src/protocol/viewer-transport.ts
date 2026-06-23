@@ -157,3 +157,15 @@ export function viewerError(code: ProtocolErrorCode | string, reason: string, op
     ...(opId !== undefined ? { opId } : {}),
   });
 }
+
+// Correlated terminal acknowledgements — one per inbound command, echoing its
+// opId so a host can await deterministic completion. (The spontaneous
+// `camera-change` and the render-complete `geometry-loaded` stay uncorrelated.)
+function ack(type: string, opId?: string) {
+  return stampOutbound(VIEWER_PROTOCOL_VERSION, type, opId !== undefined ? { opId } : {});
+}
+
+export const viewerGeometrySet = (opId?: string) => ack('geometry-set', opId);
+export const viewerSettingsSet = (opId?: string) => ack('viewer-settings-set', opId);
+export const viewerCameraSet = (opId?: string) => ack('camera-set', opId);
+export const viewerDisposed = (opId?: string) => ack('disposed', opId);
