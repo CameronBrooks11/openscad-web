@@ -71,6 +71,10 @@ type PendingJob = {
   reject: (e: Error) => void;
   streamsCallback: (ps: ProcessStreams) => void;
   priority: number;
+  /** Execution budget (ms) applied once the worker reports the job `started`. */
+  execTimeoutMs: number;
+  /** True once the worker reports this job `started` (now on the execution clock). */
+  started: boolean;
   startTime: number;
   timeoutHandle: ReturnType<typeof setTimeout> | null;
 };
@@ -84,10 +88,45 @@ let _workerGeneration = 0;
 let _firstCompileRequested = false;
 let _firstCompileCompleted = false;
 
-// A compile that has not produced a result within this window means the worker
-// is wedged (callMain is synchronous and cannot be interrupted), so the worker
-// is terminated and recreated rather than left blocking all future work.
-const COMPILE_TIMEOUT_MS = 30_000;
+// Two independent budgets (the worker runs jobs in a serial FIFO queue, so a
+// single submission-to-result timer would charge a job for time it spent merely
+// waiting behind another compile):
+//   - QUEUE: submission → the worker reports `started`. Generous, because a job
+//     can legitimately wait behind earlier compiles; exceeding it means the
+//     worker is wedged before it could even begin this job, so recycle it.
+//   - EXECUTION (per operation): `started` → result. Charged only to the running
+//     compile. A wedged synchronous callMain trips this and recycles the worker.
+const QUEUE_TIMEOUT_MS = 60_000;
+const EXEC_TIMEOUT_MS: Record<JobPriority, number> = {
+  syntax: 20_000,
+  preview: 30_000,
+  render: 60_000,
+  export: 60_000,
+};
+
+// Arm (or re-arm) a job's queue-wait timer. The queue timer is a worker-liveness
+// check: it is reset whenever any job reports `started` (forward progress), so it
+// fires only if the worker makes no progress at all for the window — a wedge —
+// not merely because a job waited a long time behind legitimate compiles.
+function armQueueTimer(id: string, job: PendingJob): void {
+  if (job.timeoutHandle != null) clearTimeout(job.timeoutHandle);
+  job.timeoutHandle = setTimeout(
+    () => failTimedOutJob(id, `Compile timed out after ${QUEUE_TIMEOUT_MS / 1000}s waiting to run`),
+    QUEUE_TIMEOUT_MS,
+  );
+}
+
+// Fail a timed-out job and recycle the (presumed wedged) worker. Shared by the
+// queue-wait and execution timers.
+function failTimedOutJob(id: string, reason: string): void {
+  const stuck = _pending.get(id);
+  if (!stuck) return; // already resolved, cancelled, or superseded
+  clearJobTimers(stuck);
+  _pending.delete(id);
+  stuck.reject(new Error(reason));
+  console.warn(`[runner] ${reason} (compile ${id})`);
+  recycleWorker('Worker recycled after timeout');
+}
 
 function getWorker(): Worker {
   if (!_worker) {
@@ -122,7 +161,28 @@ function handleWorkerMessage(e: MessageEvent<WorkerResponse>, generation: number
   const job = _pending.get(msg.id);
   if (!job) return; // stale response — job was cancelled or timed out
 
-  if (msg.type === 'result') {
+  if (msg.type === 'started') {
+    // The job left the queue and is executing: replace the queue-wait timer with
+    // the execution budget so the compile gets its full allowance regardless of
+    // how long it waited in the queue.
+    job.started = true;
+    if (job.timeoutHandle != null) clearTimeout(job.timeoutHandle);
+    job.timeoutHandle = setTimeout(
+      () =>
+        failTimedOutJob(
+          msg.id,
+          `Compile exceeded its ${job.execTimeoutMs / 1000}s execution budget`,
+        ),
+      job.execTimeoutMs,
+    );
+    // Forward progress: re-arm the queue-wait window for every still-queued job,
+    // so a job merely waiting behind legitimate compiles is never recycled (and
+    // never takes the healthy running compile down with it).
+    for (const [otherId, other] of _pending) {
+      if (other === job || other.started) continue;
+      armQueueTimer(otherId, other);
+    }
+  } else if (msg.type === 'result') {
     const r = msg as CompileResult;
     recordCompilePerf(job, r.perf);
     clearJobTimers(job);
@@ -232,24 +292,19 @@ export function spawnOpenSCAD(
       reject,
       streamsCallback,
       priority: incomingPriority,
+      execTimeoutMs: EXEC_TIMEOUT_MS[priority],
+      started: false,
       startTime: performance.now(),
       timeoutHandle: null,
     };
 
-    // Timeout: the worker has produced no result in time. Because callMain is a
-    // synchronous WASM call, a wedged worker can process neither this job nor any
-    // queued or future request — so reject this job and recycle the worker so the
-    // next request runs on a clean one. recycleWorker() rejects the remaining
-    // pending jobs (which are stuck behind this one on the same worker).
-    job.timeoutHandle = setTimeout(() => {
-      const stuck = _pending.get(id);
-      if (!stuck) return; // already resolved, cancelled, or superseded
-      clearJobTimers(stuck);
-      _pending.delete(id);
-      reject(new Error(`Compile timed out after ${COMPILE_TIMEOUT_MS / 1000}s`));
-      console.warn(`[runner] Compile ${id} timed out after ${COMPILE_TIMEOUT_MS / 1000}s`);
-      recycleWorker('Worker recycled after timeout');
-    }, COMPILE_TIMEOUT_MS);
+    // Queue-wait timeout: the worker has not even reported this job `started`
+    // within the window. Because callMain is a synchronous WASM call, a wedged
+    // worker can process neither this job nor any queued or future request — so
+    // reject this job and recycle the worker. The timer is re-armed to the
+    // execution budget once the worker reports `started` (see handleWorkerMessage),
+    // so queue time is never charged against the compile's own allowance.
+    armQueueTimer(id, job);
 
     _pending.set(id, job);
 

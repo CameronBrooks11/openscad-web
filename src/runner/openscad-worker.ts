@@ -17,6 +17,7 @@ import {
   CompileResult,
   CompileError,
   CompilePerfStats,
+  CompileStarted,
   CompileStdout,
   CompileStderr,
   MergedOutput,
@@ -112,6 +113,11 @@ async function runCompile(msg: CompileRequest): Promise<void> {
   const mergedOutputs: MergedOutput[] = [];
   const start = performance.now();
   const perf: CompilePerfStats = {};
+
+  // The job has left the queue and is now executing: tell the host so it can
+  // switch this job from the queue-wait budget to the execution budget (queue
+  // time must not consume the compile's allowance).
+  self.postMessage({ type: 'started', id } satisfies CompileStarted);
 
   try {
     await ensureWorkerBrowserFSLoaded();
