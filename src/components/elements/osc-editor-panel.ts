@@ -7,6 +7,7 @@ import * as monacoTypes from 'monaco-editor/esm/vs/editor/editor.api';
 // panel does — embed/customizer surfaces never fetch it.
 import 'monaco-editor/min/vs/editor/editor.main.css';
 import { getModel } from '../../state/model-context.ts';
+import { isProjectScopedPath, staleModelPaths } from './editor-model-ownership.ts';
 import { getFS } from '../../state/fs-context.ts';
 import { zipArchives } from '../../fs/zip-archives.generated.ts';
 import { getParentDir, join } from '../../fs/filesystem.ts';
@@ -40,6 +41,9 @@ export class OscEditorPanel extends LitElement {
   private _monaco: typeof monacoTypes | null = null;
   private _ro: ResizeObserver | null = null;
   private _updatingFromState = false;
+  // Project-file models this panel created, keyed by path, so they can be
+  // disposed when their file leaves the project or the panel tears down (#122).
+  private _ownedModels = new Map<string, monacoTypes.editor.ITextModel>();
 
   private _onState = (e: Event) => {
     const st = (e as CustomEvent<State>).detail;
@@ -61,11 +65,16 @@ export class OscEditorPanel extends LitElement {
           } else {
             editorModel.setValue(this._model.source);
           }
+          this._trackModel(st.params.activePath, editorModel);
           this._editor.setModel(editorModel);
         } finally {
           this._updatingFromState = false;
         }
       }
+
+      // A project replace (e.g. ZIP import) swaps the source set; drop the models
+      // for files that are no longer part of the project so they don't leak.
+      this._pruneOwnedModels(st);
 
       const checkerRun = st.lastCheckerRun;
       if (checkerRun) {
@@ -112,6 +121,29 @@ export class OscEditorPanel extends LitElement {
     }
   }
 
+  /** Record a model the panel created for a project file so it can be disposed
+   *  later. Library/non-project models are managed elsewhere and left alone. */
+  private _trackModel(path: string, model: monacoTypes.editor.ITextModel) {
+    if (isProjectScopedPath(path)) this._ownedModels.set(path, model);
+  }
+
+  /** Dispose owned models whose file is no longer in the project (keeping the
+   *  active one, which is on screen). */
+  private _pruneOwnedModels(st: State) {
+    const livePaths = new Set(st.params.sources.map((s) => s.path));
+    for (const path of staleModelPaths(this._ownedModels.keys(), livePaths, st.params.activePath)) {
+      this._ownedModels.get(path)?.dispose();
+      this._ownedModels.delete(path);
+    }
+  }
+
+  /** Dispose every owned model — used on teardown so models don't outlive the
+   *  panel in Monaco's global registry. */
+  private _disposeOwnedModels() {
+    for (const model of this._ownedModels.values()) model.dispose();
+    this._ownedModels.clear();
+  }
+
   private _closeMenu = (e: MouseEvent) => {
     if (!e.composedPath().includes(this)) this._menuOpen = false;
   };
@@ -131,6 +163,9 @@ export class OscEditorPanel extends LitElement {
     this._ro?.disconnect();
     this._editor?.dispose();
     this._editor = null;
+    // Dispose the editor's models after the editor itself; Monaco leaves
+    // externally-created models in its global registry otherwise (#122).
+    this._disposeOwnedModels();
   }
 
   override async firstUpdated() {
@@ -164,6 +199,7 @@ export class OscEditorPanel extends LitElement {
     if (!editorModel) {
       editorModel = monaco.editor.createModel(this._model.source, 'openscad', uri);
     }
+    this._trackModel(st.params.activePath, editorModel);
 
     const editor = monaco.editor.create(container, {
       model: editorModel,
