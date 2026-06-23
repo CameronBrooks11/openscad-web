@@ -182,6 +182,23 @@ describe('Model — render triggering', () => {
     expect(mockRender).not.toHaveBeenCalled();
   });
 
+  it('ignores source writes to a binary local asset (no conversion to text) (#153)', async () => {
+    // Make a binary asset the active source.
+    model.mutate((s) => {
+      s.params.sources = [{ kind: 'local', path: '/home/part.stl' }];
+      s.params.activePath = '/home/part.stl';
+    });
+    mockRender.mockClear();
+
+    model.source = 'cube(1);'; // a stray edit must not stick
+    await nextTicks();
+
+    const active = model.state.params.sources.find((s) => s.path === '/home/part.stl');
+    expect(active?.kind).toBe('local'); // still binary, not converted to text
+    expect('content' in (active ?? {})).toBe(false);
+    expect(mockRender).not.toHaveBeenCalled();
+  });
+
   it('triggers render when activePath changes via openFile', async () => {
     // Pre-populate the second source so openFile can switch to it
     model.mutate((s) => {

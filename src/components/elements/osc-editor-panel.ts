@@ -8,6 +8,7 @@ import * as monacoTypes from 'monaco-editor/esm/vs/editor/editor.api';
 import 'monaco-editor/min/vs/editor/editor.main.css';
 import { getModel } from '../../state/model-context.ts';
 import { isProjectScopedPath, staleModelPaths } from './editor-model-ownership.ts';
+import { isProbablyTextPath } from '../../state/project-source.ts';
 import { getFS } from '../../state/fs-context.ts';
 import { zipArchives } from '../../fs/zip-archives.generated.ts';
 import { getParentDir, join } from '../../fs/filesystem.ts';
@@ -75,6 +76,10 @@ export class OscEditorPanel extends LitElement {
       // A project replace (e.g. ZIP import) swaps the source set; drop the models
       // for files that are no longer part of the project so they don't leak.
       this._pruneOwnedModels(st);
+
+      // A binary asset has no editable text; keep the editor read-only on it so
+      // typing can't convert it to a text source (the model also guards this).
+      this._editor.updateOptions({ readOnly: this._isActiveBinary(st) });
 
       const checkerRun = st.lastCheckerRun;
       if (checkerRun) {
@@ -208,6 +213,7 @@ export class OscEditorPanel extends LitElement {
       automaticLayout: true,
       fontSize: 16,
       lineNumbers: st.view.lineNumbers ? 'on' : 'off',
+      readOnly: this._isActiveBinary(st),
     });
     this._editor = editor;
 
@@ -276,6 +282,13 @@ export class OscEditorPanel extends LitElement {
 
     markPerf('osc:editor-mount-end');
     measurePerf('osc:editor-mount', 'osc:editor-mount-start', 'osc:editor-mount-end');
+  }
+
+  /** Whether the active source is a binary asset (a `local` source with a
+   *  non-text extension) — it has no editable text, so the editor is read-only. */
+  private _isActiveBinary(st: State): boolean {
+    const active = st.params.sources.find((s) => s.path === st.params.activePath);
+    return active?.kind === 'local' && !isProbablyTextPath(active.path);
   }
 
   private _buildFileOptions(): Array<{ path: string; label: string; group: string }> {

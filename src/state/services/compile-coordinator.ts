@@ -148,7 +148,13 @@ export class CompileCoordinator {
     try {
       const checkerRun = await checkSyntax({
         activePath: this.ctx.getState().params.activePath,
-        sources: this.ctx.getState().params.sources,
+        // The param/syntax pass never resolves `import()` (it's lazy, evaluated
+        // only at geometry time), so a binary `local` asset is not needed here —
+        // and sending it content-less makes the worker log "File … does not
+        // exist". Drop binary locals; text/.scad sources are kept (#153).
+        sources: this.ctx
+          .getState()
+          .params.sources.filter((s) => !(s.kind === 'local' && !isProbablyTextPath(s.path))),
         revision: this.ctx.getSourceRevision(),
       })({ now: false });
       if (!isCurrent()) return; // a newer syntax check superseded this one
