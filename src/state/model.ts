@@ -134,8 +134,32 @@ export class Model extends EventTarget {
     this._persistTimer = setTimeout(() => {
       this._persistTimer = null;
       this._persistDeadline = null;
-      void this.flushPersist();
+      void this._persistDurable();
     }, delay);
+  }
+
+  /**
+   * Persist the durable slice immediately, bypassing the debounce. Call this on
+   * tab hide/close (`pagehide` / `visibilitychange`) so an edit made inside the
+   * debounce window isn't lost. Resolves once the write settles.
+   */
+  flushPersist(): Promise<void> {
+    if (this._persistTimer) {
+      clearTimeout(this._persistTimer);
+      this._persistTimer = null;
+    }
+    this._persistDeadline = null;
+    return this._persistDurable();
+  }
+
+  /** Cancel any pending persistence timer. For teardown (tests / re-init); the
+   *  caller should `flushPersist()` first if it wants the latest written. */
+  dispose() {
+    if (this._persistTimer) {
+      clearTimeout(this._persistTimer);
+      this._persistTimer = null;
+    }
+    this._persistDeadline = null;
   }
 
   /**
@@ -143,7 +167,7 @@ export class Model extends EventTarget {
    * mutations write nothing). Serialized so writes can't overlap or reorder; the
    * latest state is coalesced into a single follow-up write, and errors are logged.
    */
-  private async flushPersist() {
+  private async _persistDurable() {
     if (!this.statePersister) return;
     if (this._persistInFlight) {
       this._persistPending = true; // re-check & persist the latest once the current write finishes
@@ -161,7 +185,7 @@ export class Model extends EventTarget {
       this._persistInFlight = false;
       if (this._persistPending) {
         this._persistPending = false;
-        void this.flushPersist();
+        void this._persistDurable();
       }
     }
   }
