@@ -132,6 +132,13 @@ session keeps the app identical until the provider slice. Ordered by risk:
 4. **In-memory State-container split** — extract the session-owned slice
    (sources / active / output / diagnostics / revision) into `OpenScadSession`,
    leaving view/layout/persistence and the persisted shape untouched.
+   **Resolution (2026-06-23): satisfied by current session ownership; no separate
+   State-container split required.** `OpenScadSession` owns the session's `Model`,
+   compile backend, schedulers and artifacts, and the two-session isolation test
+   proves that state and execution do not cross session boundaries. A further
+   structural split would touch the UI and persistence surfaces without adding
+   functional isolation. Revisit only when a concrete consumer requires
+   independently managed state slices.
 5. **Isolation tests** — two independent sessions: a cancel / diagnostic /
    artifact in one must not affect the other; plus one headless complete project
    operation. (Must land with slice 3 — the session is unobservable without it.)
