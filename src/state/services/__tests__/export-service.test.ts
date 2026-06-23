@@ -29,6 +29,7 @@ import { bubbleUpDeepMutations } from '../../deep-mutate.ts';
 import type { HostAdapter } from '../../web-host-adapter.ts';
 import { ExportService } from '../export-service.ts';
 import type { ServiceContext } from '../service-context.ts';
+import { ArtifactStore } from '../../artifact-store.ts';
 
 /**
  * A renderExport mock whose inner thunk returns an AbortablePromise-shaped value
@@ -114,6 +115,7 @@ function makeCtx(partial: Partial<State['params']> & { is2D?: boolean; output?: 
     fs: { readFileSync: vi.fn(), writeFile: vi.fn() },
     backend: { spawn: vi.fn(), cancel: vi.fn(), dispose: vi.fn() },
     sessionId: 'test-session',
+    artifacts: new ArtifactStore(),
   };
   return { ctx, host, getState: () => state };
 }
@@ -170,7 +172,7 @@ describe('ExportService', () => {
   });
 
   it('renders a format conversion for non-passthrough formats (e.g. stl)', async () => {
-    const { ctx, host } = makeCtx({
+    const { ctx, host, getState } = makeCtx({
       is2D: false,
       exportFormat3D: 'stl',
       output: fileOutput('m.off'),
@@ -180,6 +182,10 @@ describe('ExportService', () => {
     // Export runs on its own scheduling priority (preempts background compiles).
     expect(mockRenderExport.mock.calls[0][0].priority).toBe('export');
     expect(host.download).toHaveBeenCalledWith('blob:new', 'model.stl');
+    // The committed export's artifactId resolves in the store to the exact File
+    // (shared id, byte-identical write-through — ADR 0008).
+    const exported = getState().export!;
+    expect(ctx.artifacts.get(exported.artifactId)?.bytes).toBe(exported.outFile);
   });
 
   it('drops a superseded export result instead of clobbering the newer one', async () => {
