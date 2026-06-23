@@ -31,6 +31,13 @@ export class OscGeometryViewer extends LitElement {
   @property({ type: Boolean }) active = true;
   /** Initial camera; applied on mount only — the user drives it afterward. */
   @property({ attribute: false }) camera: CameraState | null = null;
+  /**
+   * When true (default), a thumbnail hash is computed after each load and
+   * included in the `geometry-loaded` event. A host that only displays geometry
+   * (no preview placeholder) can set this false to skip the hashing work; the
+   * `geometry-loaded` event still fires (without a thumbhash) as the load signal.
+   */
+  @property({ type: Boolean }) generateThumbnails = true;
 
   @state() private _toastMessage: string | null = null;
 
@@ -93,6 +100,15 @@ export class OscGeometryViewer extends LitElement {
     if (this._toastTimer) clearTimeout(this._toastTimer);
   }
 
+  /**
+   * Imperatively set the camera pose (e.g. a host command: top view, restore
+   * pose). Applied silently so it does not echo back as a `camera-change` event.
+   * Unlike the mount-only `camera` property, this works at any time.
+   */
+  setCamera(camera: CameraState): void {
+    this._scene?.applyCameraState(camera, { silent: true });
+  }
+
   private async _loadGeometry(offText: string) {
     const scene = this._scene;
     if (!scene) return;
@@ -102,6 +118,12 @@ export class OscGeometryViewer extends LitElement {
       const geometry = offToBufferGeometry(parseOff(offText));
       scene.loadGeometry(geometry, this.color);
       if (this._container) this._container.dataset.geometryLoaded = 'true';
+
+      if (!this.generateThumbnails) {
+        // Geometry is loaded; signal the host without the (skipped) thumbnail.
+        this.dispatchEvent(new CustomEvent('geometry-loaded', { detail: {} }));
+        return;
+      }
 
       // Render the new geometry before capturing so the thumbnail isn't stale.
       scene.renderOnce();
