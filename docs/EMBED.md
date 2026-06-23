@@ -4,6 +4,10 @@ OpenSCAD Web supports a hosted iframe integration via `?mode=embed`.
 
 This document describes the parent/iframe `postMessage` contract, origin-handling expectations, and the recommended integration pattern for storefront or product-page embeds.
 
+> Embedding the standalone viewer in a **VS Code extension** webview instead? See
+> [EMBEDDING-VSCODE.md](./EMBEDDING-VSCODE.md) — the same `viewer.html`, a
+> different (auto-selected) transport binding.
+
 ## Protocol version
 
 The messaging protocol is versioned. The current version is **2** (`EMBED_PROTOCOL_VERSION`).
