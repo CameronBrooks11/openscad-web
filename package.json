@@ -31,7 +31,7 @@
     "start:development": "cross-env NODE_ENV=development vite",
     "start:production": "cross-env PUBLIC_URL=/dist/ npm run build && serve -l 3000 .",
     "start": "npm run start:development",
-    "build": "cross-env NODE_ENV=production vite build && node ./scripts/build-sw.mjs && node ./scripts/verify-production-build.mjs",
+    "build": "cross-env NODE_ENV=production vite build && node ./scripts/build-sw.mjs && node ./scripts/verify-production-build.mjs && node ./scripts/verify-viewer-bundle.mjs",
     "build:publish": "node ./scripts/build-publish.mjs",
     "build:libs": "cross-env LIBS_BUILD_MODE=all node ./scripts/build-assets/cli.mjs",
     "build:libs:clean": "cross-env LIBS_BUILD_MODE=clean node ./scripts/build-assets/cli.mjs",
