@@ -9,9 +9,13 @@ import { isTrustedOrigin } from '../protocol/envelope.ts';
 import {
   validateViewerInbound,
   viewerCameraChange,
+  viewerCameraSet,
+  viewerDisposed,
   viewerError,
   viewerGeometryLoaded,
+  viewerGeometrySet,
   viewerReady,
+  viewerSettingsSet,
 } from '../protocol/viewer-transport.ts';
 import type { CameraState } from '../components/viewer/ThreeScene.ts';
 
@@ -25,9 +29,21 @@ type GeometryViewer = HTMLElement & {
 };
 
 const selfOrigin = window.location.origin;
-// A trusted parent origin may be injected via ?parentOrigin=… (default: same
-// origin). The wildcard is never trusted.
-const parentOrigin = new URLSearchParams(window.location.search).get('parentOrigin');
+// A trusted parent origin may be injected via ?parentOrigin=…; parse it as a URL
+// and keep only the origin, rejecting malformed values and unsupported schemes
+// (and never the wildcard). A bad value falls back to same-origin-only trust.
+function canonicalOrigin(raw: string | null): string | null {
+  if (raw == null) return null;
+  try {
+    const url = new URL(raw);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.origin : null;
+  } catch {
+    return null;
+  }
+}
+const parentOrigin = canonicalOrigin(
+  new URLSearchParams(window.location.search).get('parentOrigin'),
+);
 const targetOrigin = parentOrigin ?? selfOrigin;
 // The viewer is meant to be embedded (iframe / webview): the host is the parent
 // frame. When opened top-level there is no host — don't post to ourselves (that
@@ -59,6 +75,9 @@ viewer.addEventListener('viewer-error', (e) => {
 });
 
 const onMessage = (event: MessageEvent): void => {
+  // Trust both the origin AND the sender window: a same-origin sibling frame
+  // must not be able to drive the viewer. When embedded, only the host frame.
+  if (host !== null && event.source !== host) return;
   if (!isTrustedOrigin(event.origin, parentOrigin, selfOrigin)) return;
   const result = validateViewerInbound(event.data);
   if (!result.ok) {
@@ -69,20 +88,24 @@ const onMessage = (event: MessageEvent): void => {
   switch (msg.type) {
     case 'setGeometry':
       viewer.offText = msg.offText;
+      post(viewerGeometrySet(msg.opId));
       break;
     case 'setViewerSettings':
       if (msg.color !== undefined) viewer.color = msg.color;
       if (msg.showAxes !== undefined) viewer.showAxes = msg.showAxes;
       if (msg.active !== undefined) viewer.active = msg.active;
+      post(viewerSettingsSet(msg.opId));
       break;
     case 'setCamera':
       viewer.setCamera(msg.camera);
+      post(viewerCameraSet(msg.opId));
       break;
     case 'dispose':
       // Tear down fully: remove the element (disposes the GL scene) and stop
       // listening, so no further messages are silently swallowed.
       viewer.remove();
       window.removeEventListener('message', onMessage);
+      post(viewerDisposed(msg.opId));
       break;
   }
 };

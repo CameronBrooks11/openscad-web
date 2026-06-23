@@ -85,7 +85,12 @@ test('viewer-only entry loads geometry over the host transport', async ({ page }
     opId: 'op-1',
   });
 
-  // The viewer reports geometry-loaded back to the host.
+  // The command is acknowledged (correlated by opId) and the render completes.
+  await page.waitForFunction(
+    () => window.__viewerMessages?.some((m) => m?.type === 'geometry-set' && m?.opId === 'op-1'),
+    null,
+    { timeout: 10_000 },
+  );
   await page.waitForFunction(
     () => window.__viewerMessages?.some((m) => m?.type === 'geometry-loaded'),
     null,
@@ -93,6 +98,41 @@ test('viewer-only entry loads geometry over the host transport', async ({ page }
   );
 
   // The viewer never echoed an error for the valid input.
+  const hadError = await page.evaluate(() =>
+    window.__viewerMessages?.some((m) => m?.type === 'error'),
+  );
+  expect(hadError).toBeFalsy();
+});
+
+test('a setCamera sent immediately on ready is not dropped (race with mount)', async ({ page }) => {
+  await embedViewer(page);
+
+  // Sent right after `ready`, before the geometry/scene is necessarily built.
+  await postToViewer(page, {
+    protocolVersion: 1,
+    type: 'setCamera',
+    camera: { position: [10, 10, 10], target: [0, 0, 0], zoom: 1 },
+    opId: 'cam-1',
+  });
+  await postToViewer(page, {
+    protocolVersion: 1,
+    type: 'setGeometry',
+    offText: TETRAHEDRON_OFF,
+    opId: 'geo-1',
+  });
+
+  // The camera command is acknowledged (buffered then applied, not dropped) and
+  // geometry still loads — no error.
+  await page.waitForFunction(
+    () => window.__viewerMessages?.some((m) => m?.type === 'camera-set' && m?.opId === 'cam-1'),
+    null,
+    { timeout: 10_000 },
+  );
+  await page.waitForFunction(
+    () => window.__viewerMessages?.some((m) => m?.type === 'geometry-loaded'),
+    null,
+    { timeout: 30_000 },
+  );
   const hadError = await page.evaluate(() =>
     window.__viewerMessages?.some((m) => m?.type === 'error'),
   );
