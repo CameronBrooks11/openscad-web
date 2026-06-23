@@ -118,10 +118,11 @@ describe('outbound builders', () => {
       type: 'ready',
       capabilities: ['view'],
     });
-    expect(viewerGeometryLoaded('hash')).toEqual({
+    expect(viewerGeometryLoaded('hash', 'op7')).toEqual({
       protocolVersion: v,
       type: 'geometry-loaded',
       thumbhash: 'hash',
+      opId: 'op7',
     });
     expect(viewerGeometryLoaded()).toEqual({ protocolVersion: v, type: 'geometry-loaded' });
     expect(viewerCameraChange(pose)).toEqual({

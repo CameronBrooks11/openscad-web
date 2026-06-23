@@ -140,9 +140,10 @@ export function viewerReady(capabilities: string[]) {
   return stampOutbound(VIEWER_PROTOCOL_VERSION, 'ready', { capabilities });
 }
 
-export function viewerGeometryLoaded(thumbhash?: string) {
+export function viewerGeometryLoaded(thumbhash?: string, opId?: string) {
   return stampOutbound(VIEWER_PROTOCOL_VERSION, 'geometry-loaded', {
     ...(thumbhash !== undefined ? { thumbhash } : {}),
+    ...(opId !== undefined ? { opId } : {}),
   });
 }
 
@@ -158,9 +159,11 @@ export function viewerError(code: ProtocolErrorCode | string, reason: string, op
   });
 }
 
-// Correlated terminal acknowledgements — one per inbound command, echoing its
-// opId so a host can await deterministic completion. (The spontaneous
-// `camera-change` and the render-complete `geometry-loaded` stay uncorrelated.)
+// Correlated acknowledgements that a command was applied, echoing its opId.
+// `viewer-settings-set`, `camera-set`, and `disposed` are terminal (those
+// commands apply synchronously). `geometry-set` only confirms the geometry was
+// *accepted* — its render outcome arrives later as a `geometry-loaded` or an
+// `error`, correlated by the same opId.
 function ack(type: string, opId?: string) {
   return stampOutbound(VIEWER_PROTOCOL_VERSION, type, opId !== undefined ? { opId } : {});
 }
