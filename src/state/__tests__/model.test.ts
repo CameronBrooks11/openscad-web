@@ -11,33 +11,35 @@ import { createOperationFailure } from '../../user-facing-errors.ts';
 // Module mocks — must be declared before any imports
 // ---------------------------------------------------------------------------
 
-// Mock the heavy runner actions so no Worker / WASM is touched.
-// checkSyntax and render are "turnable" factory functions: f(args) => g({now}) => Promise
-vi.mock('../../runner/actions.ts', () => {
-  const makeDelayable = (resolvedValue: unknown) =>
-    vi.fn().mockReturnValue(vi.fn().mockResolvedValue(resolvedValue));
-  return {
-    checkSyntax: makeDelayable({ logText: '', markers: [], parameterSet: undefined }),
-    render: makeDelayable({
-      outFile: new File(['content'], 'test.glb', { type: 'model/gltf-binary' }),
-      logText: '',
-      markers: [],
-      elapsedMillis: 0,
-    }),
-  };
-});
+// Mock the heavy runner actions so no Worker / WASM is touched. The schedulers
+// are created per service via factories now; each factory returns the same
+// singleton handle so the single Model under test routes all calls through it.
+// The handles are `mock`-prefixed so the hoisted vi.mock factory may close over
+// them, and the tests inspect them directly (no import-from-actions needed).
+const mockCheckSyntax = vi
+  .fn()
+  .mockReturnValue(
+    vi.fn().mockResolvedValue({ logText: '', markers: [], parameterSet: undefined }),
+  );
+const mockRender = vi.fn().mockReturnValue(
+  vi.fn().mockResolvedValue({
+    outFile: new File(['content'], 'test.glb', { type: 'model/gltf-binary' }),
+    logText: '',
+    markers: [],
+    elapsedMillis: 0,
+  }),
+);
+vi.mock('../../runner/actions.ts', () => ({
+  createSyntaxDelayable: () => mockCheckSyntax,
+  createRenderDelayable: () => mockRender,
+  // The Model also constructs ExportService, which creates its own export
+  // scheduler; a no-op delayable is enough (these tests don't drive export).
+  createRenderExportDelayable: () => vi.fn().mockReturnValue(vi.fn().mockResolvedValue({})),
+}));
 
 // Mock heavy IO that model.render() uses after a successful compile (avoided
 // because the mock render resolves immediately but we still need the symbols).
 vi.mock('../../io/import_off.ts', () => ({ parseOff: vi.fn() }));
-
-// ---------------------------------------------------------------------------
-// Import mocked actions so we can inspect call counts.
-// ---------------------------------------------------------------------------
-import { checkSyntax as _mockCheckSyntax, render as _mockRender } from '../../runner/actions.ts';
-
-const mockCheckSyntax = _mockCheckSyntax as ReturnType<typeof vi.fn>;
-const mockRender = _mockRender as ReturnType<typeof vi.fn>;
 
 // ---------------------------------------------------------------------------
 // Helpers

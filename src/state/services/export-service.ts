@@ -2,7 +2,7 @@ import chroma from 'chroma-js';
 
 import { export3MF } from '../../io/export_3mf.ts';
 import { parseOff } from '../../io/import_off.ts';
-import { renderExport, type RenderOutput } from '../../runner/actions.ts';
+import { createRenderExportDelayable, type RenderOutput } from '../../runner/actions.ts';
 import { isExpectedJobCancellation, type ProcessStreams } from '../../runner/openscad-runner.ts';
 import { isUserFacingOperationError } from '../../user-facing-errors.ts';
 import { formatBytes, formatMillis, type AbortablePromise } from '../../utils.ts';
@@ -23,6 +23,11 @@ export class ExportService {
   // the 3MF path which does not run through the delayable) must not clobber the
   // newer one's result/download when its async work finally settles.
   private _exportSeq = 0;
+
+  // This service's own export render scheduler (per session, ADR 0007), kept
+  // distinct from the coordinator's render delayable so an auto-preview never
+  // cancels an in-flight export.
+  private readonly _renderExport = createRenderExportDelayable();
 
   // The in-flight format-conversion render job, if any. The export-token logic
   // stops a superseded export from committing a stale result, but the branches
@@ -137,7 +142,7 @@ export class ExportService {
           markers: [],
         };
       } else {
-        const job = renderExport({
+        const job = this._renderExport({
           mountArchives: false,
           scadPath: '/export.scad',
           sources: [

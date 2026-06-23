@@ -27,7 +27,7 @@ type SyntaxCheckOutput = {
   parameterSet?: ParameterSet;
   revision?: number;
 };
-export const checkSyntax = turnIntoDelayableExecution(syntaxDelay, (sargs: SyntaxCheckArgs) => {
+const syntaxJob = (sargs: SyntaxCheckArgs) => {
   const { activePath, sources, revision } = sargs;
 
   const outFile = 'out.json';
@@ -82,7 +82,11 @@ export const checkSyntax = turnIntoDelayableExecution(syntaxDelay, (sargs: Synta
     })();
     return () => job.kill();
   });
-});
+};
+
+/** A fresh syntax-check scheduler (own debounce + supersession). One per session
+ *  so independent sessions don't cancel each other's checks (ADR 0007). */
+export const createSyntaxDelayable = () => turnIntoDelayableExecution(syntaxDelay, syntaxJob);
 
 const renderDelay = 1000;
 export type RenderOutput = {
@@ -306,12 +310,13 @@ const renderJob = (renderArgs: RenderArgs) => {
   });
 };
 
-// Preview and full render share one delayable instance: they debounce and
-// supersede each other (only one geometry compile should be live at a time).
-export const render = turnIntoDelayableExecution(renderDelay, renderJob);
+// Preview and full render share ONE delayable instance per coordinator: they
+// debounce and supersede each other (only one geometry compile should be live at
+// a time). One per session (ADR 0007).
+export const createRenderDelayable = () => turnIntoDelayableExecution(renderDelay, renderJob);
 
 // Export gets its OWN delayable instance so it does not share the supersession
 // signal with preview/render — an auto-preview must not cancel an in-flight
 // export, nor an export an in-flight preview. Callers pass `priority: 'export'`
 // for host-side scheduling precedence.
-export const renderExport = turnIntoDelayableExecution(renderDelay, renderJob);
+export const createRenderExportDelayable = () => turnIntoDelayableExecution(renderDelay, renderJob);

@@ -2,10 +2,17 @@ import type { State } from '../state/app-state.ts';
 import { Model } from '../state/model.ts';
 import { defaultModelColor, defaultSourcePath } from '../state/initial-state.ts';
 
-vi.mock('../runner/actions.ts', () => ({
-  checkSyntax: vi.fn().mockReturnValue(vi.fn().mockRejectedValue(new Error('mock runner failure'))),
-  render: vi.fn(),
-}));
+vi.mock('../runner/actions.ts', () => {
+  const checkSyntax = vi
+    .fn()
+    .mockReturnValue(vi.fn().mockRejectedValue(new Error('mock runner failure')));
+  const render = vi.fn();
+  return {
+    createSyntaxDelayable: () => checkSyntax,
+    createRenderDelayable: () => render,
+    createRenderExportDelayable: () => vi.fn().mockReturnValue(vi.fn().mockResolvedValue({})),
+  };
+});
 
 describe('Model.checkSyntax', () => {
   const makeMockFs = () => ({

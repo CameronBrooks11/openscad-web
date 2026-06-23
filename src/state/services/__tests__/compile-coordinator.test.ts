@@ -10,8 +10,9 @@ const renderImpl = vi.fn();
 const checkSyntaxImpl = vi.fn();
 
 vi.mock('../../../runner/actions.ts', () => ({
-  render: (renderArgs: unknown) => (opts: unknown) => renderImpl(renderArgs, opts),
-  checkSyntax: (args: unknown) => (opts: unknown) => checkSyntaxImpl(args, opts),
+  createRenderDelayable: () => (renderArgs: unknown) => (opts: unknown) =>
+    renderImpl(renderArgs, opts),
+  createSyntaxDelayable: () => (args: unknown) => (opts: unknown) => checkSyntaxImpl(args, opts),
 }));
 
 function makeContext(revision: number) {

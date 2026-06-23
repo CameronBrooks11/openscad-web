@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Mock the heavy compile/IO deps the format-conversion + 3MF paths touch.
+// Mock the heavy compile/IO deps the format-conversion + 3MF paths touch. The
+// export render scheduler is now created per ExportService via a factory; mock
+// the factory so it always returns the same handle the tests configure/assert on.
+const mockRenderExport = vi.fn().mockReturnValue(
+  vi.fn().mockResolvedValue({
+    outFile: new File(['converted'], 'model.stl'),
+    logText: '',
+    markers: [],
+    elapsedMillis: 1,
+  }),
+);
 vi.mock('../../../runner/actions.ts', () => ({
-  renderExport: vi.fn().mockReturnValue(
-    vi.fn().mockResolvedValue({
-      outFile: new File(['converted'], 'model.stl'),
-      logText: '',
-      markers: [],
-      elapsedMillis: 1,
-    }),
-  ),
+  createRenderExportDelayable: () => mockRenderExport,
 }));
 vi.mock('../../../io/import_off.ts', () => ({ parseOff: vi.fn(() => ({})) }));
 vi.mock('../../../io/export_3mf.ts', () => ({
@@ -20,14 +23,12 @@ vi.mock('../../../io/export_glb.ts', () => ({
 }));
 vi.mock('chroma-js', () => ({ default: vi.fn((c: string) => c) }));
 
-import { renderExport as _mockRenderExport, type RenderOutput } from '../../../runner/actions.ts';
+import { type RenderOutput } from '../../../runner/actions.ts';
 import type { State } from '../../app-state.ts';
 import { bubbleUpDeepMutations } from '../../deep-mutate.ts';
 import type { HostAdapter } from '../../web-host-adapter.ts';
 import { ExportService } from '../export-service.ts';
 import type { ServiceContext } from '../service-context.ts';
-
-const mockRenderExport = _mockRenderExport as ReturnType<typeof vi.fn>;
 
 /**
  * A renderExport mock whose inner thunk returns an AbortablePromise-shaped value
