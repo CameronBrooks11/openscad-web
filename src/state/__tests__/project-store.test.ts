@@ -128,3 +128,146 @@ describe('ProjectStore (#57)', () => {
   // type-check rejects jsdom's Uint8Array, so a buildZip round-trip isn't unit-
   // testable here without a real browser.
 });
+
+describe('ProjectStore — multi-file project contract (#123)', () => {
+  it('setProject canonicalizes relative paths, writes text, and picks main.scad', () => {
+    const { fs, written } = makeFs();
+    const store = new ProjectStore(fs);
+
+    const next = store.setProject([
+      { path: 'a.scad', content: 'cube(1);' },
+      { path: 'main.scad', content: 'use <a.scad>' },
+    ]);
+
+    expect(next.sources).toEqual([
+      { kind: 'text', path: '/home/a.scad', content: 'cube(1);' },
+      { kind: 'text', path: '/home/main.scad', content: 'use <a.scad>' },
+    ]);
+    expect(next.activePath).toBe('/home/main.scad'); // main.scad wins the entry rule
+    expect(written['/home/a.scad']).toBe('cube(1);');
+    expect(written['/home/main.scad']).toBe('use <a.scad>');
+  });
+
+  it('setProject honors an explicit entryPoint and falls back when it is unknown', () => {
+    const store = new ProjectStore(makeFs().fs);
+    const files = [
+      { path: 'a.scad', content: 'A' },
+      { path: 'b.scad', content: 'B' },
+    ];
+    expect(store.setProject(files, 'b.scad').activePath).toBe('/home/b.scad');
+    // Unknown entryPoint → the rule (first .scad, since no main.scad).
+    expect(store.setProject(files, 'nope.scad').activePath).toBe('/home/a.scad');
+  });
+
+  it('setProject rejects an unsafe path before writing anything (atomic)', () => {
+    const { fs, written } = makeFs();
+    const store = new ProjectStore(fs);
+    expect(() =>
+      store.setProject([
+        { path: 'ok.scad', content: 'A' },
+        { path: '../escape.scad', content: 'B' },
+      ]),
+    ).toThrow();
+    expect(written['/home/ok.scad']).toBeUndefined(); // nothing written
+  });
+
+  it('setProject rejects an unsafe entryPoint before writing anything (atomic)', () => {
+    const { fs, written } = makeFs();
+    const store = new ProjectStore(fs);
+    expect(() => store.setProject([{ path: 'ok.scad', content: 'A' }], '../escape.scad')).toThrow();
+    expect(written['/home/ok.scad']).toBeUndefined(); // entryPoint validated before writes
+  });
+
+  it('setProject accepts an already-/home/-prefixed entryPoint (idempotent canonicalization)', () => {
+    const store = new ProjectStore(makeFs().fs);
+    const next = store.setProject(
+      [
+        { path: '/home/a.scad', content: 'A' },
+        { path: 'b.scad', content: 'B' },
+      ],
+      '/home/b.scad',
+    );
+    expect(next.sources.map((s) => s.path)).toEqual(['/home/a.scad', '/home/b.scad']);
+    expect(next.activePath).toBe('/home/b.scad');
+  });
+
+  it('setProject with no files yields one fresh empty file (always-an-active-file)', () => {
+    const next = new ProjectStore(makeFs().fs).setProject([]);
+    expect(next.sources).toHaveLength(1);
+    expect(next.activePath).toBe('/home/untitled.scad');
+    expect(contentOf(next.sources[0])).toBe('');
+  });
+
+  it('updateFile replaces an existing file and appends a new one, active unchanged', () => {
+    const store = new ProjectStore(makeFs().fs);
+    const sources: SerializableSource[] = [
+      { kind: 'text', path: '/home/main.scad', content: 'M' },
+      { kind: 'text', path: '/home/a.scad', content: 'A' },
+    ];
+    const replaced = store.updateFile(sources, 'a.scad', 'A2');
+    expect(contentOf(replaced.find((s) => s.path === '/home/a.scad')!)).toBe('A2');
+    expect(replaced).toHaveLength(2);
+
+    const appended = store.updateFile(sources, 'b.scad', 'B');
+    expect(appended).toHaveLength(3);
+    expect(appended.find((s) => s.path === '/home/b.scad')).toEqual({
+      kind: 'text',
+      path: '/home/b.scad',
+      content: 'B',
+    });
+  });
+
+  it('removeFile re-points the entry deterministically when the active file goes', () => {
+    const store = new ProjectStore(makeFs().fs);
+    const sources: SerializableSource[] = [
+      { kind: 'text', path: '/home/a.scad', content: 'A' },
+      { kind: 'text', path: '/home/main.scad', content: 'M' },
+    ];
+    // Removing the active a.scad re-points to main.scad (the rule).
+    const next = store.removeFile(sources, '/home/a.scad', 'a.scad');
+    expect(next.sources.map((s) => s.path)).toEqual(['/home/main.scad']);
+    expect(next.activePath).toBe('/home/main.scad');
+
+    // Removing a non-active file keeps the active path.
+    const keep = store.removeFile(sources, '/home/main.scad', 'a.scad');
+    expect(keep.activePath).toBe('/home/main.scad');
+  });
+
+  it('updateFile refuses to overwrite a binary local asset with text', () => {
+    const { fs, written } = makeFs();
+    const store = new ProjectStore(fs);
+    const sources: SerializableSource[] = [
+      { kind: 'text', path: '/home/main.scad', content: 'M' },
+      { kind: 'local', path: '/home/logo.png' },
+    ];
+    expect(() => store.updateFile(sources, 'logo.png', 'oops')).toThrow();
+    expect(written['/home/logo.png']).toBeUndefined(); // bytes not clobbered
+  });
+
+  it('removeFile re-points to the first remaining file when no .scad survives', () => {
+    const store = new ProjectStore(makeFs().fs);
+    const sources: SerializableSource[] = [
+      { kind: 'text', path: '/home/a.scad', content: 'A' },
+      { kind: 'text', path: '/home/notes.txt', content: 'N' },
+    ];
+    const next = store.removeFile(sources, '/home/a.scad', 'a.scad');
+    expect(next.sources.map((s) => s.path)).toEqual(['/home/notes.txt']);
+    expect(next.activePath).toBe('/home/notes.txt'); // fell through to paths[0]
+  });
+
+  it('removeFile of the last file yields a fresh empty file', () => {
+    const store = new ProjectStore(makeFs().fs);
+    const sources: SerializableSource[] = [{ kind: 'text', path: '/home/only.scad', content: 'X' }];
+    const next = store.removeFile(sources, '/home/only.scad', 'only.scad');
+    expect(next.sources).toHaveLength(1);
+    expect(next.activePath).toBe('/home/untitled.scad');
+    expect(contentOf(next.sources[0])).toBe('');
+  });
+
+  it('removeFile of an absent path is a no-op (same array reference)', () => {
+    const store = new ProjectStore(makeFs().fs);
+    const sources: SerializableSource[] = [{ kind: 'text', path: '/home/a.scad', content: 'A' }];
+    const next = store.removeFile(sources, '/home/a.scad', 'ghost.scad');
+    expect(next.sources).toBe(sources); // unchanged reference → caller no-ops
+  });
+});

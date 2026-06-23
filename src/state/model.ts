@@ -12,7 +12,8 @@ import { bubbleUpDeepMutations } from './deep-mutate.ts';
 import { openLocalFile, saveViaHandle } from '../fs/filesystem.ts';
 import { ProjectFileSystem } from '../fs/project-filesystem.ts';
 import { contentOf, isProbablyTextPath } from './project-source.ts';
-import { ProjectStore } from './project-store.ts';
+import { ProjectStore, type ProjectFile } from './project-store.ts';
+import { canonicalProjectHomePath } from '../fs/project-path.ts';
 import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
 import { WasmWorkerBackend, type CompileBackend } from '../runner/openscad-runner.ts';
 import { newId } from '../runner/compile-contract.ts';
@@ -335,6 +336,107 @@ export class Model extends EventTarget {
       s.error = undefined;
       s.errorDetails = undefined;
     });
+  }
+
+  // --- Multi-file project contract (#123) -----------------------------------
+  // Typed, host-drivable project mutations over the same `sources`/`activePath`
+  // state the editor uses. Each funnels through one `mutate` (one revision bump,
+  // one 'state' event) then drives `processSource`, so the existing supersession
+  // + revision-stale-drop machinery keeps a superseded in-flight compile from
+  // clobbering the result. Text files only for now (binary is deferred — #121).
+
+  /** Replace the whole project with `files`, selecting `entryPoint` (or the
+   *  main.scad→first-.scad→first rule) as the active file. */
+  setProject(files: ProjectFile[], entryPoint?: string): void {
+    try {
+      const next = this.projectStore.setProject(files, entryPoint);
+      // None of these sources were FSAPI-opened; drop retained handles so a
+      // colliding path can't write back to a user's original on-disk file.
+      this.fsapiHandles.clear();
+      this.mutate((s) => {
+        s.params.sources = next.sources;
+        s.params.activePath = next.activePath;
+        s.lastCheckerRun = undefined;
+        s.output = undefined;
+        s.export = undefined;
+        s.preview = undefined;
+        s.currentRunLogs = undefined;
+        s.error = undefined;
+        s.errorDetails = undefined;
+        s.is2D = undefined;
+      });
+      this.compile.processSource();
+    } catch (err) {
+      this.mutate((s) => applyUserFacingError(s, err, 'model'));
+    }
+  }
+
+  /** Add or replace one text file's content (active file unchanged). */
+  updateFile(path: string, content: string): void {
+    try {
+      const sources = this.projectStore.updateFile(this.state.params.sources, path, content);
+      if (this.mutate((s) => (s.params.sources = sources))) {
+        this.compile.processSource();
+      }
+    } catch (err) {
+      this.mutate((s) => applyUserFacingError(s, err, 'model'));
+    }
+  }
+
+  /** Remove one source; re-point the entry deterministically if it was active. */
+  removeFile(path: string): void {
+    try {
+      const next = this.projectStore.removeFile(
+        this.state.params.sources,
+        this.state.params.activePath,
+        path,
+      );
+      if (next.sources === this.state.params.sources) return; // path not present — no-op
+      this.fsapiHandles.delete(canonicalProjectHomePath(path));
+      const entryChanged = next.activePath !== this.state.params.activePath;
+      this.mutate((s) => {
+        s.params.sources = next.sources;
+        s.params.activePath = next.activePath;
+        if (entryChanged) {
+          s.lastCheckerRun = undefined;
+          s.output = undefined;
+          s.export = undefined;
+          s.preview = undefined;
+          s.currentRunLogs = undefined;
+          s.error = undefined;
+          s.errorDetails = undefined;
+          s.is2D = undefined;
+        }
+      });
+      this.compile.processSource();
+    } catch (err) {
+      this.mutate((s) => applyUserFacingError(s, err, 'model'));
+    }
+  }
+
+  /** Change which file compiles (the entry point). No-op if unknown/already active. */
+  setEntryPoint(path: string): void {
+    let target: string;
+    try {
+      target = canonicalProjectHomePath(path);
+    } catch (err) {
+      this.mutate((s) => applyUserFacingError(s, err, 'model'));
+      return;
+    }
+    if (!this.state.params.sources.some((s) => s.path === target)) return; // unknown
+    if (target === this.state.params.activePath) return; // already active
+    this.mutate((s) => {
+      s.params.activePath = target;
+      s.lastCheckerRun = undefined;
+      s.output = undefined;
+      s.export = undefined;
+      s.preview = undefined;
+      s.currentRunLogs = undefined;
+      s.error = undefined;
+      s.errorDetails = undefined;
+      s.is2D = undefined;
+    });
+    this.compile.processSource();
   }
 
   /** Extracts a ZIP archive into /home/ and activates the entry .scad. */
