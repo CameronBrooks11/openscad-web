@@ -271,6 +271,12 @@ export class ThreeScene {
     };
   }
 
+  /** Set the scene background (any Three.js color representation). */
+  setBackground(color: THREE.ColorRepresentation): void {
+    this.scene.background = new THREE.Color(color);
+    this.requestRender();
+  }
+
   applyCameraState(saved: CameraState, opts: { silent?: boolean } = {}): void {
     // controls.update() dispatches 'change' synchronously; the flag is read by
     // that handler to skip echoing this programmatic update back to the host.
