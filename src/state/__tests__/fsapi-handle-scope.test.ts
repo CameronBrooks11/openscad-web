@@ -26,15 +26,8 @@ vi.mock('../../io/import_off.ts', () => ({ parseOff: vi.fn() }));
 // Control archive contents without depending on real JSZip in jsdom.
 vi.mock('jszip', () => ({ default: { loadAsync: vi.fn() } }));
 import JSZip from 'jszip';
+import { fakeZip } from './fake-zip.ts';
 const mockLoadAsync = (JSZip as unknown as { loadAsync: ReturnType<typeof vi.fn> }).loadAsync;
-
-function fakeZip(entries: Record<string, string>) {
-  const files: Record<string, { dir: boolean; async: () => Promise<string> }> = {};
-  for (const [name, content] of Object.entries(entries)) {
-    files[name] = { dir: false, async: () => Promise.resolve(content) };
-  }
-  return { files };
-}
 
 function makeFs() {
   return {

@@ -9,6 +9,12 @@ export const MAX_PROJECT_PATH_LENGTH = 1024;
 export const MAX_PROJECT_FILE_COUNT = 2000;
 /** Maximum total uncompressed bytes accepted from one imported archive (64 MiB). */
 export const MAX_PROJECT_TOTAL_BYTES = 64 * 1024 * 1024;
+/**
+ * Maximum *compressed* bytes accepted as an imported archive (64 MiB). Rejects an
+ * absurdly large archive up front, before JSZip parses it. The uncompressed total
+ * is separately bounded per-entry while decompressing (zip-bomb defense).
+ */
+export const MAX_COMPRESSED_ZIP_BYTES = 64 * 1024 * 1024;
 
 export class ProjectPathError extends Error {
   constructor(message: string) {

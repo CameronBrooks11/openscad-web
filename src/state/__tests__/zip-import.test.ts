@@ -4,7 +4,11 @@
 import { Model } from '../model.ts';
 import { State } from '../app-state.ts';
 import { defaultSourcePath, defaultModelColor } from '../initial-state.ts';
-import { MAX_PROJECT_FILE_COUNT, MAX_PROJECT_TOTAL_BYTES } from '../../fs/project-path.ts';
+import {
+  MAX_COMPRESSED_ZIP_BYTES,
+  MAX_PROJECT_FILE_COUNT,
+  MAX_PROJECT_TOTAL_BYTES,
+} from '../../fs/project-path.ts';
 
 vi.mock('../../runner/actions.ts', () => {
   const makeDelayable = (resolvedValue: unknown) =>
@@ -25,15 +29,8 @@ vi.mock('../../io/import_off.ts', () => ({ parseOff: vi.fn() }));
 // name handling.
 vi.mock('jszip', () => ({ default: { loadAsync: vi.fn() } }));
 import JSZip from 'jszip';
+import { fakeErrorEntry, fakeZip } from './fake-zip.ts';
 const mockLoadAsync = (JSZip as unknown as { loadAsync: ReturnType<typeof vi.fn> }).loadAsync;
-
-function fakeZip(entries: Record<string, string>) {
-  const files: Record<string, { dir: boolean; async: () => Promise<string> }> = {};
-  for (const [name, content] of Object.entries(entries)) {
-    files[name] = { dir: false, async: () => Promise.resolve(content) };
-  }
-  return { files };
-}
 
 function makeMockFs() {
   return {
@@ -160,10 +157,54 @@ describe('importProjectZip validation (#50)', () => {
     expect(model.state.error).toBeTruthy();
   });
 
+  it('rejects an archive whose compressed size exceeds the cap, before parsing', async () => {
+    await model.importProjectZip(new ArrayBuffer(MAX_COMPRESSED_ZIP_BYTES + 1));
+
+    // The cap is checked up front, so JSZip is never asked to parse the buffer.
+    expect(mockLoadAsync).not.toHaveBeenCalled();
+    expect(mockFs.writeFile).not.toHaveBeenCalled();
+    expect(model.state.error).toBeTruthy();
+  });
+
   it('rejects an archive that exceeds the uncompressed size limit', async () => {
     mockLoadAsync.mockResolvedValue(
       fakeZip({ 'big.scad': 'x'.repeat(MAX_PROJECT_TOTAL_BYTES + 1) }),
     );
+
+    await model.importProjectZip(new ArrayBuffer(0));
+
+    expect(mockFs.writeFile).not.toHaveBeenCalled();
+    expect(model.state.error).toBeTruthy();
+  });
+
+  it('aborts when entries cumulatively exceed the uncompressed limit', async () => {
+    // Each entry fits on its own, but together they blow the budget — the second
+    // entry's stream aborts as the running total crosses the limit.
+    const half = 'x'.repeat(Math.ceil(MAX_PROJECT_TOTAL_BYTES / 2) + 1);
+    mockLoadAsync.mockResolvedValue(fakeZip({ 'a.scad': half, 'b.scad': half }));
+
+    await model.importProjectZip(new ArrayBuffer(0));
+
+    // The whole import is rejected before the write phase, so nothing is written.
+    expect(mockFs.writeFile).not.toHaveBeenCalled();
+    expect(model.state.error).toBeTruthy();
+  });
+
+  it('rejects when an entry fails to decompress (stream error)', async () => {
+    mockLoadAsync.mockResolvedValue({
+      files: { 'bad.scad': fakeErrorEntry(new Error('corrupt entry')) },
+    });
+
+    await model.importProjectZip(new ArrayBuffer(0));
+
+    expect(mockFs.writeFile).not.toHaveBeenCalled();
+    expect(model.state.error).toBeTruthy();
+  });
+
+  it('wraps a non-Error stream failure into an Error', async () => {
+    mockLoadAsync.mockResolvedValue({
+      files: { 'bad.scad': fakeErrorEntry('plain string failure') },
+    });
 
     await model.importProjectZip(new ArrayBuffer(0));
 

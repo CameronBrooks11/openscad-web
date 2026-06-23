@@ -111,17 +111,49 @@ export async function fetchResolvedExternalSourceBytes(
     throw new Error(`HTTP ${response.status} while fetching source.`);
   }
 
+  const tooLarge = () => new Error(`Source file is too large (> ${maxBytes / 1024 / 1024} MB).`);
+
   const contentLength = response.headers.get('content-length');
   if (contentLength && Number(contentLength) > maxBytes) {
-    throw new Error(`Source file is too large (> ${maxBytes / 1024 / 1024} MB).`);
+    throw tooLarge();
   }
 
-  const buffer = await response.arrayBuffer();
-  if (buffer.byteLength > maxBytes) {
-    throw new Error(`Source file is too large (> ${maxBytes / 1024 / 1024} MB).`);
+  // Stream the body and abort as soon as the cumulative size exceeds the budget,
+  // so a response with no (or a lying) content-length can't buffer unboundedly
+  // into memory before the check. Falls back to a buffered read with the same
+  // post-hoc cap when the body isn't a readable stream (e.g. some test mocks).
+  const body = response.body;
+  if (!body) {
+    const buffer = await response.arrayBuffer();
+    if (buffer.byteLength > maxBytes) {
+      throw tooLarge();
+    }
+    return new Uint8Array(buffer);
   }
 
-  return new Uint8Array(buffer);
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      // Abort the download, but don't await/propagate cancel() — a slow or
+      // rejecting cancel must not mask (or delay) the clear "too large" error.
+      void reader.cancel().catch(() => {});
+      throw tooLarge();
+    }
+    chunks.push(value);
+  }
+
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
 }
 
 export async function fetchExternalSourceBytes(
