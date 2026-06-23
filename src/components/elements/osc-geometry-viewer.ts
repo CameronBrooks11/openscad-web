@@ -38,6 +38,10 @@ export class OscGeometryViewer extends LitElement {
    * `geometry-loaded` event still fires (without a thumbhash) as the load signal.
    */
   @property({ type: Boolean }) generateThumbnails = true;
+  /** Show the built-in camera-preset buttons. A host with its own UI can hide them. */
+  @property({ type: Boolean }) showControls = true;
+  /** Scene background (any CSS/Three colour). Defaults to the viewer's dark grey. */
+  @property() background?: string;
 
   @state() private _toastMessage: string | null = null;
 
@@ -45,6 +49,9 @@ export class OscGeometryViewer extends LitElement {
   private _ro: ResizeObserver | null = null;
   private _container: HTMLDivElement | null = null;
   private _loadedOffText: string | null = null;
+  // A camera pose commanded via setCamera() before the scene exists, applied
+  // once firstUpdated() builds it (avoids dropping a command that races mount).
+  private _pendingCamera: CameraState | null = null;
   // Monotonic load id: a newer _loadGeometry supersedes an older one whose
   // thumbnail hashing is still in flight, so a slow older hash cannot overwrite
   // the newer geometry's preview.
@@ -58,7 +65,14 @@ export class OscGeometryViewer extends LitElement {
 
     const scene = new ThreeScene(container);
     this._scene = scene;
+    if (this.background) scene.setBackground(this.background);
     if (this.camera) scene.applyCameraState(this.camera);
+    // A setCamera() that arrived before the scene existed wins over the initial
+    // camera property (it was an explicit host command).
+    if (this._pendingCamera) {
+      scene.applyCameraState(this._pendingCamera, { silent: true });
+      this._pendingCamera = null;
+    }
     scene.setAxesVisible(this.showAxes);
     scene.onCameraChange = (cam) =>
       this.dispatchEvent(new CustomEvent<CameraState>('camera-change', { detail: cam }));
@@ -82,6 +96,7 @@ export class OscGeometryViewer extends LitElement {
     if (changed.has('active')) scene.setActive(this.active);
     if (changed.has('showAxes')) scene.setAxesVisible(this.showAxes);
     if (changed.has('color') && this.color) scene.setModelColor(this.color);
+    if (changed.has('background') && this.background) scene.setBackground(this.background);
     if (changed.has('offText') && this.offText && this.offText !== this._loadedOffText) {
       this._loadGeometry(this.offText);
     }
@@ -106,7 +121,8 @@ export class OscGeometryViewer extends LitElement {
    * Unlike the mount-only `camera` property, this works at any time.
    */
   setCamera(camera: CameraState): void {
-    this._scene?.applyCameraState(camera, { silent: true });
+    if (this._scene) this._scene.applyCameraState(camera, { silent: true });
+    else this._pendingCamera = camera; // applied when firstUpdated() builds the scene
   }
 
   private async _loadGeometry(offText: string) {
@@ -160,8 +176,8 @@ export class OscGeometryViewer extends LitElement {
           position: absolute;
           top: 8px;
           right: 8px;
-          background: var(--osc-overlay);
-          color: var(--osc-on-accent);
+          background: var(--osc-viewer-control-background, var(--osc-overlay, rgba(0, 0, 0, 0.6)));
+          color: var(--osc-viewer-control-foreground, var(--osc-on-accent, #fff));
           padding: 4px 12px;
           border-radius: 4px;
           font-size: 0.8rem;
@@ -177,26 +193,30 @@ export class OscGeometryViewer extends LitElement {
         style="flex:1;position:relative;width:100%;height:100%;"
       ></div>
       ${this._toastMessage ? html`<div class="osc-toast">${this._toastMessage}</div>` : ''}
-      <div
-        aria-label="Viewer camera presets"
-        style="position:absolute;bottom:8px;right:8px;display:flex;flex-direction:column;gap:2px;z-index:2;"
-      >
-        ${NAMED_POSITIONS.map(
-          ({ name }) => html`
-            <button
-              title="${name} view"
-              aria-label=${`Set ${name} view`}
-              @click=${() => {
-                this._scene?.setCameraPosition(name);
-                this._showToast(`${name} view`);
-              }}
-              style="font-size:0.65rem;padding:2px 6px;cursor:pointer;opacity:0.75;background:var(--osc-overlay);color:var(--osc-on-accent);border:none;border-radius:3px;"
+      ${this.showControls
+        ? html`
+            <div
+              aria-label="Viewer camera presets"
+              style="position:absolute;bottom:8px;right:8px;display:flex;flex-direction:column;gap:2px;z-index:2;"
             >
-              ${name}
-            </button>
-          `,
-        )}
-      </div>
+              ${NAMED_POSITIONS.map(
+                ({ name }) => html`
+                  <button
+                    title="${name} view"
+                    aria-label=${`Set ${name} view`}
+                    @click=${() => {
+                      this._scene?.setCameraPosition(name);
+                      this._showToast(`${name} view`);
+                    }}
+                    style="font-size:0.65rem;padding:2px 6px;cursor:pointer;opacity:0.75;background:var(--osc-viewer-control-background, var(--osc-overlay, rgba(0, 0, 0, 0.6)));color:var(--osc-viewer-control-foreground, var(--osc-on-accent, #fff));border:none;border-radius:3px;"
+                  >
+                    ${name}
+                  </button>
+                `,
+              )}
+            </div>
+          `
+        : ''}
     `;
   }
 }
