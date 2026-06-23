@@ -50,6 +50,9 @@ export class ThreeScene {
 
   // Callback fired (debounced) when the user moves the camera.
   onCameraChange: ((state: CameraState) => void) | null = null;
+  // Set while a programmatic applyCameraState({ silent }) runs, so its
+  // synchronous 'change' event is not echoed back to onCameraChange.
+  private suppressCameraChange = false;
   // Fired when the WebGL context is lost (recoverable; a restore re-renders).
   onContextLost: (() => void) | null = null;
 
@@ -101,7 +104,10 @@ export class ThreeScene {
     this.controls.addEventListener('change', () => {
       // Any control-driven change needs a frame...
       this.requestRender();
-      // ...and is forwarded to the caller (debounced 200 ms).
+      // ...and is forwarded to the caller (debounced 200 ms) — unless this change
+      // came from a programmatic applyCameraState({ silent }), which must not echo
+      // back to a host that just commanded it (feedback loop).
+      if (this.suppressCameraChange) return;
       if (!this.onCameraChange) return;
       if (this.cameraDebounceTimer) clearTimeout(this.cameraDebounceTimer);
       this.cameraDebounceTimer = setTimeout(() => {
@@ -265,13 +271,20 @@ export class ThreeScene {
     };
   }
 
-  applyCameraState(saved: CameraState): void {
-    this.camera.position.set(...saved.position);
-    this.controls.target.set(...saved.target);
-    this.camera.zoom = saved.zoom;
-    this.camera.updateProjectionMatrix();
-    this.controls.update();
-    this.requestRender();
+  applyCameraState(saved: CameraState, opts: { silent?: boolean } = {}): void {
+    // controls.update() dispatches 'change' synchronously; the flag is read by
+    // that handler to skip echoing this programmatic update back to the host.
+    if (opts.silent) this.suppressCameraChange = true;
+    try {
+      this.camera.position.set(...saved.position);
+      this.controls.target.set(...saved.target);
+      this.camera.zoom = saved.zoom;
+      this.camera.updateProjectionMatrix();
+      this.controls.update();
+      this.requestRender();
+    } finally {
+      this.suppressCameraChange = false;
+    }
   }
 
   setCameraPosition(name: string): void {
