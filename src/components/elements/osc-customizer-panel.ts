@@ -5,6 +5,7 @@ import { resolveSession } from '../../state/session-context.ts';
 import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
 import type { Parameter, ParameterOption } from '../../state/customizer-types.ts';
+import type { OpenScadValue } from '../../openscad-value.ts';
 
 @customElement('osc-customizer-panel')
 export class OscCustomizerPanel extends LitElement {
@@ -122,8 +123,7 @@ export class OscCustomizerPanel extends LitElement {
     this._model?.removeEventListener('state', this._onState);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private _handleChange(name: string, value: any) {
+  private _handleChange(name: string, value: OpenScadValue) {
     this._model.setVar(name, value);
   }
 

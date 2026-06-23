@@ -9,19 +9,7 @@ import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
 import './osc-viewer-panel.ts';
 import './osc-customizer-panel.ts';
-
-function coerceUrlVars(vars: Record<string, string>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(vars)) {
-    if (v === 'true') result[k] = true;
-    else if (v === 'false') result[k] = false;
-    else {
-      const n = Number(v);
-      result[k] = v.trim() !== '' && !isNaN(n) ? n : v;
-    }
-  }
-  return result;
-}
+import { coerceUrlVars } from '../../openscad-value.ts';
 
 function buildEditorUrl(): string {
   const url = new URL(window.location.href);

@@ -1,6 +1,7 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import type { Diagnostic } from '../diagnostics.ts';
+import type { OpenScadValue } from '../openscad-value.ts';
 import { ParameterSet } from './customizer-types.ts';
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
 import type { SerializableSource } from './project-source.ts';
@@ -39,8 +40,7 @@ export interface State {
   params: {
     activePath: string;
     sources: SerializableSource[];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vars?: { [name: string]: any };
+    vars?: Record<string, OpenScadValue>;
     features: string[];
     exportFormat2D: keyof typeof VALID_EXPORT_FORMATS_2D;
     exportFormat3D: keyof typeof VALID_EXPORT_FORMATS_3D;

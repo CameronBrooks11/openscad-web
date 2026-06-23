@@ -153,14 +153,30 @@ describe('validateInbound — setVar', () => {
     ).toMatchObject({ ok: false, code: 'invalid-payload' });
   });
 
-  it('accepts plain nested JSON values (arrays/objects of primitives)', () => {
-    const r = validateInbound({
-      protocolVersion: V,
-      type: 'setVar',
-      name: 'vec',
-      value: { a: [1, 2, 3], b: { c: true, d: 'x' }, e: null },
-    });
-    expect(r).toMatchObject({ ok: true });
+  it('accepts OpenSCAD values: primitives and (nested) vectors of them', () => {
+    for (const value of [42, -3.14, true, 'hello', [1, 2, 3], [['a', 1], [true]]]) {
+      expect(
+        validateInbound({ protocolVersion: V, type: 'setVar', name: 'v', value }),
+      ).toMatchObject({ ok: true, message: { type: 'setVar', name: 'v', value } });
+    }
+  });
+
+  it('rejects objects, null, and non-finite numbers at the boundary (not deep in the render)', () => {
+    // OpenSCAD has no dict type and the args builder rejects these, so they must be
+    // refused HERE rather than accepted and failing mid-render (the prior bug).
+    for (const value of [
+      { a: 1 },
+      { a: [1, 2, 3] },
+      null,
+      NaN,
+      Infinity,
+      [1, { a: 1 }],
+      [1, NaN],
+    ]) {
+      expect(
+        validateInbound({ protocolVersion: V, type: 'setVar', name: 'n', value }),
+      ).toMatchObject({ ok: false, code: 'invalid-payload' });
+    }
   });
 });
 
