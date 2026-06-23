@@ -4,6 +4,7 @@ import { ProjectFileSystem } from '../fs/project-filesystem.ts';
 import { contentOf, type SerializableSource } from './project-source.ts';
 import { fetchSource } from '../utils.ts';
 import {
+  MAX_COMPRESSED_ZIP_BYTES,
   MAX_PROJECT_FILE_COUNT,
   MAX_PROJECT_TOTAL_BYTES,
   normalizeProjectPath,
@@ -102,14 +103,19 @@ export class ProjectStore {
    * Returns null when the archive contains no files.
    */
   async importZip(zipBuffer: ArrayBuffer): Promise<ProjectSnapshot | null> {
+    // Reject an absurdly large compressed archive before JSZip parses it.
+    if (zipBuffer.byteLength > MAX_COMPRESSED_ZIP_BYTES) {
+      throw new ProjectPathError('Archive is too large.');
+    }
     const zip = await JSZip.loadAsync(zipBuffer);
     const entries = Object.entries(zip.files).filter(([, zipObj]) => !zipObj.dir);
     if (entries.length > MAX_PROJECT_FILE_COUNT) {
       throw new ProjectPathError(`Archive has too many files (max ${MAX_PROJECT_FILE_COUNT}).`);
     }
-    // The size limit is an approximate cumulative guard over decoded entry
-    // lengths (UTF-16 units); a single entry is still fully decoded before its
-    // length is counted.
+    // Cumulative uncompressed-size guard over decoded entry lengths (UTF-16
+    // units). Each entry is decompressed as a stream and aborted the moment the
+    // running total would exceed the budget, so a zip bomb can't fully inflate
+    // in memory before the check trips.
     const files: [string, string][] = [];
     const seen = new Set<string>();
     let totalSize = 0;
@@ -119,11 +125,8 @@ export class ProjectStore {
         throw new ProjectPathError(`Duplicate path in archive: ${safePath}`);
       }
       seen.add(safePath);
-      const content = await zipObj.async('string');
+      const content = await readZipEntryWithinBudget(zipObj, MAX_PROJECT_TOTAL_BYTES - totalSize);
       totalSize += content.length;
-      if (totalSize > MAX_PROJECT_TOTAL_BYTES) {
-        throw new ProjectPathError('Archive exceeds the uncompressed size limit.');
-      }
       files.push([safePath, content]);
     }
     // Paths are validated above; FS write failures are best-effort and must not
@@ -171,4 +174,46 @@ export class ProjectStore {
     }
     return zip.generateAsync({ type: 'blob' });
   }
+}
+
+// JSZip's incremental decompression API (`internalStream`) is public at runtime
+// but missing from @types/jszip; declare the minimal surface we use.
+interface JSZipStringStream {
+  on(event: 'data', cb: (chunk: string) => void): JSZipStringStream;
+  on(event: 'error', cb: (err: unknown) => void): JSZipStringStream;
+  on(event: 'end', cb: () => void): JSZipStringStream;
+  resume(): JSZipStringStream;
+  pause(): JSZipStringStream;
+}
+
+/**
+ * Decompress one ZIP entry to a string, aborting as soon as the cumulative
+ * decoded length would exceed `budget` (UTF-16 units). Streaming the inflate and
+ * stopping early bounds a zip bomb's memory to roughly the budget plus one chunk,
+ * instead of fully inflating the entry before any size check.
+ */
+function readZipEntryWithinBudget(zipObj: JSZip.JSZipObject, budget: number): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    let acc = '';
+    let len = 0;
+    const stream = (
+      zipObj as unknown as { internalStream(type: 'string'): JSZipStringStream }
+    ).internalStream('string');
+    // The Promise is natively settle-once, so a stray late event after the first
+    // settle is a harmless no-op; pausing on the over-budget chunk keeps `acc`
+    // from growing past the budget regardless.
+    stream
+      .on('data', (chunk: string) => {
+        len += chunk.length;
+        if (len > budget) {
+          stream.pause();
+          reject(new ProjectPathError('Archive exceeds the uncompressed size limit.'));
+          return;
+        }
+        acc += chunk;
+      })
+      .on('error', (err: unknown) => reject(err instanceof Error ? err : new Error(String(err))))
+      .on('end', () => resolve(acc))
+      .resume();
+  });
 }
