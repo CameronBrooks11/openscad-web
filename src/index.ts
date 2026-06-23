@@ -13,9 +13,8 @@ import { readStateFromFragment, writeStateInFragment } from './state/fragment-st
 import { readPersistedState, writePersistedState } from './state/persisted-state.ts';
 import { createInitialState } from './state/initial-state.ts';
 import { parseUrlMode } from './state/url-mode.ts';
-import { setModel } from './state/model-context.ts';
 import { setFS } from './state/fs-context.ts';
-import { Model } from './state/model.ts';
+import { OpenScadSession } from './state/session.ts';
 import { openSCADWorkerUrl } from './runner/worker-bootstrap.ts';
 import { isInStandaloneMode, registerCustomAppHeightCSSProperty } from './utils.ts';
 import { State, StatePersister } from './state/app-state.ts';
@@ -119,18 +118,18 @@ window.addEventListener('load', async () => {
 
   const initialState = createInitialState(persistedState);
 
-  // Create and register model — init() is called lazily by the shell elements
-  const model = new Model(fs, initialState, undefined, statePersister);
-  setModel(model);
+  // The session owns its compile engine + model; the shell provides it to its
+  // subtree (replacing the former getModel() singleton). init() runs after mount.
+  const session = new OpenScadSession(fs, initialState, undefined, statePersister);
 
   // Persistence is debounced, so an edit made right before the tab is hidden or
   // closed could otherwise be lost. Force a flush on `pagehide` and when the
   // page becomes hidden (the latter is the reliable signal on mobile, where
   // `pagehide`/`beforeunload` often don't fire). Both are idempotent — a flush
   // with no durable change is a no-op.
-  window.addEventListener('pagehide', () => void model.flushPersist());
+  window.addEventListener('pagehide', () => void session.model.flushPersist());
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') void model.flushPersist();
+    if (document.visibilityState === 'hidden') void session.model.flushPersist();
   });
 
   // The shell module download was started at the top of bootstrap; awaiting it
@@ -139,23 +138,30 @@ window.addEventListener('load', async () => {
   if (urlModeResult.mode === 'customizer') {
     const shell = document.createElement('osc-customizer-shell') as HTMLElement & {
       urlParams: typeof urlModeResult;
+      session: OpenScadSession;
     };
     shell.style.cssText = 'display:flex;flex:1;width:100%;height:100%;';
+    shell.session = session;
     shell.urlParams = urlModeResult;
     rootEl.appendChild(shell);
   } else if (urlModeResult.mode === 'embed') {
     const shell = document.createElement('osc-embed-shell') as HTMLElement & {
       urlParams: typeof urlModeResult;
+      session: OpenScadSession;
     };
     shell.style.cssText = 'display:flex;flex:1;width:100%;height:100%;';
+    shell.session = session;
     shell.urlParams = urlModeResult;
     rootEl.appendChild(shell);
   } else {
-    const shell = document.createElement('osc-app-shell');
+    const shell = document.createElement('osc-app-shell') as HTMLElement & {
+      session: OpenScadSession;
+    };
     shell.style.cssText = 'display:flex;flex:1;width:100%;height:100%;';
+    shell.session = session;
     rootEl.appendChild(shell);
     // Normal app mode: call init after mounting
-    model.init();
+    session.init();
   }
 
   markPerf('osc:app-shell-mounted');

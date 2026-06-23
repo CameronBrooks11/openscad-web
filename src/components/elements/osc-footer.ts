@@ -2,7 +2,7 @@
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { countDiagnostics, maxDiagnosticSeverity } from '../../diagnostics.ts';
-import { getModel } from '../../state/model-context.ts';
+import { resolveSession } from '../../state/session-context.ts';
 import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
 import './osc-export-button.ts';
@@ -143,7 +143,7 @@ export class OscFooter extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    this._model = getModel();
+    this._model = resolveSession(this).model;
     this._model.addEventListener('state', this._onState);
     this._st = this._model.state;
   }
