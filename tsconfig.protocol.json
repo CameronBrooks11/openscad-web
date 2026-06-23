@@ -1,0 +1,23 @@
+// Emit ONLY the Layer-0 protocol (src/protocol/) as a standalone, distributable
+// module — compiled JS + .d.ts — into the viewer artifact (#143/#176). The repo
+// authors `.ts`-extension imports for the bundler; `rewriteRelativeImportExtensions`
+// rewrites those to `.js` in the emitted output so the protocol is importable on
+// its own by a separate consumer (a VS Code extension). The protocol imports
+// nothing outside src/protocol/ (lint-enforced), so the emit is self-contained.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
+    "declaration": true,
+    "emitDeclarationOnly": false,
+    "rootDir": "src/protocol",
+    "outDir": "dist-viewer/protocol"
+  },
+  "include": [
+    "src/protocol/index.ts",
+    "src/protocol/viewer-transport.ts",
+    "src/protocol/envelope.ts"
+  ],
+  "exclude": ["src/protocol/__tests__/**"]
+}

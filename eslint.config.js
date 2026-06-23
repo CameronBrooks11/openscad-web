@@ -133,9 +133,11 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['../*', '../**'],
+              // No outward relative imports, and no Node builtins — the protocol
+              // must run in a plain browser/webview consumer too.
+              group: ['../*', '../**', 'node:*', 'node:**'],
               message:
-                'src/protocol is the distributable wire contract: no imports outside src/protocol.',
+                'src/protocol is the distributable wire contract: import nothing outside src/protocol (no app code, no Node builtins).',
             },
           ],
         },
