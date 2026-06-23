@@ -172,7 +172,26 @@ describe('validateInbound — read commands', () => {
     });
     expect(validateInbound({ protocolVersion: V, type: 'getArtifact' })).toEqual({
       ok: true,
-      message: { type: 'getArtifact', requestId: undefined },
+      message: { type: 'getArtifact', requestId: undefined, artifactId: undefined },
+    });
+  });
+
+  it('carries an optional artifactId on getArtifact (ADR 0008), defaulting to undefined', () => {
+    expect(
+      validateInbound({
+        protocolVersion: V,
+        type: 'getArtifact',
+        requestId: 'a',
+        artifactId: 'xyz',
+      }),
+    ).toEqual({
+      ok: true,
+      message: { type: 'getArtifact', requestId: 'a', artifactId: 'xyz' },
+    });
+    // A non-string artifactId is ignored (treated as "current output"), never a rejection.
+    expect(validateInbound({ protocolVersion: V, type: 'getArtifact', artifactId: 123 })).toEqual({
+      ok: true,
+      message: { type: 'getArtifact', requestId: undefined, artifactId: undefined },
     });
   });
 });

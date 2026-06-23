@@ -36,7 +36,7 @@ export type InboundMessage =
   | { type: 'setModel'; source: string; requestId?: string }
   | { type: 'setVar'; name: string; value: unknown; requestId?: string }
   | { type: 'getVars'; requestId?: string }
-  | { type: 'getArtifact'; requestId?: string };
+  | { type: 'getArtifact'; requestId?: string; artifactId?: string };
 
 /** Embed rejection codes are the shared protocol vocabulary. */
 export type EmbedErrorCode = ProtocolErrorCode;
@@ -125,8 +125,12 @@ export function validateInbound(data: unknown): ValidationResult {
     }
     case 'getVars':
       return { ok: true, message: { type: 'getVars', requestId } };
-    case 'getArtifact':
-      return { ok: true, message: { type: 'getArtifact', requestId } };
+    case 'getArtifact': {
+      // Optional: a specific artifact's immutable id (ADR 0008). Absent (or a
+      // non-string) means "the current output", byte-identical to v2 behaviour.
+      const artifactId = typeof data.artifactId === 'string' ? data.artifactId : undefined;
+      return { ok: true, message: { type: 'getArtifact', requestId, artifactId } };
+    }
     default:
       return { ok: false, code: 'unknown-type', reason: `unknown type "${data.type}"`, requestId };
   }

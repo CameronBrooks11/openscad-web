@@ -13,6 +13,8 @@ The messaging protocol is versioned. The current version is **2** (`EMBED_PROTOC
 
 > **Breaking change (v1 → v2):** v1 accepted unversioned messages and, when `parentOrigin` was omitted, accepted control messages from any parent origin and broadcast outbound messages to `'*'`. v2 requires the version field, defaults to same-origin trust, never uses the wildcard, and replaces the `renderComplete` blob URL with durable metadata plus an explicit `getArtifact` request. Update integrations accordingly.
 
+> **Additive (still v2):** outputs now carry an immutable `artifactId`, surfaced on `renderComplete` and the `artifact` response, and accepted as an optional field on `getArtifact`. The `ready` message advertises a `capabilities` object (`artifactIdentity: true`). These are backward-compatible: unknown inbound fields are ignored and existing message shapes are supersets of v2, so no version bump is required.
+
 ## URL Parameters
 
 Embed mode is enabled with:
@@ -36,12 +38,12 @@ Supported embed-specific query parameters:
 
 Every inbound message must include `protocolVersion: 2`. A `requestId` is optional but recommended; it is echoed back on the corresponding `ack` / `error` / response.
 
-| Type          | Payload (in addition to `protocolVersion`, optional `requestId`) | Description                                    |
-| ------------- | ---------------------------------------------------------------- | ---------------------------------------------- |
-| `setModel`    | `{ type: 'setModel', source: string }`                           | Replace the current model with raw source text |
-| `setVar`      | `{ type: 'setVar', name: string, value: unknown }`               | Set one customizer variable                    |
-| `getVars`     | `{ type: 'getVars' }`                                            | Request the current effective variable map     |
-| `getArtifact` | `{ type: 'getArtifact' }`                                        | Request the bytes of the latest render output  |
+| Type          | Payload (in addition to `protocolVersion`, optional `requestId`) | Description                                                                   |
+| ------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `setModel`    | `{ type: 'setModel', source: string }`                           | Replace the current model with raw source text                                |
+| `setVar`      | `{ type: 'setVar', name: string, value: unknown }`               | Set one customizer variable                                                   |
+| `getVars`     | `{ type: 'getVars' }`                                            | Request the current effective variable map                                    |
+| `getArtifact` | `{ type: 'getArtifact', artifactId? }`                           | Request artifact bytes — the latest render output, or a specific `artifactId` |
 
 Limits (oversized messages are rejected with a `too-large` error):
 
@@ -55,17 +57,17 @@ Notes:
 
 ### iframe → host
 
-| Type                 | Payload (in addition to `protocolVersion`)                                   | Description                                                       |
-| -------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `ready`              | `{ type: 'ready', vars, parameterSet? }`                                     | Initial embed state is ready for host interaction                 |
-| `ack`                | `{ type: 'ack', requestId? }`                                                | A `setModel` / `setVar` command was applied                       |
-| `error`              | `{ type: 'error', code, reason, requestId? }`                                | An inbound message was rejected (see error codes)                 |
-| `varsChanged`        | `{ type: 'varsChanged', vars }`                                              | Effective variable map changed                                    |
-| `parameterSetLoaded` | `{ type: 'parameterSetLoaded', parameterSet }`                               | Parameter metadata is available                                   |
-| `varsSnapshot`       | `{ type: 'varsSnapshot', vars, requestId? }`                                 | Response to `getVars`                                             |
-| `renderComplete`     | `{ type: 'renderComplete', artifact: { name, size, format } }`               | A render finished; metadata only — fetch bytes with `getArtifact` |
-| `artifact`           | `{ type: 'artifact', available, name?, size?, format?, bytes?, requestId? }` | Response to `getArtifact`; `bytes` is a transferred `ArrayBuffer` |
-| `stateChange`        | `{ type: 'stateChange', error }`                                             | Error event used for external model-load failures                 |
+| Type                 | Payload (in addition to `protocolVersion`)                                                                                           | Description                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `ready`              | `{ type: 'ready', vars, parameterSet?, capabilities }`                                                                               | Initial embed state is ready; `capabilities.artifactIdentity` flags identity support |
+| `ack`                | `{ type: 'ack', requestId? }`                                                                                                        | A `setModel` / `setVar` command was applied                                          |
+| `error`              | `{ type: 'error', code, reason, requestId? }`                                                                                        | An inbound message was rejected (see error codes)                                    |
+| `varsChanged`        | `{ type: 'varsChanged', vars }`                                                                                                      | Effective variable map changed                                                       |
+| `parameterSetLoaded` | `{ type: 'parameterSetLoaded', parameterSet }`                                                                                       | Parameter metadata is available                                                      |
+| `varsSnapshot`       | `{ type: 'varsSnapshot', vars, requestId? }`                                                                                         | Response to `getVars`                                                                |
+| `renderComplete`     | `{ type: 'renderComplete', artifact: { artifactId, operationId, sourceRevision, format, mediaType, size, name } }`                   | A render finished; durable metadata + identity — fetch bytes with `getArtifact`      |
+| `artifact`           | `{ type: 'artifact', available, artifactId?, operationId?, sourceRevision?, format?, mediaType?, size?, name?, bytes?, requestId? }` | Response to `getArtifact`; `bytes` is a transferred `ArrayBuffer`                    |
+| `stateChange`        | `{ type: 'stateChange', error }`                                                                                                     | Error event used for external model-load failures                                    |
 
 Error `code` values: `malformed`, `unsupported-version`, `unknown-type`, `invalid-payload`, `too-large`.
 
@@ -75,6 +77,7 @@ Notes:
 - `varsChanged` carries the current effective values, including parameter defaults when available.
 - `parameterSetLoaded` may arrive after `ready`. If the host needs a fully default-expanded variable map for a parameterized model, call `getVars` after `parameterSetLoaded`.
 - `renderComplete` no longer includes a blob URL. Call `getArtifact` to receive the output bytes as a transferred `ArrayBuffer` (`artifact.available === false` if no render output exists yet).
+- Each render/export output carries an immutable `artifactId` (advertised on `renderComplete` and the `artifact` response). Pass it to `getArtifact` to fetch that exact result rather than whatever is current; an `artifactId` that is unknown or has aged out of the per-session store returns `available: false`. Omitting `artifactId` returns the current output, unchanged from protocol v2.
 
 ## Security Model
 
