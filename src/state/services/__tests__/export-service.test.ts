@@ -62,6 +62,7 @@ function makeCtx(partial: Partial<State['params']> & { is2D?: boolean; output?: 
     createObjectURL: vi.fn(() => 'blob:new'),
     revokeObjectURL: vi.fn(),
     download: vi.fn(),
+    downloadBlob: vi.fn(),
     playCompletionChime: vi.fn(),
     baseUrl: vi.fn(() => 'http://localhost/'),
   } satisfies HostAdapter;

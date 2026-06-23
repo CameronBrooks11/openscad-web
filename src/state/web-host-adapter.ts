@@ -10,6 +10,12 @@ export interface HostAdapter {
   createObjectURL(blob: Blob | File): string;
   revokeObjectURL(url: string): void;
   download(url: string, filename: string): void;
+  /**
+   * Download a blob, then revoke the temporary object URL it creates so it does
+   * not leak. Prefer this over `download(createObjectURL(blob), name)`, which
+   * never frees the URL.
+   */
+  downloadBlob(blob: Blob | File, filename: string): void;
   playCompletionChime(): void;
   baseUrl(): string;
 }
@@ -26,6 +32,14 @@ export class WebHostAdapter implements HostAdapter {
 
   download(url: string, filename: string): void {
     downloadUrl(url, filename);
+  }
+
+  downloadBlob(blob: Blob | File, filename: string): void {
+    const url = URL.createObjectURL(blob);
+    downloadUrl(url, filename);
+    // The anchor click is synchronous but the browser reads the URL after the
+    // current task; defer the revoke one turn so the download still resolves.
+    setTimeout(() => URL.revokeObjectURL(url), 0);
   }
 
   playCompletionChime(): void {
