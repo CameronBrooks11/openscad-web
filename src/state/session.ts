@@ -45,6 +45,11 @@ export class OpenScadSession {
     this.model.init();
   }
 
+  /** Cancel this session's in-flight compile/export operations (#123). */
+  cancel(): void {
+    this.model.cancel();
+  }
+
   /** Tear the session down: stop persistence timers and terminate the worker.
    *  Fixes the page-lifetime worker leak the singleton had. */
   dispose(): void {

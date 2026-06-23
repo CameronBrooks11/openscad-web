@@ -67,6 +67,13 @@ export class ExportService {
     });
   }
 
+  /** Cancel an in-flight format-conversion render (best-effort, #123). The killed
+   *  job rejects with an expected cancellation, so the existing catch emits one
+   *  terminal `cancelled` result and clears the exporting spinner. */
+  cancel(): void {
+    this._activeRender?.kill();
+  }
+
   /** Route a terminal result to the optional sink, guarding the commit path: a
    *  throwing sink must never corrupt committed state or double-emit (ADR 0008).
    *  No-op when no sink is wired. */
@@ -275,9 +282,12 @@ export class ExportService {
       });
       this.emitResult(operationSuccess(base({ elapsedMillis: output.elapsedMillis }), artifactRef));
     } catch (err) {
-      // A superseded export rejects with the delayable's cancellation; that is
-      // expected supersession, not a failure — the newer export owns the spinner.
+      // An expected cancellation is either supersession (a newer export, which
+      // owns the spinner — leave it) or an explicit cancel() of THIS still-current
+      // export (nothing newer owns the spinner, so we must clear it ourselves or
+      // it stays stuck). Distinguish by ownership, then emit one cancelled result.
       if (isExpectedJobCancellation(err)) {
+        if (isCurrent()) mutate((s) => (s.exporting = false));
         this.emitResult(operationCancelled(base()));
         return;
       }

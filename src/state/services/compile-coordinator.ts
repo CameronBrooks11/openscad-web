@@ -20,7 +20,7 @@ import {
   normalizeOperationFailure,
   UserFacingOperationError,
 } from '../../user-facing-errors.ts';
-import { fetchSource, formatBytes, formatMillis } from '../../utils.ts';
+import { fetchSource, formatBytes, formatMillis, type AbortablePromise } from '../../utils.ts';
 import { applyUserFacingError } from '../apply-user-facing-error.ts';
 import type { State } from '../app-state.ts';
 import { is2DFormatExtension } from '../formats.ts';
@@ -77,6 +77,24 @@ export class CompileCoordinator {
   // syntax has its own. See ADR 0007.
   private readonly _render: ReturnType<typeof createRenderDelayable>;
   private readonly _checkSyntax: ReturnType<typeof createSyntaxDelayable>;
+
+  // The in-flight render / syntax jobs, retained so cancel() can kill them
+  // (mirrors ExportService._activeRender). Each is cleared when its job settles.
+  private _activeRender: AbortablePromise<unknown> | null = null;
+  private _activeSyntax: AbortablePromise<unknown> | null = null;
+
+  /**
+   * Cancel any in-flight syntax check / render on this session (best-effort, the
+   * `cancel` of the Layer-1 command set — ADR 0008/#123). A killed job rejects
+   * with an expected cancellation, so the existing catch emits exactly one
+   * terminal `cancelled` OperationResult and clears the spinner. A job already
+   * executing `callMain` in the worker finishes there; its result is discarded by
+   * id (same as supersession).
+   */
+  cancel(): void {
+    this._activeSyntax?.kill();
+    this._activeRender?.kill();
+  }
 
   /**
    * Convert the typed sources to the flat wire shape, reading each project-local
@@ -206,7 +224,7 @@ export class CompileCoordinator {
     });
     this.ctx.mutate((s) => (s.checkingSyntax = true));
     try {
-      const checkerRun = await this._checkSyntax({
+      const syntaxJob = this._checkSyntax({
         activePath: this.ctx.getState().params.activePath,
         // The param/syntax pass never resolves `import()` (it's lazy, evaluated
         // only at geometry time), so a binary `local` asset is not needed here —
@@ -217,6 +235,11 @@ export class CompileCoordinator {
           .params.sources.filter((s) => !(s.kind === 'local' && !isProbablyTextPath(s.path))),
         revision: this.ctx.getSourceRevision(),
       })({ now: false });
+      // Retain the handle so cancel() can kill it; clear it once it settles.
+      this._activeSyntax = syntaxJob;
+      const checkerRun = await syntaxJob.finally(() => {
+        if (this._activeSyntax === syntaxJob) this._activeSyntax = null;
+      });
       if (!isCurrent()) {
         this.emitResult(operationCancelled(base())); // superseded
         return; // a newer syntax check superseded this one
@@ -369,7 +392,12 @@ export class CompileCoordinator {
         backend: this.ctx.getState().params.backend,
         revision: this.ctx.getSourceRevision(),
       };
-      const output = await this._render(renderArgs)({ now });
+      const renderJob = this._render(renderArgs)({ now });
+      // Retain the handle so cancel() can kill it; clear it once it settles.
+      this._activeRender = renderJob;
+      const output = await renderJob.finally(() => {
+        if (this._activeRender === renderJob) this._activeRender = null;
+      });
       if (!isCurrent()) {
         this.emitResult(operationCancelled(base())); // superseded
         return; // a newer render/preview superseded this one

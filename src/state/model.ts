@@ -81,6 +81,12 @@ export class Model extends EventTarget {
       backend: this.backend,
       sessionId: this.sessionId,
       artifacts: this.artifacts,
+      // Surface each operation's terminal result as an 'operation' event so a host
+      // binding / test can correlate on operationId (ADR 0008 / #123). No-op for
+      // the UI, which has no listener; the commit path is unchanged (the emit is
+      // post-commit and guarded by emitResult).
+      onOperationResult: (result) =>
+        this.dispatchEvent(new CustomEvent('operation', { detail: result })),
     };
   }
 
@@ -437,6 +443,14 @@ export class Model extends EventTarget {
       s.is2D = undefined;
     });
     this.compile.processSource();
+  }
+
+  /** Cancel in-flight compile and export operations on this session (#123).
+   *  Best-effort: each cancelled job surfaces one terminal `cancelled`
+   *  OperationResult (via the 'operation' event) and clears its spinner. */
+  cancel(): void {
+    this.compile.cancel();
+    this.exportService.cancel();
   }
 
   /** Extracts a ZIP archive into /home/ and activates the entry .scad. */

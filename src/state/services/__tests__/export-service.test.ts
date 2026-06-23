@@ -381,4 +381,30 @@ describe('ExportService', () => {
     expect(results[0].status).toBe('error');
     expect(results[0].kind).toBe('export');
   });
+
+  it('cancel() of an in-flight conversion clears the spinner and emits one cancelled result (#123)', async () => {
+    const { ctx, getState, results } = makeCtx({
+      is2D: false,
+      exportFormat3D: 'stl',
+      output: fileOutput('m.off'),
+    });
+    const conversion = hangingRender();
+    mockRenderExport.mockReturnValueOnce(conversion.inner);
+    const svc = new ExportService(ctx);
+
+    const p = svc.export(); // worker-conversion branch; sets _activeRender, awaits
+    await Promise.resolve();
+    expect(getState().exporting).toBe(true);
+
+    svc.cancel();
+    expect(conversion.kill).toHaveBeenCalled();
+    conversion.reject(new Error('Cancelled')); // the kill rejects the job
+    await p;
+
+    // The still-current export was cancelled (not superseded), so it must clear
+    // its own spinner — the BLOCKER this test guards.
+    expect(getState().exporting).toBe(false);
+    expect(getState().error).toBeUndefined();
+    expect(results.filter((r) => r.status === 'cancelled')).toHaveLength(1);
+  });
 });
