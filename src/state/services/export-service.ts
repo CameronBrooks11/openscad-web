@@ -5,7 +5,7 @@ import { parseOff } from '../../io/import_off.ts';
 import { renderExport, type RenderOutput } from '../../runner/actions.ts';
 import { isExpectedJobCancellation, type ProcessStreams } from '../../runner/openscad-runner.ts';
 import { isUserFacingOperationError } from '../../user-facing-errors.ts';
-import { formatBytes, formatMillis } from '../../utils.ts';
+import { formatBytes, formatMillis, type AbortablePromise } from '../../utils.ts';
 import { applyUserFacingError } from '../apply-user-facing-error.ts';
 import type { ServiceContext } from './service-context.ts';
 
@@ -23,6 +23,18 @@ export class ExportService {
   // the 3MF path which does not run through the delayable) must not clobber the
   // newer one's result/download when its async work finally settles.
   private _exportSeq = 0;
+
+  // The in-flight format-conversion render job, if any. The export-token logic
+  // stops a superseded export from committing a stale result, but the branches
+  // that supersede WITHOUT calling renderExport (pass-through, 3MF picker, GLB,
+  // 3MF) never trigger the delayable's own cancellation. Owning the handle lets
+  // every export cancel the previous render at entry: this drops it if still
+  // queued and settles the superseded export's promise immediately rather than
+  // leaving it to be dropped by token later. A render already executing in the
+  // worker can't be interrupted (its synchronous callMain runs to completion and
+  // the host discards the result by id), but it no longer holds up the new
+  // export's state. See #122.
+  private _activeRender: AbortablePromise<RenderOutput> | null = null;
 
   private rawStreamsCallback(ps: ProcessStreams) {
     this.ctx.mutate((s) => {
@@ -43,6 +55,13 @@ export class ExportService {
     // result nor leave the spinner stuck.
     const token = ++this._exportSeq;
     const isCurrent = () => this._exportSeq === token;
+    // Cancel any in-flight conversion render so a superseding export — including
+    // a pass-through or picker branch that never calls renderExport — drops a
+    // still-queued render and promptly settles the previous export's await with a
+    // cancellation it treats as supersession (#122). A render already executing
+    // in the worker still finishes there; its result is discarded by id.
+    this._activeRender?.kill();
+    this._activeRender = null;
     // Snapshot is safe: export never mutates output/params/is2D, only the
     // export/exporting/error/log/view fields it writes via the mutate callback.
     const state = this.ctx.getState();
@@ -118,7 +137,7 @@ export class ExportService {
           markers: [],
         };
       } else {
-        output = await renderExport({
+        const job = renderExport({
           mountArchives: false,
           scadPath: '/export.scad',
           sources: [
@@ -138,6 +157,14 @@ export class ExportService {
           priority: 'export',
           streamsCallback: this.rawStreamsCallback.bind(this),
         })({ now: true });
+        // Own the handle so a later export can kill this render if it supersedes
+        // before the worker finishes.
+        this._activeRender = job;
+        try {
+          output = await job;
+        } finally {
+          if (this._activeRender === job) this._activeRender = null;
+        }
       }
 
       // A newer export superseded this one while its conversion ran; it owns the
