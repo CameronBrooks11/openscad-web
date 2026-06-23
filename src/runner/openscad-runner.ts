@@ -64,7 +64,7 @@ export function isExpectedJobCancellation(error: unknown): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Persistent singleton Worker
+// Worker backend
 // ---------------------------------------------------------------------------
 type PendingJob = {
   resolve: (r: OpenSCADInvocationResults) => void;
@@ -78,15 +78,6 @@ type PendingJob = {
   startTime: number;
   timeoutHandle: ReturnType<typeof setTimeout> | null;
 };
-
-const _pending = new Map<string, PendingJob>();
-let _nextId = 0;
-let _worker: Worker | null = null;
-// Identifies the current worker. Bumped whenever the worker is torn down so that
-// late messages from a terminated worker cannot resolve or affect newer jobs.
-let _workerGeneration = 0;
-let _firstCompileRequested = false;
-let _firstCompileCompleted = false;
 
 // Two independent budgets (the worker runs jobs in a serial FIFO queue, so a
 // single submission-to-result timer would charge a job for time it spent merely
@@ -104,225 +95,275 @@ const EXEC_TIMEOUT_MS: Record<JobPriority, number> = {
   export: 60_000,
 };
 
-// Arm (or re-arm) a job's queue-wait timer. The queue timer is a worker-liveness
-// check: it is reset whenever any job reports `started` (forward progress), so it
-// fires only if the worker makes no progress at all for the window — a wedge —
-// not merely because a job waited a long time behind legitimate compiles.
-function armQueueTimer(id: string, job: PendingJob): void {
-  if (job.timeoutHandle != null) clearTimeout(job.timeoutHandle);
-  job.timeoutHandle = setTimeout(
-    () => failTimedOutJob(id, `Compile timed out after ${QUEUE_TIMEOUT_MS / 1000}s waiting to run`),
-    QUEUE_TIMEOUT_MS,
-  );
-}
-
-// Fail a timed-out job and recycle the (presumed wedged) worker. Shared by the
-// queue-wait and execution timers.
-function failTimedOutJob(id: string, reason: string): void {
-  const stuck = _pending.get(id);
-  if (!stuck) return; // already resolved, cancelled, or superseded
-  clearJobTimers(stuck);
-  _pending.delete(id);
-  stuck.reject(new Error(reason));
-  console.warn(`[runner] ${reason} (compile ${id})`);
-  recycleWorker('Worker recycled after timeout');
-}
-
-function getWorker(): Worker {
-  if (!_worker) {
-    const generation = _workerGeneration;
-    _worker = createOpenSCADWorker();
-    _worker.onmessage = (e: MessageEvent<WorkerResponse>) => handleWorkerMessage(e, generation);
-    _worker.onerror = handleWorkerError;
-  }
-  return _worker;
-}
-
-// Terminate the current worker and reject every job bound to it. The next
-// request lazily creates a clean worker (getWorker). This is the recovery path
-// for a wedged or crashed worker.
-function recycleWorker(reason: string): void {
-  if (_worker) {
-    _worker.terminate();
-    _worker = null;
-  }
-  _workerGeneration++;
-  for (const [, job] of _pending) {
-    clearJobTimers(job);
-    job.reject(new Error(reason));
-  }
-  _pending.clear();
-}
-
-function handleWorkerMessage(e: MessageEvent<WorkerResponse>, generation: number): void {
-  // Ignore messages from a worker generation that has since been terminated.
-  if (generation !== _workerGeneration) return;
-  const msg = e.data;
-  const job = _pending.get(msg.id);
-  if (!job) return; // stale response — job was cancelled or timed out
-
-  if (msg.type === 'started') {
-    // The job left the queue and is executing: replace the queue-wait timer with
-    // the execution budget so the compile gets its full allowance regardless of
-    // how long it waited in the queue.
-    job.started = true;
-    if (job.timeoutHandle != null) clearTimeout(job.timeoutHandle);
-    job.timeoutHandle = setTimeout(
-      () =>
-        failTimedOutJob(
-          msg.id,
-          `Compile exceeded its ${job.execTimeoutMs / 1000}s execution budget`,
-        ),
-      job.execTimeoutMs,
-    );
-    // Forward progress: re-arm the queue-wait window for every still-queued job,
-    // so a job merely waiting behind legitimate compiles is never recycled (and
-    // never takes the healthy running compile down with it).
-    for (const [otherId, other] of _pending) {
-      if (other === job || other.started) continue;
-      armQueueTimer(otherId, other);
-    }
-  } else if (msg.type === 'result') {
-    const r = msg as CompileResult;
-    recordCompilePerf(job, r.perf);
-    clearJobTimers(job);
-    _pending.delete(r.id);
-    job.resolve({
-      exitCode: r.exitCode,
-      outputs: r.outputs,
-      mergedOutputs: r.mergedOutputs,
-      elapsedMillis: r.elapsedMillis,
-      perf: r.perf,
-      revision: r.revision,
-    });
-  } else if (msg.type === 'error') {
-    const r = msg as CompileError;
-    recordCompilePerf(job, r.perf);
-    clearJobTimers(job);
-    _pending.delete(r.id);
-    job.resolve({
-      exitCode: undefined,
-      error: r.message,
-      mergedOutputs: r.mergedOutputs,
-      elapsedMillis: r.elapsedMillis,
-      perf: r.perf,
-      revision: r.revision,
-    });
-  } else if (msg.type === 'stdout') {
-    const r = msg as CompileStdout;
-    job.streamsCallback({ stdout: r.text });
-  } else if (msg.type === 'stderr') {
-    const r = msg as CompileStderr;
-    job.streamsCallback({ stderr: r.text });
-  }
-}
-
-function handleWorkerError(e: ErrorEvent): void {
-  console.error('OpenSCAD worker crashed:', e.message);
-  recycleWorker('Worker crashed: ' + e.message);
-}
-
 function clearJobTimers(job: PendingJob): void {
   if (job.timeoutHandle != null) clearTimeout(job.timeoutHandle);
 }
 
-function recordCompilePerf(job: PendingJob, perf?: CompilePerfStats): void {
-  recordPerfDuration('osc:compile-roundtrip', performance.now() - job.startTime);
-  if (perf?.workerFsInitMillis != null) {
-    recordPerfDuration('osc:worker-fs-init', perf.workerFsInitMillis);
-  }
-  if (perf?.workerLibraryMountMillis != null) {
-    recordPerfDuration('osc:worker-library-mount', perf.workerLibraryMountMillis);
-  }
-  if (perf?.workerWasmInitMillis != null) {
-    recordPerfDuration('osc:worker-wasm-init', perf.workerWasmInitMillis);
-  }
-  if (perf?.workerJobMillis != null) {
-    recordPerfDuration('osc:worker-job-total', perf.workerJobMillis);
-  }
-  if (!_firstCompileCompleted) {
-    _firstCompileCompleted = true;
-    markPerf('osc:first-compile-complete');
-    measurePerf(
-      'osc:first-compile-from-bootstrap',
-      'osc:app-bootstrap-start',
-      'osc:first-compile-complete',
+// Page-global, NOT per-backend: these gate the once-per-page first-compile perf
+// marks (the bootstrap measure starts at `osc:app-bootstrap-start`, set once in
+// index.ts). A second backend must consult — not re-fire — them, or it would
+// re-measure boot against a start that already elapsed. See ADR 0007.
+let _pageFirstCompileRequested = false;
+let _pageFirstCompileCompleted = false;
+
+/**
+ * The browser-WASM compile engine: owns one persistent Worker plus the pending
+ * jobs, id space, worker generation, and queue/exec timeout timers that drive
+ * it. Instance-scoped so independent sessions get fully isolated engines (ADR
+ * 0007). The app runs a single `defaultBackend`; `spawnOpenSCAD` delegates to it,
+ * so behavior is identical to the previous module-singleton.
+ */
+export class WasmWorkerBackend {
+  /** @internal Pending jobs by id; exposed for cross-instance isolation tests. */
+  readonly pending = new Map<string, PendingJob>();
+  /** @internal Monotonic job id counter (per backend). */
+  nextId = 0;
+  /** @internal Current worker identity; bumped on recycle/dispose so late
+   *  messages from a terminated worker cannot affect newer jobs. */
+  generation = 0;
+  private worker: Worker | null = null;
+
+  // Arm (or re-arm) a job's queue-wait timer. The queue timer is a worker-liveness
+  // check: it is reset whenever any job reports `started` (forward progress), so it
+  // fires only if the worker makes no progress at all for the window — a wedge —
+  // not merely because a job waited a long time behind legitimate compiles.
+  private armQueueTimer(id: string, job: PendingJob): void {
+    if (job.timeoutHandle != null) clearTimeout(job.timeoutHandle);
+    job.timeoutHandle = setTimeout(
+      () =>
+        this.failTimedOutJob(
+          id,
+          `Compile timed out after ${QUEUE_TIMEOUT_MS / 1000}s waiting to run`,
+        ),
+      QUEUE_TIMEOUT_MS,
     );
-    measurePerf(
-      'osc:first-compile-roundtrip',
-      'osc:first-compile-request',
-      'osc:first-compile-complete',
-    );
+  }
+
+  // Fail a timed-out job and recycle the (presumed wedged) worker. Shared by the
+  // queue-wait and execution timers.
+  private failTimedOutJob(id: string, reason: string): void {
+    const stuck = this.pending.get(id);
+    if (!stuck) return; // already resolved, cancelled, or superseded
+    clearJobTimers(stuck);
+    this.pending.delete(id);
+    stuck.reject(new Error(reason));
+    console.warn(`[runner] ${reason} (compile ${id})`);
+    this.recycleWorker('Worker recycled after timeout');
+  }
+
+  private getWorker(): Worker {
+    if (!this.worker) {
+      const generation = this.generation; // snapshot: pins this worker's identity
+      this.worker = createOpenSCADWorker();
+      this.worker.onmessage = (e: MessageEvent<WorkerResponse>) =>
+        this.handleWorkerMessage(e, generation);
+      this.worker.onerror = (e: ErrorEvent) => this.handleWorkerError(e);
+    }
+    return this.worker;
+  }
+
+  // Terminate the current worker and reject every job bound to it. The next
+  // request lazily creates a clean worker (getWorker). This is the recovery path
+  // for a wedged or crashed worker.
+  private recycleWorker(reason: string): void {
+    if (this.worker) {
+      this.worker.terminate();
+      this.worker = null;
+    }
+    this.generation++;
+    for (const [, job] of this.pending) {
+      clearJobTimers(job);
+      job.reject(new Error(reason));
+    }
+    this.pending.clear();
+  }
+
+  private handleWorkerMessage(e: MessageEvent<WorkerResponse>, generation: number): void {
+    // Ignore messages from a worker generation that has since been terminated.
+    if (generation !== this.generation) return;
+    const msg = e.data;
+    const job = this.pending.get(msg.id);
+    if (!job) return; // stale response — job was cancelled or timed out
+
+    if (msg.type === 'started') {
+      // The job left the queue and is executing: replace the queue-wait timer with
+      // the execution budget so the compile gets its full allowance regardless of
+      // how long it waited in the queue.
+      job.started = true;
+      if (job.timeoutHandle != null) clearTimeout(job.timeoutHandle);
+      job.timeoutHandle = setTimeout(
+        () =>
+          this.failTimedOutJob(
+            msg.id,
+            `Compile exceeded its ${job.execTimeoutMs / 1000}s execution budget`,
+          ),
+        job.execTimeoutMs,
+      );
+      // Forward progress: re-arm the queue-wait window for every still-queued job,
+      // so a job merely waiting behind legitimate compiles is never recycled (and
+      // never takes the healthy running compile down with it).
+      for (const [otherId, other] of this.pending) {
+        if (other === job || other.started) continue;
+        this.armQueueTimer(otherId, other);
+      }
+    } else if (msg.type === 'result') {
+      const r = msg as CompileResult;
+      this.recordCompilePerf(job, r.perf);
+      clearJobTimers(job);
+      this.pending.delete(r.id);
+      job.resolve({
+        exitCode: r.exitCode,
+        outputs: r.outputs,
+        mergedOutputs: r.mergedOutputs,
+        elapsedMillis: r.elapsedMillis,
+        perf: r.perf,
+        revision: r.revision,
+      });
+    } else if (msg.type === 'error') {
+      const r = msg as CompileError;
+      this.recordCompilePerf(job, r.perf);
+      clearJobTimers(job);
+      this.pending.delete(r.id);
+      job.resolve({
+        exitCode: undefined,
+        error: r.message,
+        mergedOutputs: r.mergedOutputs,
+        elapsedMillis: r.elapsedMillis,
+        perf: r.perf,
+        revision: r.revision,
+      });
+    } else if (msg.type === 'stdout') {
+      const r = msg as CompileStdout;
+      job.streamsCallback({ stdout: r.text });
+    } else if (msg.type === 'stderr') {
+      const r = msg as CompileStderr;
+      job.streamsCallback({ stderr: r.text });
+    }
+  }
+
+  private handleWorkerError(e: ErrorEvent): void {
+    console.error('OpenSCAD worker crashed:', e.message);
+    this.recycleWorker('Worker crashed: ' + e.message);
+  }
+
+  private recordCompilePerf(job: PendingJob, perf?: CompilePerfStats): void {
+    recordPerfDuration('osc:compile-roundtrip', performance.now() - job.startTime);
+    if (perf?.workerFsInitMillis != null) {
+      recordPerfDuration('osc:worker-fs-init', perf.workerFsInitMillis);
+    }
+    if (perf?.workerLibraryMountMillis != null) {
+      recordPerfDuration('osc:worker-library-mount', perf.workerLibraryMountMillis);
+    }
+    if (perf?.workerWasmInitMillis != null) {
+      recordPerfDuration('osc:worker-wasm-init', perf.workerWasmInitMillis);
+    }
+    if (perf?.workerJobMillis != null) {
+      recordPerfDuration('osc:worker-job-total', perf.workerJobMillis);
+    }
+    if (!_pageFirstCompileCompleted) {
+      _pageFirstCompileCompleted = true;
+      markPerf('osc:first-compile-complete');
+      measurePerf(
+        'osc:first-compile-from-bootstrap',
+        'osc:app-bootstrap-start',
+        'osc:first-compile-complete',
+      );
+      measurePerf(
+        'osc:first-compile-roundtrip',
+        'osc:first-compile-request',
+        'osc:first-compile-complete',
+      );
+    }
+  }
+
+  /** Discard a job without terminating the worker (queued-job cancel path). */
+  cancel(id: string, reason = 'Cancelled'): void {
+    const job = this.pending.get(id);
+    if (!job) return;
+    clearJobTimers(job);
+    this.pending.delete(id);
+    this.worker?.postMessage({ type: 'cancel', id } satisfies CancelRequest);
+    job.reject(new Error(reason));
+  }
+
+  spawn(
+    invocation: OpenSCADInvocation,
+    streamsCallback: (ps: ProcessStreams) => void,
+    priority: JobPriority = 'render',
+  ): AbortablePromise<OpenSCADInvocationResults> {
+    const id = String(++this.nextId);
+    const worker = this.getWorker();
+    if (!_pageFirstCompileRequested) {
+      _pageFirstCompileRequested = true;
+      markPerf('osc:first-compile-request');
+    }
+
+    // cancel all lower-priority pending jobs when a higher-priority job arrives
+    const incomingPriority = PRIORITY[priority];
+    for (const [pendingId, pendingJob] of this.pending) {
+      if (pendingJob.priority < incomingPriority) {
+        this.cancel(pendingId, 'Superseded by higher-priority job');
+      }
+    }
+
+    return AbortablePromise<OpenSCADInvocationResults>((resolve, reject) => {
+      const job: PendingJob = {
+        resolve,
+        reject,
+        streamsCallback,
+        priority: incomingPriority,
+        execTimeoutMs: EXEC_TIMEOUT_MS[priority],
+        started: false,
+        startTime: performance.now(),
+        timeoutHandle: null,
+      };
+
+      // Queue-wait timeout: the worker has not even reported this job `started`
+      // within the window. Because callMain is a synchronous WASM call, a wedged
+      // worker can process neither this job nor any queued or future request — so
+      // reject this job and recycle the worker. The timer is re-armed to the
+      // execution budget once the worker reports `started` (see handleWorkerMessage),
+      // so queue time is never charged against the compile's own allowance.
+      this.armQueueTimer(id, job);
+
+      this.pending.set(id, job);
+
+      const request: CompileRequest = {
+        type: 'compile',
+        id,
+        sources: (invocation.inputs ?? []).map((s) => ({
+          path: s.path,
+          content: s.content,
+          url: s.url,
+        })),
+        args: invocation.args,
+        outputPaths: invocation.outputPaths ?? [],
+        mountArchives: invocation.mountArchives,
+        revision: invocation.revision,
+      };
+      worker.postMessage(request);
+
+      return () => this.cancel(id);
+    });
+  }
+
+  /** Tear down this backend: terminate its worker, clear timers, reject pending.
+   *  Makes session teardown real (the previous singleton leaked for the page
+   *  lifetime). Same effect as a recycle, with no re-arm. */
+  dispose(): void {
+    this.recycleWorker('Backend disposed');
   }
 }
 
-// Discard a job without terminating the worker (queued-job cancel path)
-function cancelJobById(id: string, reason = 'Cancelled'): void {
-  const job = _pending.get(id);
-  if (!job) return;
-  clearJobTimers(job);
-  _pending.delete(id);
-  _worker?.postMessage({ type: 'cancel', id } satisfies CancelRequest);
-  job.reject(new Error(reason));
-}
+// The app's single compile engine. `spawnOpenSCAD` delegates here so the public
+// surface is byte-identical to the previous module-singleton; a second session
+// constructs its own `WasmWorkerBackend` (later slices).
+const defaultBackend = new WasmWorkerBackend();
 
 export function spawnOpenSCAD(
   invocation: OpenSCADInvocation,
   streamsCallback: (ps: ProcessStreams) => void,
   priority: JobPriority = 'render',
 ): AbortablePromise<OpenSCADInvocationResults> {
-  const id = String(++_nextId);
-  const worker = getWorker();
-  if (!_firstCompileRequested) {
-    _firstCompileRequested = true;
-    markPerf('osc:first-compile-request');
-  }
-
-  // cancel all lower-priority pending jobs when a higher-priority job arrives
-  const incomingPriority = PRIORITY[priority];
-  for (const [pendingId, pendingJob] of _pending) {
-    if (pendingJob.priority < incomingPriority) {
-      cancelJobById(pendingId, 'Superseded by higher-priority job');
-    }
-  }
-
-  return AbortablePromise<OpenSCADInvocationResults>((resolve, reject) => {
-    const job: PendingJob = {
-      resolve,
-      reject,
-      streamsCallback,
-      priority: incomingPriority,
-      execTimeoutMs: EXEC_TIMEOUT_MS[priority],
-      started: false,
-      startTime: performance.now(),
-      timeoutHandle: null,
-    };
-
-    // Queue-wait timeout: the worker has not even reported this job `started`
-    // within the window. Because callMain is a synchronous WASM call, a wedged
-    // worker can process neither this job nor any queued or future request — so
-    // reject this job and recycle the worker. The timer is re-armed to the
-    // execution budget once the worker reports `started` (see handleWorkerMessage),
-    // so queue time is never charged against the compile's own allowance.
-    armQueueTimer(id, job);
-
-    _pending.set(id, job);
-
-    const request: CompileRequest = {
-      type: 'compile',
-      id,
-      sources: (invocation.inputs ?? []).map((s) => ({
-        path: s.path,
-        content: s.content,
-        url: s.url,
-      })),
-      args: invocation.args,
-      outputPaths: invocation.outputPaths ?? [],
-      mountArchives: invocation.mountArchives,
-      revision: invocation.revision,
-    };
-    worker.postMessage(request);
-
-    return () => cancelJobById(id);
-  });
+  return defaultBackend.spawn(invocation, streamsCallback, priority);
 }
