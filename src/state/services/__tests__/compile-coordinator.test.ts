@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CompileCoordinator } from '../compile-coordinator.ts';
 import type { ServiceContext } from '../service-context.ts';
 import { ArtifactStore } from '../../artifact-store.ts';
+import type { OperationResult } from '../../../runner/compile-contract.ts';
 import type { State } from '../../app-state.ts';
 
 // render() is `factory(renderArgs)({ now })` → Promise<RenderOutput>; we drive the
@@ -16,7 +17,7 @@ vi.mock('../../../runner/actions.ts', () => ({
   createSyntaxDelayable: () => (args: unknown) => (opts: unknown) => checkSyntaxImpl(args, opts),
 }));
 
-function makeContext(revision: number) {
+function makeContext(revision: number, onResult?: (r: OperationResult) => void) {
   const state = {
     params: {
       sources: [{ kind: 'text', path: '/main.scad', content: 'cube();' }],
@@ -38,6 +39,7 @@ function makeContext(revision: number) {
   };
 
   let rev = revision;
+  const results: OperationResult[] = [];
   const ctx: ServiceContext = {
     getState: () => state,
     mutate: (f) => {
@@ -53,9 +55,10 @@ function makeContext(revision: number) {
     backend: { spawn: vi.fn(), cancel: vi.fn(), dispose: vi.fn() },
     sessionId: 'test-session',
     artifacts: new ArtifactStore(),
+    onOperationResult: onResult ?? ((r) => results.push(r)),
   };
 
-  return { ctx, state, host, setRevision: (n: number) => (rev = n) };
+  return { ctx, state, host, results, setRevision: (n: number) => (rev = n) };
 }
 
 function renderOutput(revision: number) {
@@ -168,7 +171,7 @@ describe('CompileCoordinator render staleness', () => {
   });
 
   it('commits the result and revokes nothing on the happy path', async () => {
-    const { ctx, state, host } = makeContext(1);
+    const { ctx, state, host, results } = makeContext(1);
     renderImpl.mockResolvedValue(renderOutput(1));
 
     await new CompileCoordinator(ctx).render({ isPreview: false, now: true });
@@ -184,12 +187,23 @@ describe('CompileCoordinator render staleness', () => {
     // The same artifactId resolves in the store to the exact committed File —
     // the slice's central guarantee (shared id, byte-identical write-through).
     expect(ctx.artifacts.get(state.output!.artifactId)?.bytes).toBe(state.output!.outFile);
+    // Exactly one terminal OperationResult: a success keyed to the operation, its
+    // artifact ref matching the committed output (ADR 0008 slice 4).
+    expect(results).toHaveLength(1);
+    const result = results[0];
+    expect(result.status).toBe('success');
+    expect(result.kind).toBe('render');
+    expect(result.operationId).toBe(state.output?.operationId);
+    if (result.status === 'success') {
+      expect(result.artifact?.artifactId).toBe(state.output?.artifactId);
+      expect(result.artifact?.operationId).toBe(state.output?.operationId);
+    }
   });
 
   it('drops a result whose revision is stale and never creates a blob URL', async () => {
     // The render was requested at revision 1, but the sources moved to 2 by the
     // time the result arrives (e.g. the user edited while rendering).
-    const { ctx, state, host } = makeContext(2);
+    const { ctx, state, host, results } = makeContext(2);
     renderImpl.mockResolvedValue(renderOutput(1));
 
     await new CompileCoordinator(ctx).render({ isPreview: false, now: true });
@@ -201,6 +215,10 @@ describe('CompileCoordinator render staleness', () => {
     expect(host.revokeObjectURL).not.toHaveBeenCalled();
     expect(host.playCompletionChime).not.toHaveBeenCalled();
     expect(state.rendering).toBe(false);
+    // The stale-drop still terminates the operation — exactly one cancelled result.
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('cancelled');
+    expect(results[0].kind).toBe('render');
   });
 
   it('revokes the previous output blob URL when committing a new result', async () => {
@@ -223,5 +241,111 @@ describe('CompileCoordinator render staleness', () => {
 
     expect(host.revokeObjectURL).toHaveBeenCalledWith('blob:old-url');
     expect(state.output?.outFileURL).toBe('blob:fake-url');
+  });
+});
+
+describe('CompileCoordinator terminal OperationResult (ADR 0008 slice 4)', () => {
+  beforeEach(() => {
+    renderImpl.mockReset();
+    checkSyntaxImpl.mockReset();
+  });
+
+  it('emits one error result when the render rejects', async () => {
+    const { ctx, results } = makeContext(1);
+    renderImpl.mockRejectedValue(new Error('boom'));
+
+    await new CompileCoordinator(ctx).render({ isPreview: false, now: true });
+
+    expect(results).toHaveLength(1);
+    const result = results[0];
+    expect(result.status).toBe('error');
+    expect(result.kind).toBe('render');
+    if (result.status === 'error') {
+      expect(result.code).toBe('operation_failed');
+      expect(typeof result.reason).toBe('string');
+      expect(result.reason.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('a superseded render terminates as cancelled while the newer one succeeds', async () => {
+    const { ctx, results } = makeContext(1);
+    let resolveFirst: (v: unknown) => void = () => {};
+    renderImpl.mockReturnValueOnce(new Promise((r) => (resolveFirst = r)));
+    renderImpl.mockResolvedValueOnce(renderOutput(1));
+    const coord = new CompileCoordinator(ctx);
+
+    const first = coord.render({ isPreview: false, now: true });
+    const second = coord.render({ isPreview: false, now: true }); // supersedes the first
+    resolveFirst(renderOutput(1));
+    await Promise.all([first, second]);
+
+    expect(results).toHaveLength(2);
+    const statuses = results.map((r) => r.status).sort();
+    expect(statuses).toEqual(['cancelled', 'success']);
+    // Distinct operations: the cancelled and the success never share an id.
+    expect(results[0].operationId).not.toBe(results[1].operationId);
+  });
+
+  it('the 2D/3D dimension retry is a distinct second operation (two results, two ids)', async () => {
+    const { ctx, results } = makeContext(1);
+    // The first render logs a dimension mismatch via the streams callback, which
+    // triggers exactly one retry (a recursive render with its own operationId).
+    renderImpl.mockImplementationOnce((renderArgs: { streamsCallback: (p: unknown) => void }) => {
+      renderArgs.streamsCallback({ stderr: 'Current top level object is not a 3D object.' });
+      return Promise.resolve(renderOutput(1));
+    });
+    renderImpl.mockResolvedValueOnce(renderOutput(1));
+
+    await new CompileCoordinator(ctx).render({ isPreview: false, now: true });
+    // The retry is dispatched without await (fire-and-return), so let its own
+    // async commit settle before asserting.
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(results).toHaveLength(2);
+    expect(results.every((r) => r.status === 'success')).toBe(true);
+    expect(results[0].operationId).not.toBe(results[1].operationId);
+  });
+
+  it('checkSyntax emits one success result with no artifact', async () => {
+    const { ctx, results } = makeContext(1);
+    checkSyntaxImpl.mockResolvedValue({ revision: 1, markers: [], logText: '' });
+
+    await new CompileCoordinator(ctx).checkSyntax();
+
+    expect(results).toHaveLength(1);
+    const result = results[0];
+    expect(result.status).toBe('success');
+    expect(result.kind).toBe('syntaxCheck');
+    if (result.status === 'success') {
+      expect(result.artifact).toBeUndefined();
+    }
+  });
+
+  it('checkSyntax emits one error result when the check rejects', async () => {
+    const { ctx, results } = makeContext(1);
+    checkSyntaxImpl.mockRejectedValue(new Error('parse failure'));
+
+    await new CompileCoordinator(ctx).checkSyntax();
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('error');
+    expect(results[0].kind).toBe('syntaxCheck');
+  });
+
+  it('a throwing sink cannot corrupt the committed render or surface an error', async () => {
+    // The result sink throws; emitResult must swallow it so the success commit is
+    // not re-entered by the catch (no clobbered output, no spurious error).
+    const { ctx, state } = makeContext(1, () => {
+      throw new Error('sink boom');
+    });
+    renderImpl.mockResolvedValue(renderOutput(1));
+
+    await expect(
+      new CompileCoordinator(ctx).render({ isPreview: false, now: true }),
+    ).resolves.toBeUndefined();
+
+    expect(state.output?.outFileURL).toBe('blob:fake-url');
+    expect(state.error).toBeUndefined();
+    expect(state.rendering).toBe(false);
   });
 });

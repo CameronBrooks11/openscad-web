@@ -30,6 +30,7 @@ import type { HostAdapter } from '../../web-host-adapter.ts';
 import { ExportService } from '../export-service.ts';
 import type { ServiceContext } from '../service-context.ts';
 import { ArtifactStore } from '../../artifact-store.ts';
+import type { OperationResult } from '../../../runner/compile-contract.ts';
 
 /**
  * A renderExport mock whose inner thunk returns an AbortablePromise-shaped value
@@ -74,6 +75,7 @@ function fileOutput(name: string, url = 'blob:out'): State['output'] {
 }
 
 function makeCtx(partial: Partial<State['params']> & { is2D?: boolean; output?: State['output'] }) {
+  const results: OperationResult[] = [];
   let state: State = {
     params: {
       activePath: '/a.scad',
@@ -116,15 +118,16 @@ function makeCtx(partial: Partial<State['params']> & { is2D?: boolean; output?: 
     backend: { spawn: vi.fn(), cancel: vi.fn(), dispose: vi.fn() },
     sessionId: 'test-session',
     artifacts: new ArtifactStore(),
+    onOperationResult: (r) => results.push(r),
   };
-  return { ctx, host, getState: () => state };
+  return { ctx, host, results, getState: () => state };
 }
 
 describe('ExportService', () => {
   beforeEach(() => vi.clearAllMocks());
 
   it('downloads the rendered file directly on an svg pass-through (2D)', async () => {
-    const { ctx, host } = makeCtx({
+    const { ctx, host, results } = makeCtx({
       is2D: true,
       exportFormat2D: 'svg',
       output: fileOutput('m.svg'),
@@ -132,6 +135,15 @@ describe('ExportService', () => {
     await new ExportService(ctx).export();
     expect(host.download).toHaveBeenCalledWith('blob:out', 'm.svg');
     expect(mockRenderExport).not.toHaveBeenCalled();
+    // One terminal success that INHERITS the render's artifact identity (same
+    // bytes), keyed to this export operation (ADR 0008 slice 4).
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('success');
+    expect(results[0].kind).toBe('export');
+    if (results[0].status === 'success') {
+      expect(results[0].artifact?.artifactId).toBe('art');
+      expect(results[0].artifact?.operationId).toBe('op');
+    }
   });
 
   it('converts to glb in-browser (no worker render) and downloads a .glb', async () => {
@@ -148,7 +160,7 @@ describe('ExportService', () => {
   });
 
   it('opens the multimaterial picker for 3mf without extruder colors', async () => {
-    const { ctx, getState } = makeCtx({
+    const { ctx, getState, results } = makeCtx({
       is2D: false,
       exportFormat3D: '3mf',
       output: fileOutput('m.off'),
@@ -156,6 +168,11 @@ describe('ExportService', () => {
     await new ExportService(ctx).export();
     expect(getState().view.extruderPickerVisibility).toBe('exporting');
     expect(mockRenderExport).not.toHaveBeenCalled();
+    // The picker defers the real export to a second call; this op terminates as
+    // cancelled so every minted operationId resolves exactly once (ADR 0008).
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('cancelled');
+    expect(results[0].kind).toBe('export');
   });
 
   it('converts to 3mf when extruder colors are set, then downloads', async () => {
@@ -172,7 +189,7 @@ describe('ExportService', () => {
   });
 
   it('renders a format conversion for non-passthrough formats (e.g. stl)', async () => {
-    const { ctx, host, getState } = makeCtx({
+    const { ctx, host, getState, results } = makeCtx({
       is2D: false,
       exportFormat3D: 'stl',
       output: fileOutput('m.off'),
@@ -186,10 +203,16 @@ describe('ExportService', () => {
     // (shared id, byte-identical write-through — ADR 0008).
     const exported = getState().export!;
     expect(ctx.artifacts.get(exported.artifactId)?.bytes).toBe(exported.outFile);
+    // One terminal success whose fresh artifact ref matches the committed export.
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('success');
+    if (results[0].status === 'success') {
+      expect(results[0].artifact?.artifactId).toBe(exported.artifactId);
+    }
   });
 
   it('drops a superseded export result instead of clobbering the newer one', async () => {
-    const { ctx, host, getState } = makeCtx({
+    const { ctx, host, getState, results } = makeCtx({
       is2D: false,
       exportFormat3D: 'stl',
       output: fileOutput('m.off'),
@@ -223,6 +246,8 @@ describe('ExportService', () => {
     // Only the newer export downloaded; the stale one was dropped.
     expect(host.download.mock.calls.map((c) => c[1])).toEqual(['second.stl']);
     expect(getState().exporting).toBe(false);
+    // Two terminal results: the superseded op is cancelled, the newer succeeds.
+    expect(results.map((r) => r.status).sort()).toEqual(['cancelled', 'success']);
   });
 
   it('treats a superseded (cancelled) export as supersession, not a user-facing error', async () => {
@@ -343,9 +368,17 @@ describe('ExportService', () => {
   });
 
   it('clears exporting and surfaces an error when there is no output to convert', async () => {
-    const { ctx, getState } = makeCtx({ is2D: false, exportFormat3D: 'stl', output: undefined });
+    const { ctx, getState, results } = makeCtx({
+      is2D: false,
+      exportFormat3D: 'stl',
+      output: undefined,
+    });
     await new ExportService(ctx).export();
     expect(getState().exporting).toBe(false);
     expect(getState().error).toBeTruthy();
+    // The failed export terminates as exactly one error result (ADR 0008 slice 4).
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('error');
+    expect(results[0].kind).toBe('export');
   });
 });

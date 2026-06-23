@@ -1,4 +1,5 @@
 import type { ProjectFileSystem } from '../../fs/project-filesystem.ts';
+import type { OperationResult } from '../../runner/compile-contract.ts';
 import type { CompileBackend } from '../../runner/openscad-runner.ts';
 import type { ArtifactStore } from '../artifact-store.ts';
 import type { State } from '../app-state.ts';
@@ -35,4 +36,12 @@ export interface ServiceContext {
   readonly sessionId: string;
   /** This session's artifact store — bytes by immutable artifactId (ADR 0008). */
   readonly artifacts: ArtifactStore;
+  /**
+   * Optional sink for the one terminal `OperationResult` each operation produces
+   * (ADR 0008). When unset the emit short-circuits, so the deploy-critical commit
+   * path stays byte-identical; wiring it (e.g. to a Model event for the future MCP
+   * binding) is a one-line change. The UI commit and embed events are unchanged —
+   * they still derive from `FileOutput`; this is the correlated parallel record.
+   */
+  readonly onOperationResult?: (result: OperationResult) => void;
 }

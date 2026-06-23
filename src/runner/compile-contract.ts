@@ -57,6 +57,42 @@ export interface OperationCancelled extends OperationResultBase {
 export type OperationResult = OperationSuccess | OperationFailure | OperationCancelled;
 
 /**
+ * Layer-1 envelope version (ADR 0005 axis). Distinct from `EMBED_PROTOCOL_VERSION`
+ * — that versions the embed *wire*; this versions the host-side operation result.
+ */
+export const L1_PROTOCOL_VERSION = 1;
+
+/** Coarse failure code pending a real taxonomy when the MCP binding needs to
+ *  branch on it; `reason` carries the user-facing message today. */
+export const OPERATION_FAILED = 'operation_failed';
+
+/** The shared, status-independent fields of a terminal result. */
+export type OperationBase = Omit<OperationResultBase, 'protocolVersion'>;
+
+export function operationSuccess(base: OperationBase, artifact?: ArtifactRef): OperationSuccess {
+  // Omit the key entirely when artifact-less (e.g. a syntax check), so `'artifact'
+  // in result` is a reliable "has bytes" probe rather than always-true.
+  return {
+    protocolVersion: L1_PROTOCOL_VERSION,
+    status: 'success',
+    ...base,
+    ...(artifact ? { artifact } : {}),
+  };
+}
+
+export function operationFailure(
+  base: OperationBase,
+  code: string,
+  reason: string,
+): OperationFailure {
+  return { protocolVersion: L1_PROTOCOL_VERSION, status: 'error', ...base, code, reason };
+}
+
+export function operationCancelled(base: OperationBase): OperationCancelled {
+  return { protocolVersion: L1_PROTOCOL_VERSION, status: 'cancelled', ...base };
+}
+
+/**
  * An immutable handle to a produced artifact's exact bytes. `artifactId` keys a
  * per-session store so `getArtifact(artifactId)` returns those exact bytes — not a
  * racy "current output".
