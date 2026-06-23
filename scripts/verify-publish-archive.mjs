@@ -39,6 +39,7 @@ async function main() {
   const entrySet = new Set(entryNames);
 
   assertArchiveHas(entrySet, 'index.html');
+  assertArchiveHas(entrySet, 'viewer.html');
   assertArchiveHasPrefix(entryNames, 'assets/');
   assertArchiveHasPrefix(entryNames, 'libraries/');
 

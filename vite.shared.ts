@@ -1,6 +1,9 @@
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 import type { UserConfig } from 'vite';
+
+const htmlInput = (name: string) => fileURLToPath(new URL(`./${name}`, import.meta.url));
 
 type PackageJsonShape = {
   homepage?: string;
@@ -29,13 +32,24 @@ export function createAppViteConfig({
     base,
     publicDir: 'public',
     optimizeDeps: {
-      entries: ['index.html'],
+      entries: ['index.html', 'viewer.html'],
     },
     build: {
       outDir,
       target: 'es2022',
       emptyOutDir: true,
       rollupOptions: {
+        // Two HTML entries: the full app (index.html) and a standalone, read-only
+        // geometry viewer (viewer.html) for host/webview embedding. The viewer
+        // entry pulls in only Lit + Three + the OFF viewer — no Monaco, BrowserFS,
+        // OpenSCAD WASM, Model, or service worker (asserted by
+        // scripts/verify-viewer-bundle.mjs).
+        // The `index` key keeps the app entry chunk named `index-*` (the bundle
+        // budgets and the existing tooling key off that).
+        input: {
+          index: htmlInput('index.html'),
+          viewer: htmlInput('viewer.html'),
+        },
         output: {
           // Split the two heavy vendor libraries into their own named chunks so
           // they can be budgeted separately and are only fetched by the surfaces
