@@ -3,6 +3,7 @@ import { contentOf, type SerializableSource } from '../project-source.ts';
 
 function makeFs(files: Record<string, string> = {}) {
   const written: Record<string, string> = {};
+  const writtenBytes: Record<string, Uint8Array> = {};
   return {
     fs: {
       readFileSync: vi.fn((path: string) => {
@@ -12,8 +13,12 @@ function makeFs(files: Record<string, string> = {}) {
       writeFile: vi.fn((path: string, content: string) => {
         written[path] = content;
       }),
+      writeBytes: vi.fn((path: string, content: Uint8Array) => {
+        writtenBytes[path] = content;
+      }),
     } as unknown as FS,
     written,
+    writtenBytes,
   };
 }
 
@@ -30,6 +35,24 @@ describe('ProjectStore (#57)', () => {
     const updated = store.withActiveContent(sources, '/a.scad', 'A2');
     expect(contentOf(updated.find((s) => s.path === '/a.scad')!)).toBe('A2');
     expect(contentOf(updated.find((s) => s.path === '/b.scad')!)).toBe('B');
+  });
+
+  it('addBinaryFile writes bytes and records a content-less local source', () => {
+    const { fs, written, writtenBytes } = makeFs();
+    const store = new ProjectStore(fs);
+    const bytes = new Uint8Array([0, 65, 200, 255]);
+
+    const next = store.addBinaryFile(
+      [{ kind: 'text', path: '/a.scad', content: 'A' }],
+      '/p.stl',
+      bytes,
+    );
+
+    expect(Array.from(writtenBytes['/p.stl'])).toEqual(Array.from(bytes));
+    expect(written['/p.stl']).toBeUndefined(); // not written as text
+    const added = next.sources.find((s) => s.path === '/p.stl');
+    expect(added).toEqual({ kind: 'local', path: '/p.stl' });
+    expect(next.activePath).toBe('/p.stl');
   });
 
   it('openFile returns null when the path is already active', () => {

@@ -1,7 +1,7 @@
 import JSZip from 'jszip';
 import { ancestorDirsOf } from '../fs/filesystem.ts';
 import { ProjectFileSystem } from '../fs/project-filesystem.ts';
-import { contentOf, type SerializableSource } from './project-source.ts';
+import { contentOf, isProbablyTextPath, type SerializableSource } from './project-source.ts';
 import { fetchSource } from '../utils.ts';
 import {
   MAX_COMPRESSED_ZIP_BYTES,
@@ -97,6 +97,19 @@ export class ProjectStore {
     return { sources: [...withoutExisting, { kind: 'text', path, content }], activePath: path };
   }
 
+  /** Add a binary asset: write its bytes to the FS and record a content-less
+   *  `local` source (its bytes are materialized into the compile request when
+   *  referenced — ADR 0006). */
+  addBinaryFile(sources: SerializableSource[], path: string, bytes: Uint8Array): ProjectSnapshot {
+    try {
+      this.fs.writeBytes?.(path, bytes);
+    } catch {
+      /* ignore */
+    }
+    const withoutExisting = sources.filter((src) => src.path !== path);
+    return { sources: [...withoutExisting, { kind: 'local', path }], activePath: path };
+  }
+
   /**
    * Extract a validated ZIP archive into /home and select an entry .scad.
    * Validates and bounds every entry before writing any (atomic rejection).
@@ -116,7 +129,7 @@ export class ProjectStore {
     // units). Each entry is decompressed as a stream and aborted the moment the
     // running total would exceed the budget, so a zip bomb can't fully inflate
     // in memory before the check trips.
-    const files: [string, string][] = [];
+    const files: ImportedEntry[] = [];
     const seen = new Set<string>();
     let totalSize = 0;
     for (const [relPath, zipObj] of entries) {
@@ -125,16 +138,25 @@ export class ProjectStore {
         throw new ProjectPathError(`Duplicate path in archive: ${safePath}`);
       }
       seen.add(safePath);
-      const content = await readZipEntryWithinBudget(zipObj, MAX_PROJECT_TOTAL_BYTES - totalSize);
-      totalSize += content.length;
-      files.push([safePath, content]);
+      const budget = MAX_PROJECT_TOTAL_BYTES - totalSize;
+      // Text entries decode to an editable in-memory string; everything else is
+      // read as raw bytes and kept on the FS as a binary `local` source (#121).
+      if (isProbablyTextPath(safePath)) {
+        const content = await readZipEntryWithinBudget(zipObj, budget);
+        totalSize += content.length;
+        files.push({ safePath, kind: 'text', content });
+      } else {
+        const content = await readZipEntryBytesWithinBudget(zipObj, budget);
+        totalSize += content.byteLength;
+        files.push({ safePath, kind: 'binary', content });
+      }
     }
     // Paths are validated above; FS write failures are best-effort and must not
-    // abort the import — the file content is still surfaced via the returned
-    // sources. Create each nested file's parent dirs first (mkdir -p) so a file
-    // like lib/x.scad doesn't fail to write for want of /home/lib.
-    for (const [safePath, content] of files) {
-      const fullPath = `/home/${safePath}`;
+    // abort the import — text content is still surfaced via the returned sources.
+    // Create each nested file's parent dirs first (mkdir -p) so a file like
+    // lib/x.scad doesn't fail to write for want of /home/lib.
+    for (const entry of files) {
+      const fullPath = `/home/${entry.safePath}`;
       try {
         if (this.fs.mkdirSync) {
           for (const dir of ancestorDirsOf(fullPath)) {
@@ -145,21 +167,30 @@ export class ProjectStore {
             }
           }
         }
-        this.fs.writeFile(fullPath, content);
+        if (entry.kind === 'binary') {
+          this.fs.writeBytes?.(fullPath, entry.content);
+        } else {
+          this.fs.writeFile(fullPath, entry.content);
+        }
       } catch {
         /* best-effort */
       }
     }
-    const entryRel = (files.find(([p]) => p === 'main.scad') ??
-      files.find(([p]) => p.endsWith('.scad')) ??
-      files[0])?.[0];
+    const entryRel = (
+      files.find((e) => e.safePath === 'main.scad') ??
+      files.find((e) => e.safePath.endsWith('.scad')) ??
+      files[0]
+    )?.safePath;
     if (!entryRel) return null;
     return {
-      sources: files.map(([p, content]) => ({
-        kind: 'text' as const,
-        path: `/home/${p}`,
-        content,
-      })),
+      // A binary entry becomes a content-less `local` source: its bytes live on
+      // the FS (written above) and are materialized into the compile request when
+      // referenced (ADR 0006). Text entries keep their inline content.
+      sources: files.map((e) =>
+        e.kind === 'text'
+          ? { kind: 'text' as const, path: `/home/${e.safePath}`, content: e.content }
+          : { kind: 'local' as const, path: `/home/${e.safePath}` },
+      ),
       activePath: `/home/${entryRel}`,
     };
   }
@@ -176,6 +207,11 @@ export class ProjectStore {
   }
 }
 
+/** One decoded archive entry: editable text, or raw bytes for a binary asset. */
+type ImportedEntry =
+  | { safePath: string; kind: 'text'; content: string }
+  | { safePath: string; kind: 'binary'; content: Uint8Array };
+
 // JSZip's incremental decompression API (`internalStream`) is public at runtime
 // but missing from @types/jszip; declare the minimal surface we use.
 interface JSZipStringStream {
@@ -184,6 +220,14 @@ interface JSZipStringStream {
   on(event: 'end', cb: () => void): JSZipStringStream;
   resume(): JSZipStringStream;
   pause(): JSZipStringStream;
+}
+
+interface JSZipBytesStream {
+  on(event: 'data', cb: (chunk: Uint8Array) => void): JSZipBytesStream;
+  on(event: 'error', cb: (err: unknown) => void): JSZipBytesStream;
+  on(event: 'end', cb: () => void): JSZipBytesStream;
+  resume(): JSZipBytesStream;
+  pause(): JSZipBytesStream;
 }
 
 /**
@@ -214,6 +258,46 @@ function readZipEntryWithinBudget(zipObj: JSZip.JSZipObject, budget: number): Pr
       })
       .on('error', (err: unknown) => reject(err instanceof Error ? err : new Error(String(err))))
       .on('end', () => resolve(acc))
+      .resume();
+  });
+}
+
+/**
+ * Decompress one ZIP entry to raw bytes, aborting as soon as the cumulative size
+ * would exceed `budget` (bytes). The binary counterpart of
+ * `readZipEntryWithinBudget` — never decodes through a (lossy) TextDecoder, so a
+ * `.stl`/`.png` lands byte-exact.
+ */
+function readZipEntryBytesWithinBudget(
+  zipObj: JSZip.JSZipObject,
+  budget: number,
+): Promise<Uint8Array> {
+  return new Promise<Uint8Array>((resolve, reject) => {
+    const chunks: Uint8Array[] = [];
+    let len = 0;
+    const stream = (
+      zipObj as unknown as { internalStream(type: 'uint8array'): JSZipBytesStream }
+    ).internalStream('uint8array');
+    stream
+      .on('data', (chunk: Uint8Array) => {
+        len += chunk.byteLength;
+        if (len > budget) {
+          stream.pause();
+          reject(new ProjectPathError('Archive exceeds the uncompressed size limit.'));
+          return;
+        }
+        chunks.push(chunk);
+      })
+      .on('error', (err: unknown) => reject(err instanceof Error ? err : new Error(String(err))))
+      .on('end', () => {
+        const out = new Uint8Array(len);
+        let offset = 0;
+        for (const chunk of chunks) {
+          out.set(chunk, offset);
+          offset += chunk.byteLength;
+        }
+        resolve(out);
+      })
       .resume();
   });
 }

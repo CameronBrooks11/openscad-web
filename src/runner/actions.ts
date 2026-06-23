@@ -9,7 +9,7 @@ import {
 } from './openscad-runner.ts';
 import { processMergedOutputs } from './output-parser.ts';
 import { AbortablePromise, turnIntoDelayableExecution } from '../utils.ts';
-import { Source } from '../state/app-state.ts';
+import type { WireSource } from '../state/project-source.ts';
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from '../state/formats.ts';
 import { ParameterSet } from '../state/customizer-types.ts';
 import { createOperationFailure } from '../user-facing-errors.ts';
@@ -18,7 +18,7 @@ const syntaxDelay = 300;
 
 type SyntaxCheckArgs = {
   activePath: string;
-  sources: Source[];
+  sources: WireSource[];
   revision?: number;
 };
 type SyntaxCheckOutput = {
@@ -95,7 +95,7 @@ export type RenderOutput = {
 
 export type RenderArgs = {
   scadPath: string;
-  sources: Source[];
+  sources: WireSource[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   vars?: { [name: string]: any };
   features?: string[];

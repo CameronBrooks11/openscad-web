@@ -3,6 +3,12 @@
 
 declare interface FS {
   writeFile(path: string, content: string): void;
+  /**
+   * Write raw bytes. BrowserFS corrupts a bare `Uint8Array` (writes zeros) and
+   * throws from `writeFileSync`, so this is installed by `createEditorFS` to
+   * convert through BrowserFS's own `Buffer` first. See ADR 0006.
+   */
+  writeBytes(path: string, content: Uint8Array): void;
   readdir(path: string, cb: (err: any, files: string[]) => void): void;
   readdirSync(path: string): string[];
   symlink(target: string, source: string): void;

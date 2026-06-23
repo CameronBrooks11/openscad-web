@@ -132,7 +132,12 @@ async function runCompile(msg: CompileRequest): Promise<void> {
         perf.workerFsInitMillis = performance.now() - fsStart;
         measurePerf('osc:worker-fs-init', 'osc:worker-fs-init-start', 'osc:worker-fs-init-end');
       }
-      const sourceTexts = sources.map((s) => s.content).filter((c): c is string => c != null);
+      // Only text sources are scanned for library directives — a binary asset's
+      // Uint8Array content must be excluded (the `!= null` guard used to let it
+      // through, then extractLibraryNames did `.matchAll` on bytes — #121).
+      const sourceTexts = sources
+        .map((s) => s.content)
+        .filter((c): c is string => typeof c === 'string');
       // Also ensure the library is mounted if the active source path is inside /libraries/<name>/
       const extraNames = sources
         .map((s) => s.path)

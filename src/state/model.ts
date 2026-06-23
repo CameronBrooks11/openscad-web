@@ -343,7 +343,10 @@ export class Model extends EventTarget {
     const result = await openLocalFile();
     if (!result) return false;
     const path = `/home/${result.name}`;
-    const next = this.projectStore.addFile(this.state.params.sources, path, result.content);
+    const next =
+      result.bytes !== undefined
+        ? this.projectStore.addBinaryFile(this.state.params.sources, path, result.bytes)
+        : this.projectStore.addFile(this.state.params.sources, path, result.content);
     this.fsapiHandles.set(path, result.handle);
     this.mutate((s) => {
       s.params.sources = next.sources;
