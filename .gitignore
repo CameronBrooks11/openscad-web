@@ -4,6 +4,7 @@ node_modules/
 # Build outputs
 dist/
 dist-publish/
+dist-viewer/
 libs/
 openscad-web-publish.zip
 .publish-e2e/
