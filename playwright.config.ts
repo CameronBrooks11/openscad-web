@@ -52,7 +52,20 @@ export default defineConfig({
       ? [
           {
             name: 'firefox',
-            use: { ...devices['Desktop Firefox'] },
+            use: {
+              ...devices['Desktop Firefox'],
+              // Headless Firefox in CI has no GPU; nudge it toward software WebGL
+              // so the viewer can still init. The @firefox smoke tests assert on
+              // the WASM render output rather than the canvas, so this is a
+              // best-effort bonus, not load-bearing.
+              launchOptions: {
+                firefoxUserPrefs: {
+                  'webgl.force-enabled': true,
+                  'webgl.disabled': false,
+                  'gfx.webrender.software': true,
+                },
+              },
+            },
             grep: /@firefox/,
           },
         ]

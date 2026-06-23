@@ -6,9 +6,10 @@ import { expect, test, type Page } from '@playwright/test';
 // playwright.config.ts) to cover the WASM worker, Blob/File, and the BrowserFS
 // fallback used when the File System Access API is absent (Firefox/Safari).
 //
-// These assert on functional outcomes (geometry loaded, valid OFF) rather than
-// console cleanliness, since benign console/network message strings differ
-// across browsers — the strict console-error gate lives in e2e.spec.ts.
+// These assert on functional outcomes (a settled WASM render output + valid OFF)
+// rather than the WebGL viewer or console cleanliness, since headless Firefox in
+// CI has no WebGL and benign console/network message strings differ across
+// browsers — the strict console-error gate lives in e2e.spec.ts.
 
 const isProductionServer = process.env.E2E_SERVER_MODE !== 'dev';
 const appOrigin = isProductionServer ? 'http://localhost:3000' : 'http://localhost:4000';
@@ -29,14 +30,15 @@ async function loadSrc(page: Page, src: string): Promise<void> {
   await page.goto(url.toString());
 }
 
-/** Wait until the viewer canvas reports geometry and a settled render output. */
-async function waitForGeometry(page: Page): Promise<void> {
-  await page.waitForSelector('[data-testid="viewer-canvas"] canvas', { timeout: renderTimeoutMs });
+/**
+ * Wait until the WASM worker produces a settled render output. Deliberately does
+ * NOT wait on the Three.js `viewer-canvas`: headless Firefox in CI has no WebGL,
+ * so the canvas never paints — but the compile pipeline (worker + WASM + Blob)
+ * still runs, which is what this cross-browser smoke verifies.
+ */
+async function waitForRenderOutput(page: Page): Promise<void> {
   await page.waitForFunction(
     () => {
-      const container = document.querySelector(
-        '[data-testid="viewer-canvas"]',
-      ) as HTMLElement | null;
       const shell = document.querySelector('osc-app-shell') as (Element & { _st?: unknown }) | null;
       const state =
         shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
@@ -44,13 +46,7 @@ async function waitForGeometry(page: Page): Promise<void> {
         state && typeof state === 'object' && 'output' in state
           ? (state.output as Record<string, unknown> | undefined)
           : undefined;
-      return Boolean(
-        container?.dataset.geometryLoaded === 'true' &&
-        state &&
-        !state.rendering &&
-        !state.previewing &&
-        output,
-      );
+      return Boolean(state && !state.rendering && !state.previewing && output);
     },
     null,
     { timeout: renderTimeoutMs },
@@ -88,13 +84,13 @@ async function expectValidOff(page: Page): Promise<void> {
 
 test('loads and renders the default model @firefox', async ({ page }) => {
   await page.goto(appBaseUrl);
-  await waitForGeometry(page);
+  await waitForRenderOutput(page);
   await expectValidOff(page);
 });
 
 test('compiles a model from the URL fragment via the WASM worker @firefox', async ({ page }) => {
   await loadSrc(page, 'cube([10, 10, 10]);');
-  await waitForGeometry(page);
+  await waitForRenderOutput(page);
   await expectValidOff(page);
 });
 
@@ -126,7 +122,7 @@ test('imports a nested-dir ZIP project, lists the nested file, and compiles @fir
   page,
 }) => {
   await page.goto(appBaseUrl);
-  await waitForGeometry(page); // default model loaded first
+  await waitForRenderOutput(page); // default model loaded first
 
   // Build a multi-directory project archive: main.scad includes lib/part.scad.
   const zip = new JSZip();
@@ -152,7 +148,7 @@ test('imports a nested-dir ZIP project, lists the nested file, and compiles @fir
 
   // main.scad is the active entry and compiles — the include resolved, so the
   // cube(7) from the nested file is in the output mesh.
-  await waitForGeometry(page);
+  await waitForRenderOutput(page);
   await expectValidOff(page);
 
   // Navigating to the nested file makes it the active source.
