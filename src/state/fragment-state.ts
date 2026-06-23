@@ -1,6 +1,7 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import { resolveExternalSourceUrl } from '../external-source.ts';
+import { isOpenScadValue, type OpenScadValue } from '../openscad-value.ts';
 import { State } from './app-state.ts';
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
 import { validateArray, validateBoolean, validateString, validateStringEnum } from '../utils.ts';
@@ -9,11 +10,14 @@ import { createInitialState, defaultModelColor, defaultSourcePath } from './init
 
 function validateVars(v: unknown): State['params']['vars'] {
   if (v == null || typeof v !== 'object' || Array.isArray(v)) return undefined;
-  return Object.fromEntries(
-    Object.entries(v as Record<string, unknown>).filter(
-      ([k]) => typeof k === 'string' && k.length > 0,
-    ),
-  );
+  // Keep only well-formed entries: a non-empty key and an OpenSCAD-valid value, so
+  // a corrupt/hostile fragment can't inject a value (object, Infinity, …) that the
+  // args builder would later reject mid-render.
+  const out: Record<string, OpenScadValue> = {};
+  for (const [k, value] of Object.entries(v as Record<string, unknown>)) {
+    if (k.length > 0 && isOpenScadValue(value)) out[k] = value;
+  }
+  return out;
 }
 
 // Preserve tri-state: an absent boolean stays `undefined` (its "use the default"

@@ -7,6 +7,7 @@ import {
   StatePersister,
 } from './app-state.ts';
 import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
+import type { OpenScadValue } from '../openscad-value.ts';
 import { bubbleUpDeepMutations } from './deep-mutate.ts';
 import { openLocalFile, saveViaHandle } from '../fs/filesystem.ts';
 import { ProjectFileSystem } from '../fs/project-filesystem.ts';
@@ -245,8 +246,7 @@ export class Model extends EventTarget {
       this.render({ isPreview: true, now: true });
     }
   }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  setVar(name: string, value: any) {
+  setVar(name: string, value: OpenScadValue) {
     this.mutate((s) => (s.params.vars = { ...(s.params.vars ?? {}), [name]: value }));
     this.render({ isPreview: true, now: false });
   }

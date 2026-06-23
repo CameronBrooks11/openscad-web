@@ -8,12 +8,8 @@
 // envelope/validation primitives live in `src/protocol/envelope.ts` (ADR 0005);
 // this module is one binding over that shared core.
 
-import {
-  isPlainJsonValue,
-  isRecord,
-  stampOutbound,
-  type ProtocolErrorCode,
-} from '../protocol/envelope.ts';
+import { isRecord, stampOutbound, type ProtocolErrorCode } from '../protocol/envelope.ts';
+import { isOpenScadValue, type OpenScadValue } from '../openscad-value.ts';
 
 // Origin checking is generic; re-export it so embed consumers keep one import.
 export { isTrustedOrigin } from '../protocol/envelope.ts';
@@ -34,7 +30,7 @@ export const MAX_VAR_VALUE_LENGTH = 64 * 1024; // setVar JSON-encoded value
 
 export type InboundMessage =
   | { type: 'setModel'; source: string; requestId?: string }
-  | { type: 'setVar'; name: string; value: unknown; requestId?: string }
+  | { type: 'setVar'; name: string; value: OpenScadValue; requestId?: string }
   | { type: 'getVars'; requestId?: string }
   | { type: 'getArtifact'; requestId?: string; artifactId?: string };
 
@@ -96,31 +92,26 @@ export function validateInbound(data: unknown): ValidationResult {
       if (data.name.length > MAX_VAR_NAME_LENGTH) {
         return { ok: false, code: 'too-large', reason: 'name exceeds size limit', requestId };
       }
-      const value = data.value ?? null;
-      let encoded: string | undefined;
-      try {
-        encoded = JSON.stringify(value);
-      } catch {
-        encoded = undefined; // circular reference
-      }
-      // `encoded` is `undefined` for functions/symbols/circular values; an
-      // exotic but cloneable type (ArrayBuffer, Map, …) stringifies to a tiny
-      // string while carrying a large payload, so also require a plain JSON
-      // shape rather than trusting the encoded length alone.
-      if (typeof encoded !== 'string' || !isPlainJsonValue(value)) {
+      const value = data.value;
+      // Reject anything that is not a valid OpenSCAD value (object, null, NaN/
+      // Infinity, exotic) HERE, at the boundary, rather than letting it pass and
+      // then throw deeper in the args builder (the prior divergence). This is the
+      // same predicate the URL coercion and `-D` formatter use.
+      if (!isOpenScadValue(value)) {
         return {
           ok: false,
           code: 'invalid-payload',
-          reason: 'value must be a JSON value',
+          reason: 'value must be an OpenSCAD value (string, number, boolean, or array of those)',
           requestId,
         };
       }
-      if (encoded.length > MAX_VAR_VALUE_LENGTH) {
+      // A valid value can still be enormous (a long string or big vector); bound it.
+      if (JSON.stringify(value).length > MAX_VAR_VALUE_LENGTH) {
         return { ok: false, code: 'too-large', reason: 'value exceeds size limit', requestId };
       }
       return {
         ok: true,
-        message: { type: 'setVar', name: data.name, value: data.value, requestId },
+        message: { type: 'setVar', name: data.name, value, requestId },
       };
     }
     case 'getVars':

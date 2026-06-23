@@ -41,7 +41,7 @@ Every inbound message must include `protocolVersion: 2`. A `requestId` is option
 | Type          | Payload (in addition to `protocolVersion`, optional `requestId`) | Description                                                                   |
 | ------------- | ---------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | `setModel`    | `{ type: 'setModel', source: string }`                           | Replace the current model with raw source text                                |
-| `setVar`      | `{ type: 'setVar', name: string, value: unknown }`               | Set one customizer variable                                                   |
+| `setVar`      | `{ type: 'setVar', name: string, value: OpenScadValue }`         | Set one customizer variable                                                   |
 | `getVars`     | `{ type: 'getVars' }`                                            | Request the current effective variable map                                    |
 | `getArtifact` | `{ type: 'getArtifact', artifactId? }`                           | Request artifact bytes — the latest render output, or a specific `artifactId` |
 
@@ -49,6 +49,7 @@ Limits (oversized messages are rejected with a `too-large` error):
 
 - `setModel.source` ≤ 5 MiB
 - `setVar.name` ≤ 256 chars; `setVar.value` ≤ 64 KiB JSON-encoded
+- `setVar.value` must be an **OpenSCAD value**: a string, a finite number, a boolean, or a (nested, ≤ 16 deep) array of those. Objects, `null`, and `NaN`/`Infinity` are rejected with `invalid-payload` — OpenSCAD cannot represent them, so they are refused at the boundary rather than failing mid-render.
 
 Notes:
 

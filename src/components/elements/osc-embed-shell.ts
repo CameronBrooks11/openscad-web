@@ -12,6 +12,7 @@ import './osc-viewer-panel.ts';
 import './osc-customizer-panel.ts';
 import { validateInbound, outbound, isTrustedOrigin } from '../../embed/protocol.ts';
 import { outputArtifactRef } from '../../embed/artifact-event.ts';
+import { coerceUrlVars } from '../../openscad-value.ts';
 
 // ---------------------------------------------------------------------------
 // postMessage protocol — see src/embed/protocol.ts and docs/EMBED.md
@@ -26,19 +27,6 @@ function notifyHost(
   if (window.parent !== window) {
     window.parent.postMessage(outbound(type, payload), targetOrigin, transfer ?? []);
   }
-}
-
-function coerceUrlVars(vars: Record<string, string>): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(vars)) {
-    if (v === 'true') result[k] = true;
-    else if (v === 'false') result[k] = false;
-    else {
-      const n = Number(v);
-      result[k] = v.trim() !== '' && !isNaN(n) ? n : v;
-    }
-  }
-  return result;
 }
 
 function getVarsSnapshot(st: State): Record<string, unknown> {
@@ -178,7 +166,7 @@ export class OscEmbedShell extends LitElement {
         this._notifyHost('ack', ack);
         break;
       case 'setVar':
-        this._model.setVar(msg.name, msg.value as never);
+        this._model.setVar(msg.name, msg.value);
         this._notifyHost('ack', ack);
         break;
       case 'getVars':

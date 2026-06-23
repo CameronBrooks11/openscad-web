@@ -1,6 +1,7 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import type { Diagnostic } from '../diagnostics.ts';
+import { MAX_VALUE_DEPTH, type OpenScadValue } from '../openscad-value.ts';
 import {
   ProcessStreams,
   isExpectedJobCancellation,
@@ -102,8 +103,7 @@ export type RenderOutput = {
 export type RenderArgs = {
   scadPath: string;
   sources: WireSource[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  vars?: { [name: string]: any };
+  vars?: Record<string, OpenScadValue>;
   features?: string[];
   extraArgs?: string[];
   isPreview: boolean;
@@ -119,9 +119,6 @@ export type RenderArgs = {
    */
   priority?: JobPriority;
 };
-
-/** Maximum array-nesting depth accepted for a customizer value. */
-const MAX_VALUE_DEPTH = 16;
 
 /**
  * Render an OpenSCAD customizer value into a `-D` literal. Only the value shapes
@@ -164,8 +161,7 @@ export interface OpenScadArgsRequest {
   /** Compute backend; omit for syntax/parameter passes that don't render geometry. */
   backend?: 'manifold' | 'cgal';
   /** Customizer variable overrides, emitted as `-D` literals. */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  vars?: { [name: string]: any };
+  vars?: Record<string, OpenScadValue>;
   /** Experimental feature flags, emitted as `--enable=`. */
   features?: string[];
   /** Extra raw args appended verbatim. */
