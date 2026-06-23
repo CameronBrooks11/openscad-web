@@ -13,6 +13,8 @@ class FakeViewer extends EventTarget {
   color = '';
   showAxes = true;
   active = true;
+  background: string | undefined;
+  showControls = true;
   generateThumbnails = false;
   camera: unknown;
   removed = false;
@@ -83,6 +85,21 @@ describe('ViewerController', () => {
     expect(viewer.color).toBe('#abc');
     expect(viewer.showAxes).toBe(true); // untouched
     expect(transport.sent.at(-1)).toMatchObject({ type: 'viewer-settings-set', opId: 's1' });
+  });
+
+  it('applies background + showControls from setViewerSettings (#177)', () => {
+    const { viewer, transport } = setup();
+    transport.receive({
+      protocolVersion: V,
+      type: 'setViewerSettings',
+      background: '#101010',
+      showControls: false,
+      opId: 's2',
+    });
+    expect(viewer.background).toBe('#101010');
+    expect(viewer.showControls).toBe(false);
+    expect(viewer.color).toBe(''); // untouched
+    expect(transport.sent.at(-1)).toMatchObject({ type: 'viewer-settings-set', opId: 's2' });
   });
 
   it('applies setCamera and acks; forwards camera-change from the viewer', () => {

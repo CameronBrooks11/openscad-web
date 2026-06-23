@@ -30,6 +30,8 @@ export type GeometryViewer = HTMLElement & {
   color: string;
   showAxes: boolean;
   active: boolean;
+  background?: string;
+  showControls: boolean;
   generateThumbnails: boolean;
   setCamera(camera: CameraPose): void;
 };
@@ -87,6 +89,8 @@ export class ViewerController {
         if (msg.color !== undefined) this.viewer.color = msg.color;
         if (msg.showAxes !== undefined) this.viewer.showAxes = msg.showAxes;
         if (msg.active !== undefined) this.viewer.active = msg.active;
+        if (msg.background !== undefined) this.viewer.background = msg.background;
+        if (msg.showControls !== undefined) this.viewer.showControls = msg.showControls;
         this.transport.send(viewerSettingsSet(msg.opId));
         break;
       case 'setCamera':

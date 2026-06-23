@@ -85,6 +85,28 @@ describe('validateViewerInbound', () => {
     ).toMatchObject({ ok: false, code: 'invalid-payload' });
   });
 
+  it('accepts optional background + showControls on setViewerSettings (#177)', () => {
+    const r = validateViewerInbound({
+      protocolVersion: v,
+      type: 'setViewerSettings',
+      background: '#101010',
+      showControls: false,
+    });
+    expect(r).toEqual({
+      ok: true,
+      message: { type: 'setViewerSettings', background: '#101010', showControls: false },
+    });
+  });
+
+  it('rejects wrong types for background + showControls', () => {
+    expect(
+      validateViewerInbound({ protocolVersion: v, type: 'setViewerSettings', background: 7 }),
+    ).toMatchObject({ ok: false, code: 'invalid-payload' });
+    expect(
+      validateViewerInbound({ protocolVersion: v, type: 'setViewerSettings', showControls: 'no' }),
+    ).toMatchObject({ ok: false, code: 'invalid-payload' });
+  });
+
   it('accepts a valid camera pose and rejects malformed ones', () => {
     expect(validateViewerInbound({ protocolVersion: v, type: 'setCamera', camera: pose })).toEqual({
       ok: true,

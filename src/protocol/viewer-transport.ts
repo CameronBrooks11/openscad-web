@@ -30,6 +30,8 @@ export type ViewerInbound =
       color?: string;
       showAxes?: boolean;
       active?: boolean;
+      background?: string;
+      showControls?: boolean;
     } & Correlated)
   | ({ type: 'setCamera'; camera: CameraPose } & Correlated)
   | ({ type: 'dispose' } & Correlated);
@@ -109,6 +111,18 @@ export function validateViewerInbound(data: unknown): ViewerValidation {
       if (data.active !== undefined && typeof data.active !== 'boolean') {
         return { ok: false, code: 'invalid-payload', reason: 'active must be a boolean', opId };
       }
+      const background = data.background === undefined ? undefined : readString(data.background);
+      if (data.background !== undefined && background === undefined) {
+        return { ok: false, code: 'invalid-payload', reason: 'background must be a string', opId };
+      }
+      if (data.showControls !== undefined && typeof data.showControls !== 'boolean') {
+        return {
+          ok: false,
+          code: 'invalid-payload',
+          reason: 'showControls must be a boolean',
+          opId,
+        };
+      }
       return {
         ok: true,
         message: {
@@ -116,6 +130,10 @@ export function validateViewerInbound(data: unknown): ViewerValidation {
           ...(color !== undefined ? { color } : {}),
           ...(data.showAxes !== undefined ? { showAxes: data.showAxes as boolean } : {}),
           ...(data.active !== undefined ? { active: data.active as boolean } : {}),
+          ...(background !== undefined ? { background } : {}),
+          ...(data.showControls !== undefined
+            ? { showControls: data.showControls as boolean }
+            : {}),
           ...corr,
         },
       };
