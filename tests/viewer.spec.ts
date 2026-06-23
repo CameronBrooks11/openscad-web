@@ -85,14 +85,15 @@ test('viewer-only entry loads geometry over the host transport', async ({ page }
     opId: 'op-1',
   });
 
-  // The command is acknowledged (correlated by opId) and the render completes.
+  // The command is accepted (geometry-set) and the render result is correlated
+  // back to the same opId (geometry-loaded carries opId).
   await page.waitForFunction(
     () => window.__viewerMessages?.some((m) => m?.type === 'geometry-set' && m?.opId === 'op-1'),
     null,
     { timeout: 10_000 },
   );
   await page.waitForFunction(
-    () => window.__viewerMessages?.some((m) => m?.type === 'geometry-loaded'),
+    () => window.__viewerMessages?.some((m) => m?.type === 'geometry-loaded' && m?.opId === 'op-1'),
     null,
     { timeout: 30_000 },
   );
@@ -102,6 +103,30 @@ test('viewer-only entry loads geometry over the host transport', async ({ page }
     window.__viewerMessages?.some((m) => m?.type === 'error'),
   );
   expect(hadError).toBeFalsy();
+});
+
+test('a malformed model is accepted then reports a correlated render error', async ({ page }) => {
+  await embedViewer(page);
+
+  await postToViewer(page, {
+    protocolVersion: 1,
+    type: 'setGeometry',
+    offText: 'OFF not-a-valid-mesh',
+    opId: 'bad-geo',
+  });
+
+  // Accepted immediately...
+  await page.waitForFunction(
+    () => window.__viewerMessages?.some((m) => m?.type === 'geometry-set' && m?.opId === 'bad-geo'),
+    null,
+    { timeout: 10_000 },
+  );
+  // ...then a render error correlated to the same opId (not an uncorrelated event).
+  await page.waitForFunction(
+    () => window.__viewerMessages?.some((m) => m?.type === 'error' && m?.opId === 'bad-geo'),
+    null,
+    { timeout: 10_000 },
+  );
 });
 
 test('a setCamera sent immediately on ready is not dropped (race with mount)', async ({ page }) => {

@@ -60,18 +60,24 @@ function post(message: object): void {
   host?.postMessage(message, targetOrigin);
 }
 
+// The opId of the in-flight setGeometry, so the (async) render outcome it
+// produces — geometry-loaded or a render error — can be correlated back to it.
+// Only setGeometry sets viewer.offText, so every load maps to one setGeometry.
+let geometryOpId: string | undefined;
+
 // Forward viewer events to the host.
 viewer.addEventListener('camera-change', (e) => {
   post(viewerCameraChange((e as CustomEvent<CameraState>).detail));
 });
 viewer.addEventListener('geometry-loaded', (e) => {
-  post(viewerGeometryLoaded((e as CustomEvent<{ thumbhash?: string }>).detail.thumbhash));
+  post(
+    viewerGeometryLoaded((e as CustomEvent<{ thumbhash?: string }>).detail.thumbhash, geometryOpId),
+  );
 });
 viewer.addEventListener('viewer-error', (e) => {
   // A render/parse failure of host-supplied geometry — distinct from a protocol
-  // validation rejection. Not opId-correlated: geometry loading is async and
-  // decoupled from the setGeometry message that triggered it.
-  post(viewerError('render-error', String((e as CustomEvent).detail)));
+  // validation rejection — correlated to the setGeometry that triggered it.
+  post(viewerError('render-error', String((e as CustomEvent).detail), geometryOpId));
 });
 
 const onMessage = (event: MessageEvent): void => {
@@ -87,8 +93,9 @@ const onMessage = (event: MessageEvent): void => {
   const msg = result.message;
   switch (msg.type) {
     case 'setGeometry':
+      geometryOpId = msg.opId; // correlate the eventual geometry-loaded / error
       viewer.offText = msg.offText;
-      post(viewerGeometrySet(msg.opId));
+      post(viewerGeometrySet(msg.opId)); // accepted; render outcome follows
       break;
     case 'setViewerSettings':
       if (msg.color !== undefined) viewer.color = msg.color;
