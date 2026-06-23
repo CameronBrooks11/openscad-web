@@ -107,7 +107,7 @@ window.addEventListener('load', async () => {
 
   if (isInStandaloneMode()) {
     const bfs: FS = getBrowserFS().BFSRequire('fs');
-    persistedState = readPersistedState(bfs);
+    persistedState = readPersistedState(bfs, window.location.href);
     statePersister = {
       set: async (state) => writePersistedState(bfs, state),
     };
