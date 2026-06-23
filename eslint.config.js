@@ -121,6 +121,76 @@ export default tseslint.config(
     },
   },
 
+  // The Layer-0 protocol is the DISTRIBUTABLE, DOM-free wire contract (#143/#176):
+  // it must import nothing outside src/protocol/ so it stays portable to a
+  // separate consumer (a VS Code extension) and publishable as-is.
+  {
+    files: ['src/protocol/**/*.ts'],
+    ignores: ['src/protocol/__tests__/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['../*', '../**'],
+              message:
+                'src/protocol is the distributable wire contract: no imports outside src/protocol.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // The viewer-host (controller + transports) is the host-binding tier (#143/#173):
+  // it may use the protocol and the reusable viewer, but NOT the app shell, state,
+  // language, Monaco, or the editor — so the VS Code work stays isolated from the
+  // main app.
+  {
+    files: ['src/viewer-host/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '**/state/**',
+                '**/language/**',
+                'monaco-editor',
+                'monaco-editor/**',
+                '**/osc-editor-panel*',
+                '**/osc-app-shell*',
+                '**/model*',
+              ],
+              message: 'The viewer host must not import the app shell, state, or editor.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
+  // The app must not reach into the viewer-host transports (reverse direction):
+  // host-binding code is consumed only by the viewer entry composition root.
+  {
+    files: ['src/components/**/*.ts', 'src/state/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/viewer-host/**'],
+              message: 'App code must not import the viewer-host transports.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // JavaScript/ESM rules applied to Node scripts and root JS config files
   {
     files: ['scripts/**/*.mjs', '*.js'],
