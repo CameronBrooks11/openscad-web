@@ -10,7 +10,7 @@ import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
 import { bubbleUpDeepMutations } from './deep-mutate.ts';
 import { openLocalFile, saveViaHandle } from '../fs/filesystem.ts';
 import { ProjectFileSystem } from '../fs/project-filesystem.ts';
-import { contentOf } from './project-source.ts';
+import { contentOf, isProbablyTextPath } from './project-source.ts';
 import { ProjectStore } from './project-store.ts';
 import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
 import { applyUserFacingError } from './apply-user-facing-error.ts';
@@ -277,6 +277,11 @@ export class Model extends EventTarget {
     return this.projectStore.activeContent(this.state.params.sources, this.state.params.activePath);
   }
   set source(source: string) {
+    // A binary `local` asset has no text representation; ignore writes to it so
+    // no edit path converts it into a `{kind:'text'}` source and drops the asset
+    // (the editor also keeps it read-only). See #153 / ADR 0006.
+    const active = this.state.params.sources.find((s) => s.path === this.state.params.activePath);
+    if (active?.kind === 'local' && !isProbablyTextPath(active.path)) return;
     if (
       this.mutate((s) => {
         s.params.sources = this.projectStore.withActiveContent(

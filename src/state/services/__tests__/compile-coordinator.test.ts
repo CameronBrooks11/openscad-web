@@ -7,10 +7,11 @@ import type { State } from '../../app-state.ts';
 // render() is `factory(renderArgs)({ now })` → Promise<RenderOutput>; we drive the
 // promise it returns and the source revision to exercise the staleness drop.
 const renderImpl = vi.fn();
+const checkSyntaxImpl = vi.fn();
 
 vi.mock('../../../runner/actions.ts', () => ({
   render: (renderArgs: unknown) => (opts: unknown) => renderImpl(renderArgs, opts),
-  checkSyntax: vi.fn(),
+  checkSyntax: (args: unknown) => (opts: unknown) => checkSyntaxImpl(args, opts),
 }));
 
 function makeContext(revision: number) {
@@ -135,6 +136,21 @@ describe('CompileCoordinator binary-asset materialization (#121)', () => {
 
     expect(String(state.error)).toMatch(/Asset not available/);
     expect(renderImpl).not.toHaveBeenCalled();
+  });
+
+  it('excludes binary local assets from the syntax-check inputs, keeping .scad sources (#153)', async () => {
+    const { ctx } = makeBinaryContext(() => new Uint8Array());
+    checkSyntaxImpl.mockReset();
+    checkSyntaxImpl.mockResolvedValue({ markers: [], parameterSet: undefined, revision: 1 });
+
+    await new CompileCoordinator(ctx).checkSyntax();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const args = checkSyntaxImpl.mock.calls[0][0] as any;
+    const paths = args.sources.map((s: { path: string }) => s.path);
+    expect(paths).toContain('/home/main.scad'); // active .scad kept
+    expect(paths).toContain('/libraries/foo/bar.scad'); // a .scad local is text → kept
+    expect(paths).not.toContain('/home/part.stl'); // binary local dropped (no worker noise)
   });
 });
 
