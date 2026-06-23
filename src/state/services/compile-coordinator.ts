@@ -3,9 +3,23 @@ import {
   createSyntaxDelayable,
   type RenderArgs,
 } from '../../runner/actions.ts';
-import { formatOfName, mediaTypeForFormat, newId } from '../../runner/compile-contract.ts';
+import {
+  formatOfName,
+  mediaTypeForFormat,
+  newId,
+  operationCancelled,
+  operationFailure,
+  operationSuccess,
+  OPERATION_FAILED,
+  type OperationBase,
+  type OperationResult,
+} from '../../runner/compile-contract.ts';
 import { isExpectedJobCancellation, type ProcessStreams } from '../../runner/openscad-runner.ts';
-import { isUserFacingOperationError, UserFacingOperationError } from '../../user-facing-errors.ts';
+import {
+  isUserFacingOperationError,
+  normalizeOperationFailure,
+  UserFacingOperationError,
+} from '../../user-facing-errors.ts';
 import { fetchSource, formatBytes, formatMillis } from '../../utils.ts';
 import { applyUserFacingError } from '../apply-user-facing-error.ts';
 import type { State } from '../app-state.ts';
@@ -34,6 +48,18 @@ export class CompileCoordinator {
     // `useDefineForClassFields`. Reading the parameter is unconditionally correct.
     this._render = createRenderDelayable(ctx.backend);
     this._checkSyntax = createSyntaxDelayable(ctx.backend);
+  }
+
+  /** Route a terminal result to the optional sink, guarding the commit path: a
+   *  throwing sink must never corrupt committed state or double-emit, so its
+   *  exception is swallowed here rather than re-entering an operation's control
+   *  flow (ADR 0008). No-op when no sink is wired. */
+  private emitResult(result: OperationResult) {
+    try {
+      this.ctx.onOperationResult?.(result);
+    } catch (err) {
+      console.error('onOperationResult sink threw:', err);
+    }
   }
 
   // Sequence counters identifying the latest in-flight operation of each kind.
@@ -163,6 +189,21 @@ export class CompileCoordinator {
   async checkSyntax() {
     const token = ++this._syntaxSeq;
     const isCurrent = () => this._syntaxSeq === token;
+    // One operation id + terminal-result base for this syntax check (ADR 0008).
+    // The revision is captured at submit time (not lazily at emit) so a cancelled
+    // result echoes the revision the op was submitted at, matching the contract.
+    const operationId = newId();
+    const submittedRevision = this.ctx.getSourceRevision();
+    const base = (over: Partial<OperationBase> = {}): OperationBase => ({
+      sessionId: this.ctx.sessionId,
+      operationId,
+      sourceRevision: submittedRevision,
+      kind: 'syntaxCheck',
+      elapsedMillis: 0,
+      diagnostics: [],
+      logText: '',
+      ...over,
+    });
     this.ctx.mutate((s) => (s.checkingSyntax = true));
     try {
       const checkerRun = await this._checkSyntax({
@@ -176,11 +217,15 @@ export class CompileCoordinator {
           .params.sources.filter((s) => !(s.kind === 'local' && !isProbablyTextPath(s.path))),
         revision: this.ctx.getSourceRevision(),
       })({ now: false });
-      if (!isCurrent()) return; // a newer syntax check superseded this one
+      if (!isCurrent()) {
+        this.emitResult(operationCancelled(base())); // superseded
+        return; // a newer syntax check superseded this one
+      }
       if (
         checkerRun?.revision !== undefined &&
         checkerRun.revision !== this.ctx.getSourceRevision()
       ) {
+        this.emitResult(operationCancelled(base())); // revision stale-drop
         return; // sources changed since this check was requested — drop the stale result
       }
       this.ctx.mutate((s) => {
@@ -188,8 +233,17 @@ export class CompileCoordinator {
         s.parameterSet = checkerRun?.parameterSet;
         s.checkingSyntax = false;
       });
+      // A syntax check carries diagnostics but never an artifact (ADR 0008).
+      this.emitResult(
+        operationSuccess(
+          base({ diagnostics: checkerRun?.markers ?? [], logText: checkerRun?.logText ?? '' }),
+        ),
+      );
     } catch (err) {
-      if (!isCurrent()) return; // superseded — the newer check owns checkingSyntax
+      if (!isCurrent()) {
+        this.emitResult(operationCancelled(base())); // superseded
+        return; // superseded — the newer check owns checkingSyntax
+      }
       if (!isExpectedJobCancellation(err)) {
         if (!isUserFacingOperationError(err)) {
           console.error('Error while checking syntax:', err);
@@ -198,6 +252,15 @@ export class CompileCoordinator {
           applyUserFacingError(s, err, 'syntax');
         });
       }
+      this.emitResult(
+        isExpectedJobCancellation(err)
+          ? operationCancelled(base())
+          : operationFailure(
+              base(),
+              OPERATION_FAILED,
+              normalizeOperationFailure(err, 'syntax').message,
+            ),
+      );
     } finally {
       if (isCurrent()) {
         this.ctx.mutate((s) => {
@@ -237,6 +300,22 @@ export class CompileCoordinator {
     // One operation id per scheduler invocation (ADR 0008). The dimension retry
     // is a distinct recursive render(), so it mints its own — never shared.
     const operationId = newId();
+    // The status-independent fields for this operation's single terminal result.
+    // The revision is captured at submit time (not lazily at emit), so a cancelled
+    // stale-drop echoes the submitted revision rather than the newer one that
+    // superseded it. Emits route through emitResult so a throwing sink cannot
+    // disturb the byte-identical live commit (ADR 0008).
+    const submittedRevision = this.ctx.getSourceRevision();
+    const base = (over: Partial<OperationBase> = {}): OperationBase => ({
+      sessionId: this.ctx.sessionId,
+      operationId,
+      sourceRevision: submittedRevision,
+      kind: isPreview ? 'preview' : 'render',
+      elapsedMillis: 0,
+      diagnostics: [],
+      logText: '',
+      ...over,
+    });
     const setRendering = (s: State, value: boolean) => {
       if (isPreview) {
         s.previewing = value;
@@ -291,13 +370,17 @@ export class CompileCoordinator {
         revision: this.ctx.getSourceRevision(),
       };
       const output = await this._render(renderArgs)({ now });
-      if (!isCurrent()) return; // a newer render/preview superseded this one
+      if (!isCurrent()) {
+        this.emitResult(operationCancelled(base())); // superseded
+        return; // a newer render/preview superseded this one
+      }
       if (output.revision !== undefined && output.revision !== this.ctx.getSourceRevision()) {
         // Sources changed since this render was requested — drop the stale result.
         // Unlike the supersession case above, no newer call owns this spinner
         // flag, so we must clear it ourselves or it stays stuck (e.g. after
         // newFile(), which bumps the revision without dispatching a new render).
         this.ctx.mutate((s) => setRendering(s, false));
+        this.emitResult(operationCancelled(base())); // revision stale-drop
         return;
       }
       is2D = output.outFile.name.endsWith('.svg') || output.outFile.name.endsWith('.dxf');
@@ -310,7 +393,7 @@ export class CompileCoordinator {
       const artifactId = newId();
       const sourceRevision = output.revision ?? this.ctx.getSourceRevision();
       const format = formatOfName(output.outFile.name);
-      this.ctx.artifacts.put(output.outFile, {
+      const artifactRef = {
         artifactId,
         operationId,
         sourceRevision,
@@ -318,7 +401,8 @@ export class CompileCoordinator {
         mediaType: mediaTypeForFormat(format),
         size: output.outFile.size,
         name: output.outFile.name,
-      });
+      };
+      this.ctx.artifacts.put(output.outFile, artifactRef);
       this.ctx.mutate((s) => {
         setRendering(s, false);
         s.error = undefined;
@@ -348,8 +432,22 @@ export class CompileCoordinator {
           this.ctx.host.playCompletionChime();
         }
       });
+      this.emitResult(
+        operationSuccess(
+          base({
+            sourceRevision,
+            elapsedMillis: output.elapsedMillis,
+            diagnostics: output.markers ?? [],
+            logText: output.logText,
+          }),
+          artifactRef,
+        ),
+      );
     } catch (err) {
-      if (!isCurrent()) return; // superseded — the newer call owns the spinner state
+      if (!isCurrent()) {
+        this.emitResult(operationCancelled(base())); // superseded
+        return; // superseded — the newer call owns the spinner state
+      }
       this.ctx.mutate((s) => {
         setRendering(s, false);
         if (!isExpectedJobCancellation(err)) {
@@ -359,6 +457,17 @@ export class CompileCoordinator {
           applyUserFacingError(s, err, isPreview ? 'preview' : 'render');
         }
       });
+      // A cancelled job is not a failure (priority preemption, etc.); everything
+      // else is a real error carrying the user-facing reason.
+      this.emitResult(
+        isExpectedJobCancellation(err)
+          ? operationCancelled(base())
+          : operationFailure(
+              base(),
+              OPERATION_FAILED,
+              normalizeOperationFailure(err, isPreview ? 'preview' : 'render').message,
+            ),
+      );
     }
     if (retryInOtherDim) {
       let is2D: boolean | undefined;

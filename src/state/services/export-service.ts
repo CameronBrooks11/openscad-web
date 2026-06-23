@@ -3,9 +3,19 @@ import chroma from 'chroma-js';
 import { export3MF } from '../../io/export_3mf.ts';
 import { parseOff } from '../../io/import_off.ts';
 import { createRenderExportDelayable, type RenderOutput } from '../../runner/actions.ts';
-import { formatOfName, mediaTypeForFormat, newId } from '../../runner/compile-contract.ts';
+import {
+  formatOfName,
+  mediaTypeForFormat,
+  newId,
+  operationCancelled,
+  operationFailure,
+  operationSuccess,
+  OPERATION_FAILED,
+  type OperationBase,
+  type OperationResult,
+} from '../../runner/compile-contract.ts';
 import { isExpectedJobCancellation, type ProcessStreams } from '../../runner/openscad-runner.ts';
-import { isUserFacingOperationError } from '../../user-facing-errors.ts';
+import { isUserFacingOperationError, normalizeOperationFailure } from '../../user-facing-errors.ts';
 import { formatBytes, formatMillis, type AbortablePromise } from '../../utils.ts';
 import { applyUserFacingError } from '../apply-user-facing-error.ts';
 import type { ServiceContext } from './service-context.ts';
@@ -57,6 +67,17 @@ export class ExportService {
     });
   }
 
+  /** Route a terminal result to the optional sink, guarding the commit path: a
+   *  throwing sink must never corrupt committed state or double-emit (ADR 0008).
+   *  No-op when no sink is wired. */
+  private emitResult(result: OperationResult) {
+    try {
+      this.ctx.onOperationResult?.(result);
+    } catch (err) {
+      console.error('onOperationResult sink threw:', err);
+    }
+  }
+
   async export() {
     const { mutate, host } = this.ctx;
     // Claim the export token at entry — before any early return — so that EVERY
@@ -67,6 +88,21 @@ export class ExportService {
     const token = ++this._exportSeq;
     const isCurrent = () => this._exportSeq === token;
     const operationId = newId(); // one per export() invocation (ADR 0008)
+    // The status-independent fields for this export's single terminal result. The
+    // revision is captured at submit time so a cancelled result echoes the
+    // revision the op was submitted at; emits route through emitResult so a
+    // throwing sink cannot disturb the byte-identical commit (ADR 0008).
+    const submittedRevision = this.ctx.getSourceRevision();
+    const base = (over: Partial<OperationBase> = {}): OperationBase => ({
+      sessionId: this.ctx.sessionId,
+      operationId,
+      sourceRevision: submittedRevision,
+      kind: 'export',
+      elapsedMillis: 0,
+      diagnostics: [],
+      logText: '',
+      ...over,
+    });
     // Cancel any in-flight conversion render so a superseding export — including
     // a pass-through or picker branch that never calls renderExport — drops a
     // still-queued render and promptly settles the previous export's await with a
@@ -87,11 +123,26 @@ export class ExportService {
       if (normalPassThrough) {
         // Synchronous, so this export stays current through commit. Clear
         // `exporting` to take ownership from any async export it just superseded.
+        const passThrough = state.output;
         mutate((s) => {
           s.exporting = false;
           s.export = s.output;
         });
-        host.download(state.output.outFileURL, state.output.outFile.name);
+        host.download(passThrough.outFileURL, passThrough.outFile.name);
+        // Inherits the render's immutable artifact identity (same bytes, ADR 0008);
+        // the result is keyed to THIS export op.
+        const passFormat = formatOfName(passThrough.outFile.name);
+        this.emitResult(
+          operationSuccess(base(), {
+            artifactId: passThrough.artifactId,
+            operationId: passThrough.operationId,
+            sourceRevision: passThrough.sourceRevision,
+            format: passFormat,
+            mediaType: mediaTypeForFormat(passFormat),
+            size: passThrough.outFile.size,
+            name: passThrough.outFile.name,
+          }),
+        );
         return;
       }
     }
@@ -102,6 +153,9 @@ export class ExportService {
           s.exporting = false;
           s.view.extruderPickerVisibility = 'exporting';
         });
+        // No artifact produced — the real export is a second export() once the
+        // user picks colors; this minted op terminates as cancelled (ADR 0008).
+        this.emitResult(operationCancelled(base()));
         return;
       }
     }
@@ -181,7 +235,10 @@ export class ExportService {
 
       // A newer export superseded this one while its conversion ran; it owns the
       // exporting flag and will commit/download its own result. Drop this one.
-      if (!isCurrent()) return;
+      if (!isCurrent()) {
+        this.emitResult(operationCancelled(base()));
+        return;
+      }
 
       const outFileURL = host.createObjectURL(output.outFile);
       // One immutable artifact id, shared by state.export and the store entry, so
@@ -189,7 +246,7 @@ export class ExportService {
       const artifactId = newId();
       const sourceRevision = this.ctx.getSourceRevision();
       const format = formatOfName(output.outFile.name);
-      this.ctx.artifacts.put(output.outFile, {
+      const artifactRef = {
         artifactId,
         operationId,
         sourceRevision,
@@ -197,7 +254,8 @@ export class ExportService {
         mediaType: mediaTypeForFormat(format),
         size: output.outFile.size,
         name: output.outFile.name,
-      });
+      };
+      this.ctx.artifacts.put(output.outFile, artifactRef);
       mutate((s) => {
         s.exporting = false;
         if (s.export?.outFileURL?.startsWith('blob:') ?? false) {
@@ -215,13 +273,20 @@ export class ExportService {
         };
         host.download(s.export.outFileURL, output.outFile.name);
       });
+      this.emitResult(operationSuccess(base({ elapsedMillis: output.elapsedMillis }), artifactRef));
     } catch (err) {
       // A superseded export rejects with the delayable's cancellation; that is
       // expected supersession, not a failure — the newer export owns the spinner.
-      if (isExpectedJobCancellation(err)) return;
+      if (isExpectedJobCancellation(err)) {
+        this.emitResult(operationCancelled(base()));
+        return;
+      }
       // A stale export that fails for any other reason must not clobber the
       // current export's spinner or surface its obsolete error.
-      if (!isCurrent()) return;
+      if (!isCurrent()) {
+        this.emitResult(operationCancelled(base()));
+        return;
+      }
       mutate((s) => {
         s.exporting = false;
         if (!isUserFacingOperationError(err)) {
@@ -229,6 +294,13 @@ export class ExportService {
         }
         applyUserFacingError(s, err, 'export');
       });
+      this.emitResult(
+        operationFailure(
+          base(),
+          OPERATION_FAILED,
+          normalizeOperationFailure(err, 'export').message,
+        ),
+      );
     }
   }
 }
