@@ -26,7 +26,14 @@ import type { ServiceContext } from './service-context.ts';
  * the host adapter; it never touches the DOM directly.
  */
 export class CompileCoordinator {
-  constructor(private ctx: ServiceContext) {}
+  constructor(private ctx: ServiceContext) {
+    // Built in the constructor body, reading the `ctx` PARAMETER (always bound at
+    // call time), rather than a field initializer reading `this.ctx` — whose
+    // ordering vs the `ctx` parameter-property assignment depends on
+    // `useDefineForClassFields`. Reading the parameter is unconditionally correct.
+    this._render = createRenderDelayable(ctx.backend);
+    this._checkSyntax = createSyntaxDelayable(ctx.backend);
+  }
 
   // Sequence counters identifying the latest in-flight operation of each kind.
   // checkSyntax/render debounce and supersede one another (turnIntoDelayableExecution),
@@ -37,11 +44,12 @@ export class CompileCoordinator {
   private _renderSeq = 0;
   private _syntaxSeq = 0;
 
-  // Per-coordinator (= per-session) schedulers so independent sessions never
-  // cross-cancel. One render delayable shared by preview + full render (they
-  // supersede each other); syntax has its own. See ADR 0007.
-  private readonly _render = createRenderDelayable();
-  private readonly _checkSyntax = createSyntaxDelayable();
+  // Per-coordinator (= per-session) schedulers, bound to this session's engine,
+  // so independent sessions never cross-cancel and run on their own worker. One
+  // render delayable shared by preview + full render (they supersede each other);
+  // syntax has its own. See ADR 0007.
+  private readonly _render: ReturnType<typeof createRenderDelayable>;
+  private readonly _checkSyntax: ReturnType<typeof createSyntaxDelayable>;
 
   /**
    * Convert the typed sources to the flat wire shape, reading each project-local

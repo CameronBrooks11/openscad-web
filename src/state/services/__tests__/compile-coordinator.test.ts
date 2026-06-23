@@ -49,6 +49,7 @@ function makeContext(revision: number) {
     host: host as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fs: {} as any,
+    backend: { spawn: vi.fn(), cancel: vi.fn(), dispose: vi.fn() },
   };
 
   return { ctx, state, host, setRevision: (n: number) => (rev = n) };
@@ -100,6 +101,7 @@ function makeBinaryContext(readFileSync: () => any) {
     host: host as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     fs: { readFileSync } as any,
+    backend: { spawn: vi.fn(), cancel: vi.fn(), dispose: vi.fn() },
   };
   return { ctx, state };
 }

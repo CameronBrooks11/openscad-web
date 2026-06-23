@@ -35,6 +35,7 @@ function makeCtx(layout: State['view']['layout'], logs = false) {
       baseUrl: () => '',
     },
     fs: { readFileSync: () => new Uint8Array(), writeFile: () => {} },
+    backend: { spawn: () => ({}) as never, cancel: () => {}, dispose: () => {} },
   };
   return { ctx, getState: () => state };
 }
