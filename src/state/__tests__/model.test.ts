@@ -612,6 +612,19 @@ describe('Model — multi-file project contract (#123)', () => {
     expect(mockRender).not.toHaveBeenCalled();
   });
 
+  it("dispatches an 'operation' event carrying the terminal result", async () => {
+    const seen: { status: string }[] = [];
+    model.addEventListener('operation', (e) => seen.push((e as CustomEvent).detail));
+    model.setVar('x', 1); // triggers a preview render
+    await nextTicks();
+    expect(seen.length).toBeGreaterThanOrEqual(1);
+    expect(seen.every((r) => ['success', 'error', 'cancelled'].includes(r.status))).toBe(true);
+  });
+
+  it('cancel() is safe to call when nothing is in flight', () => {
+    expect(() => model.cancel()).not.toThrow();
+  });
+
   it('removeFile of the active entry re-points deterministically and recompiles', async () => {
     model.setProject(
       [

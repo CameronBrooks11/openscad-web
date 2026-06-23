@@ -349,3 +349,56 @@ describe('CompileCoordinator terminal OperationResult (ADR 0008 slice 4)', () =>
     expect(state.rendering).toBe(false);
   });
 });
+
+describe('CompileCoordinator cancel() (#123)', () => {
+  beforeEach(() => {
+    renderImpl.mockReset();
+    checkSyntaxImpl.mockReset();
+  });
+
+  // A never-resolving job whose kill() rejects with the expected-cancellation
+  // message — exactly what the real delayable does when superseded/killed.
+  function hangingJob() {
+    let reject: (e: unknown) => void = () => {};
+    const promise = new Promise((_resolve, rej) => (reject = rej));
+    return Object.assign(promise, { kill: () => reject(new Error('Cancelled')) });
+  }
+
+  it('cancel() kills an in-flight render: one cancelled result, spinner cleared', async () => {
+    const { ctx, state, results } = makeContext(1);
+    renderImpl.mockReturnValueOnce(hangingJob());
+    const coord = new CompileCoordinator(ctx);
+
+    const p = coord.render({ isPreview: true, now: true });
+    await new Promise((r) => setTimeout(r, 0)); // let render() submit + retain the handle
+    coord.cancel();
+    await p;
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('cancelled');
+    expect(results[0].kind).toBe('preview');
+    expect(state.previewing).toBe(false); // spinner cleared, no error surfaced
+    expect(state.error).toBeUndefined();
+  });
+
+  it('cancel() kills an in-flight syntax check: one cancelled result', async () => {
+    const { ctx, state, results } = makeContext(1);
+    checkSyntaxImpl.mockReturnValueOnce(hangingJob());
+    const coord = new CompileCoordinator(ctx);
+
+    const p = coord.checkSyntax();
+    await new Promise((r) => setTimeout(r, 0));
+    coord.cancel();
+    await p;
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('cancelled');
+    expect(results[0].kind).toBe('syntaxCheck');
+    expect(state.checkingSyntax).toBe(false);
+  });
+
+  it('cancel() is a no-op when nothing is in flight', () => {
+    const { ctx } = makeContext(1);
+    expect(() => new CompileCoordinator(ctx).cancel()).not.toThrow();
+  });
+});
