@@ -29,6 +29,33 @@ import type { ServiceContext } from '../service-context.ts';
 
 const mockRenderExport = _mockRenderExport as ReturnType<typeof vi.fn>;
 
+/**
+ * A renderExport mock whose inner thunk returns an AbortablePromise-shaped value
+ * (a Promise with a `kill` spy), mirroring the real delayable so the service can
+ * own and kill the in-flight render. The promise stays pending until `resolve`
+ * (or `reject`) is called by the test.
+ */
+function hangingRender() {
+  let resolve!: (v: RenderOutput) => void;
+  let reject!: (e: unknown) => void;
+  const kill = vi.fn();
+  const inner = vi.fn(() =>
+    Object.assign(
+      new Promise<RenderOutput>((res, rej) => {
+        resolve = res;
+        reject = rej;
+      }),
+      { kill },
+    ),
+  );
+  return {
+    inner,
+    kill,
+    resolve: (v: RenderOutput) => resolve(v),
+    reject: (e: unknown) => reject(e),
+  };
+}
+
 function fileOutput(name: string, url = 'blob:out'): State['output'] {
   const f = new File(['x'], name);
   return {
@@ -158,21 +185,22 @@ describe('ExportService', () => {
     const svc = new ExportService(ctx);
 
     // First export's conversion hangs; the second resolves immediately.
-    let resolveFirst!: (v: RenderOutput) => void;
-    const firstInner = vi.fn(() => new Promise<RenderOutput>((r) => (resolveFirst = r)));
+    const first = hangingRender();
     const secondInner = vi.fn().mockResolvedValue({
       outFile: new File(['second'], 'second.stl'),
       logText: '',
       markers: [],
       elapsedMillis: 1,
     });
-    mockRenderExport.mockReturnValueOnce(firstInner).mockReturnValueOnce(secondInner);
+    mockRenderExport.mockReturnValueOnce(first.inner).mockReturnValueOnce(secondInner);
 
     const p1 = svc.export(); // token 1 — awaits the hanging conversion
     const p2 = svc.export(); // token 2 — resolves and commits
     await p2;
+    // The superseding export killed the first render job.
+    expect(first.kill).toHaveBeenCalled();
     // Now let the first (superseded) export finish; its token is stale.
-    resolveFirst({
+    first.resolve({
       outFile: new File(['first'], 'first.stl'),
       logText: '',
       markers: [],
@@ -210,10 +238,8 @@ describe('ExportService', () => {
     });
     const svc = new ExportService(ctx);
 
-    let resolveFirst!: (v: RenderOutput) => void;
-    mockRenderExport.mockReturnValueOnce(
-      vi.fn(() => new Promise<RenderOutput>((r) => (resolveFirst = r))),
-    );
+    const first = hangingRender();
+    mockRenderExport.mockReturnValueOnce(first.inner);
 
     const p1 = svc.export(); // token 1 — STL conversion hangs, exporting=true
     // User switches to a pass-through format (OFF) and exports again.
@@ -222,7 +248,11 @@ describe('ExportService', () => {
     });
     await svc.export(); // token 2 — pass-through downloads the OFF, supersedes token 1
 
-    resolveFirst({
+    // The pass-through branch never calls renderExport, but still killed the
+    // in-flight STL render rather than letting the worker finish a dropped result.
+    expect(first.kill).toHaveBeenCalled();
+
+    first.resolve({
       outFile: new File(['x'], 'first.stl'),
       logText: '',
       markers: [],
@@ -243,10 +273,8 @@ describe('ExportService', () => {
     });
     const svc = new ExportService(ctx);
 
-    let resolveFirst!: (v: RenderOutput) => void;
-    mockRenderExport.mockReturnValueOnce(
-      vi.fn(() => new Promise<RenderOutput>((r) => (resolveFirst = r))),
-    );
+    const first = hangingRender();
+    mockRenderExport.mockReturnValueOnce(first.inner);
 
     const p1 = svc.export(); // token 1 — exporting=true
     // User switches to 3MF (no extruder colors) and exports → the picker shows.
@@ -255,7 +283,11 @@ describe('ExportService', () => {
     });
     await svc.export(); // token 2 — picker branch
 
-    resolveFirst({
+    // The picker branch returns early without renderExport, but still killed the
+    // in-flight render.
+    expect(first.kill).toHaveBeenCalled();
+
+    first.resolve({
       outFile: new File(['x'], 'first.stl'),
       logText: '',
       markers: [],
@@ -276,22 +308,20 @@ describe('ExportService', () => {
     });
     const svc = new ExportService(ctx);
 
-    let rejectFirst!: (e: unknown) => void;
+    const first = hangingRender();
     const secondInner = vi.fn().mockResolvedValue({
       outFile: new File(['ok'], 'second.stl'),
       logText: '',
       markers: [],
       elapsedMillis: 1,
     });
-    mockRenderExport
-      .mockReturnValueOnce(vi.fn(() => new Promise<RenderOutput>((_r, rej) => (rejectFirst = rej))))
-      .mockReturnValueOnce(secondInner);
+    mockRenderExport.mockReturnValueOnce(first.inner).mockReturnValueOnce(secondInner);
 
     const p1 = svc.export(); // token 1 — hangs
     const p2 = svc.export(); // token 2 — resolves and commits
     await p2;
     // The stale first export now fails with a non-cancellation error.
-    rejectFirst(new Error('boom'));
+    first.reject(new Error('boom'));
     await p1;
 
     // The current export's success is untouched: no error surfaced, only its download.
