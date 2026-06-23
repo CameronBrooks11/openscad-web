@@ -33,6 +33,7 @@
     "start": "npm run start:development",
     "build": "cross-env NODE_ENV=production vite build && node ./scripts/build-sw.mjs && node ./scripts/verify-production-build.mjs && node ./scripts/verify-viewer-bundle.mjs",
     "build:publish": "node ./scripts/build-publish.mjs",
+    "build:viewer": "cross-env NODE_ENV=production vite build --config vite.viewer.config.ts && node ./scripts/verify-viewer-bundle.mjs --dir dist-viewer && node ./scripts/build-viewer-manifest.mjs",
     "build:libs": "cross-env LIBS_BUILD_MODE=all node ./scripts/build-assets/cli.mjs",
     "build:libs:clean": "cross-env LIBS_BUILD_MODE=clean node ./scripts/build-assets/cli.mjs",
     "build:libs:wasm": "cross-env LIBS_BUILD_MODE=wasm node ./scripts/build-assets/cli.mjs",
@@ -53,7 +54,7 @@
     "perf:ci": "npm run perf:capture:series && npm run perf:compare",
     "security:check-install-scripts": "node ./scripts/security/check-install-scripts.mjs",
     "verify:publish-archive": "node ./scripts/verify-publish-archive.mjs",
-    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit && npm run test:assembly && npm run build && npm run check:budgets && npm run build:publish && npm run verify:publish-archive",
+    "verify": "npm run format:check && npm run lint && npm run typecheck && npm run test:unit && npm run test:assembly && npm run build && npm run check:budgets && npm run build:publish && npm run verify:publish-archive && npm run build:viewer",
     "verify:full": "npm run verify && npm run test:e2e && npm run test:e2e:publish:skip-build",
     "check:budgets": "node ./scripts/check-bundle-budgets.mjs"
   },
