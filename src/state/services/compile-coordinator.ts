@@ -3,7 +3,7 @@ import {
   createSyntaxDelayable,
   type RenderArgs,
 } from '../../runner/actions.ts';
-import { newId } from '../../runner/compile-contract.ts';
+import { formatOfName, mediaTypeForFormat, newId } from '../../runner/compile-contract.ts';
 import { isExpectedJobCancellation, type ProcessStreams } from '../../runner/openscad-runner.ts';
 import { isUserFacingOperationError, UserFacingOperationError } from '../../user-facing-errors.ts';
 import { fetchSource, formatBytes, formatMillis } from '../../utils.ts';
@@ -305,6 +305,20 @@ export class CompileCoordinator {
       // synchronous (the viewer reads the OFF File directly and uses outFileURL
       // for SVG), so no newer render can land in between — no recheck needed.
       const outFileURL = this.ctx.host.createObjectURL(output.outFile);
+      // One immutable artifact id, shared by state.output and the store entry, so
+      // getArtifact(artifactId) returns these exact bytes (ADR 0008).
+      const artifactId = newId();
+      const sourceRevision = output.revision ?? this.ctx.getSourceRevision();
+      const format = formatOfName(output.outFile.name);
+      this.ctx.artifacts.put(output.outFile, {
+        artifactId,
+        operationId,
+        sourceRevision,
+        format,
+        mediaType: mediaTypeForFormat(format),
+        size: output.outFile.size,
+        name: output.outFile.name,
+      });
       this.ctx.mutate((s) => {
         setRendering(s, false);
         s.error = undefined;
@@ -325,9 +339,9 @@ export class CompileCoordinator {
           elapsedMillis: output.elapsedMillis,
           formattedElapsedMillis: formatMillis(output.elapsedMillis),
           formattedOutFileSize: formatBytes(output.outFile.size),
-          artifactId: newId(),
+          artifactId,
           operationId,
-          sourceRevision: output.revision ?? this.ctx.getSourceRevision(),
+          sourceRevision,
         };
 
         if (!isPreview) {

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CompileCoordinator } from '../compile-coordinator.ts';
 import type { ServiceContext } from '../service-context.ts';
+import { ArtifactStore } from '../../artifact-store.ts';
 import type { State } from '../../app-state.ts';
 
 // render() is `factory(renderArgs)({ now })` → Promise<RenderOutput>; we drive the
@@ -51,6 +52,7 @@ function makeContext(revision: number) {
     fs: {} as any,
     backend: { spawn: vi.fn(), cancel: vi.fn(), dispose: vi.fn() },
     sessionId: 'test-session',
+    artifacts: new ArtifactStore(),
   };
 
   return { ctx, state, host, setRevision: (n: number) => (rev = n) };
@@ -104,6 +106,7 @@ function makeBinaryContext(readFileSync: () => any) {
     fs: { readFileSync } as any,
     backend: { spawn: vi.fn(), cancel: vi.fn(), dispose: vi.fn() },
     sessionId: 'test-session',
+    artifacts: new ArtifactStore(),
   };
   return { ctx, state };
 }
@@ -178,6 +181,9 @@ describe('CompileCoordinator render staleness', () => {
     expect(state.output?.artifactId).toMatch(/[0-9a-f-]{36}/);
     expect(state.output?.operationId).toMatch(/[0-9a-f-]{36}/);
     expect(state.output?.sourceRevision).toBe(1);
+    // The same artifactId resolves in the store to the exact committed File —
+    // the slice's central guarantee (shared id, byte-identical write-through).
+    expect(ctx.artifacts.get(state.output!.artifactId)?.bytes).toBe(state.output!.outFile);
   });
 
   it('drops a result whose revision is stale and never creates a blob URL', async () => {

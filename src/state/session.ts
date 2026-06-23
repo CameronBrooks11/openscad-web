@@ -1,6 +1,7 @@
 import { Model } from './model.ts';
 import { WasmWorkerBackend, type CompileBackend } from '../runner/openscad-runner.ts';
 import { newId } from '../runner/compile-contract.ts';
+import { ArtifactStore } from './artifact-store.ts';
 import type { ProjectFileSystem } from '../fs/project-filesystem.ts';
 import type { State, StatePersister } from './app-state.ts';
 import type { HostAdapter } from './web-host-adapter.ts';
@@ -16,6 +17,7 @@ export class OpenScadSession {
   /** Stable session id, for routing/debug correlation of operations/artifacts. */
   readonly id = newId();
   readonly backend: CompileBackend;
+  readonly artifacts = new ArtifactStore();
   readonly model: Model;
 
   constructor(
@@ -34,6 +36,7 @@ export class OpenScadSession {
       host,
       this.backend,
       this.id,
+      this.artifacts,
     );
   }
 

@@ -15,6 +15,7 @@ import { ProjectStore } from './project-store.ts';
 import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
 import { WasmWorkerBackend, type CompileBackend } from '../runner/openscad-runner.ts';
 import { newId } from '../runner/compile-contract.ts';
+import { ArtifactStore } from './artifact-store.ts';
 import { applyUserFacingError } from './apply-user-facing-error.ts';
 import { CompileCoordinator } from './services/compile-coordinator.ts';
 import { ExportService } from './services/export-service.ts';
@@ -53,6 +54,8 @@ export class Model extends EventTarget {
     private backend: CompileBackend = new WasmWorkerBackend(),
     // This session's id, for operation/artifact correlation (ADR 0008).
     private sessionId: string = newId(),
+    // This session's artifact store (bytes by artifactId, ADR 0008).
+    private artifacts: ArtifactStore = new ArtifactStore(),
   ) {
     super();
     this.projectStore = new ProjectStore(fs);
@@ -75,6 +78,7 @@ export class Model extends EventTarget {
       fs: this.fs,
       backend: this.backend,
       sessionId: this.sessionId,
+      artifacts: this.artifacts,
     };
   }
 
@@ -113,6 +117,13 @@ export class Model extends EventTarget {
     ) {
       this.compile.processSource({ immediatePreview: true });
     }
+  }
+
+  /** The exact bytes a prior operation produced, by immutable artifactId, or
+   *  undefined if unknown/evicted (ADR 0008). Lets a consumer (embed/MCP) fetch a
+   *  specific result rather than the racy "current output". */
+  getArtifact(artifactId: string): File | undefined {
+    return this.artifacts.get(artifactId)?.bytes;
   }
 
   private setState(state: State) {

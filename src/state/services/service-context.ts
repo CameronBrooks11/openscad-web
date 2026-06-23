@@ -1,5 +1,6 @@
 import type { ProjectFileSystem } from '../../fs/project-filesystem.ts';
 import type { CompileBackend } from '../../runner/openscad-runner.ts';
+import type { ArtifactStore } from '../artifact-store.ts';
 import type { State } from '../app-state.ts';
 import type { HostAdapter } from '../web-host-adapter.ts';
 
@@ -32,4 +33,6 @@ export interface ServiceContext {
   readonly backend: CompileBackend;
   /** This session's id, for operation/artifact correlation (ADR 0008). */
   readonly sessionId: string;
+  /** This session's artifact store — bytes by immutable artifactId (ADR 0008). */
+  readonly artifacts: ArtifactStore;
 }

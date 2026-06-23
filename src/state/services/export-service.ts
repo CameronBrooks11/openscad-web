@@ -3,7 +3,7 @@ import chroma from 'chroma-js';
 import { export3MF } from '../../io/export_3mf.ts';
 import { parseOff } from '../../io/import_off.ts';
 import { createRenderExportDelayable, type RenderOutput } from '../../runner/actions.ts';
-import { newId } from '../../runner/compile-contract.ts';
+import { formatOfName, mediaTypeForFormat, newId } from '../../runner/compile-contract.ts';
 import { isExpectedJobCancellation, type ProcessStreams } from '../../runner/openscad-runner.ts';
 import { isUserFacingOperationError } from '../../user-facing-errors.ts';
 import { formatBytes, formatMillis, type AbortablePromise } from '../../utils.ts';
@@ -184,6 +184,20 @@ export class ExportService {
       if (!isCurrent()) return;
 
       const outFileURL = host.createObjectURL(output.outFile);
+      // One immutable artifact id, shared by state.export and the store entry, so
+      // getArtifact(artifactId) returns these exact exported bytes (ADR 0008).
+      const artifactId = newId();
+      const sourceRevision = this.ctx.getSourceRevision();
+      const format = formatOfName(output.outFile.name);
+      this.ctx.artifacts.put(output.outFile, {
+        artifactId,
+        operationId,
+        sourceRevision,
+        format,
+        mediaType: mediaTypeForFormat(format),
+        size: output.outFile.size,
+        name: output.outFile.name,
+      });
       mutate((s) => {
         s.exporting = false;
         if (s.export?.outFileURL?.startsWith('blob:') ?? false) {
@@ -195,9 +209,9 @@ export class ExportService {
           elapsedMillis: output.elapsedMillis,
           formattedElapsedMillis: formatMillis(output.elapsedMillis),
           formattedOutFileSize: formatBytes(output.outFile.size),
-          artifactId: newId(),
+          artifactId,
           operationId,
-          sourceRevision: this.ctx.getSourceRevision(),
+          sourceRevision,
         };
         host.download(s.export.outFileURL, output.outFile.name);
       });

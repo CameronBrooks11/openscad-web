@@ -4,6 +4,7 @@ import type { State } from '../../app-state.ts';
 import { bubbleUpDeepMutations } from '../../deep-mutate.ts';
 import { LayoutController } from '../layout-controller.ts';
 import type { ServiceContext } from '../service-context.ts';
+import { ArtifactStore } from '../../artifact-store.ts';
 
 function makeCtx(layout: State['view']['layout'], logs = false) {
   let state: State = {
@@ -37,6 +38,7 @@ function makeCtx(layout: State['view']['layout'], logs = false) {
     fs: { readFileSync: () => new Uint8Array(), writeFile: () => {} },
     backend: { spawn: () => ({}) as never, cancel: () => {}, dispose: () => {} },
     sessionId: 'test-session',
+    artifacts: new ArtifactStore(),
   };
   return { ctx, getState: () => state };
 }
