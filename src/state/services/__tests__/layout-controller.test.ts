@@ -36,6 +36,7 @@ function makeCtx(layout: State['view']['layout'], logs = false) {
     },
     fs: { readFileSync: () => new Uint8Array(), writeFile: () => {} },
     backend: { spawn: () => ({}) as never, cancel: () => {}, dispose: () => {} },
+    sessionId: 'test-session',
   };
   return { ctx, getState: () => state };
 }

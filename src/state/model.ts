@@ -14,6 +14,7 @@ import { contentOf, isProbablyTextPath } from './project-source.ts';
 import { ProjectStore } from './project-store.ts';
 import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
 import { WasmWorkerBackend, type CompileBackend } from '../runner/openscad-runner.ts';
+import { newId } from '../runner/compile-contract.ts';
 import { applyUserFacingError } from './apply-user-facing-error.ts';
 import { CompileCoordinator } from './services/compile-coordinator.ts';
 import { ExportService } from './services/export-service.ts';
@@ -50,6 +51,8 @@ export class Model extends EventTarget {
     // This session's compile engine. Default-constructed so a lone `new Model`
     // (and tests) keep working; OpenScadSession passes its own (ADR 0007).
     private backend: CompileBackend = new WasmWorkerBackend(),
+    // This session's id, for operation/artifact correlation (ADR 0008).
+    private sessionId: string = newId(),
   ) {
     super();
     this.projectStore = new ProjectStore(fs);
@@ -71,6 +74,7 @@ export class Model extends EventTarget {
       host: this.host,
       fs: this.fs,
       backend: this.backend,
+      sessionId: this.sessionId,
     };
   }
 

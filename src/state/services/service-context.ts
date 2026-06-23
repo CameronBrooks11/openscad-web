@@ -30,4 +30,6 @@ export interface ServiceContext {
   readonly fs: ProjectFileSystem;
   /** This session's compile engine; the schedulers submit jobs to it (ADR 0007). */
   readonly backend: CompileBackend;
+  /** This session's id, for operation/artifact correlation (ADR 0008). */
+  readonly sessionId: string;
 }

@@ -124,6 +124,9 @@ describe('Model routes side effects through the host (#59)', () => {
       elapsedMillis: 1,
       formattedElapsedMillis: '1ms',
       formattedOutFileSize: '3 bytes',
+      artifactId: 'art',
+      operationId: 'op',
+      sourceRevision: 0,
     } as State['output'];
     const model = new Model(makeFs(), state, undefined, undefined, host);
 
