@@ -10,13 +10,16 @@ vi.mock('../../runner/actions.ts', () => {
   const makeDelayable = (resolved: unknown) =>
     vi.fn().mockReturnValue(vi.fn().mockResolvedValue(resolved));
   return {
-    checkSyntax: makeDelayable({ logText: '', markers: [], parameterSet: undefined }),
-    render: makeDelayable({
-      outFile: new File(['off-bytes'], 'out.off'),
-      logText: '',
-      markers: [],
-      elapsedMillis: 1,
-    }),
+    createSyntaxDelayable: () =>
+      makeDelayable({ logText: '', markers: [], parameterSet: undefined }),
+    createRenderDelayable: () =>
+      makeDelayable({
+        outFile: new File(['off-bytes'], 'out.off'),
+        logText: '',
+        markers: [],
+        elapsedMillis: 1,
+      }),
+    createRenderExportDelayable: () => makeDelayable({}),
   };
 });
 vi.mock('../../io/import_off.ts', () => ({ parseOff: vi.fn() }));

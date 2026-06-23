@@ -1,4 +1,8 @@
-import { checkSyntax, render, type RenderArgs } from '../../runner/actions.ts';
+import {
+  createRenderDelayable,
+  createSyntaxDelayable,
+  type RenderArgs,
+} from '../../runner/actions.ts';
 import { isExpectedJobCancellation, type ProcessStreams } from '../../runner/openscad-runner.ts';
 import { isUserFacingOperationError, UserFacingOperationError } from '../../user-facing-errors.ts';
 import { fetchSource, formatBytes, formatMillis } from '../../utils.ts';
@@ -32,6 +36,12 @@ export class CompileCoordinator {
   private _previewSeq = 0;
   private _renderSeq = 0;
   private _syntaxSeq = 0;
+
+  // Per-coordinator (= per-session) schedulers so independent sessions never
+  // cross-cancel. One render delayable shared by preview + full render (they
+  // supersede each other); syntax has its own. See ADR 0007.
+  private readonly _render = createRenderDelayable();
+  private readonly _checkSyntax = createSyntaxDelayable();
 
   /**
    * Convert the typed sources to the flat wire shape, reading each project-local
@@ -146,7 +156,7 @@ export class CompileCoordinator {
     const isCurrent = () => this._syntaxSeq === token;
     this.ctx.mutate((s) => (s.checkingSyntax = true));
     try {
-      const checkerRun = await checkSyntax({
+      const checkerRun = await this._checkSyntax({
         activePath: this.ctx.getState().params.activePath,
         // The param/syntax pass never resolves `import()` (it's lazy, evaluated
         // only at geometry time), so a binary `local` asset is not needed here —
@@ -268,7 +278,7 @@ export class CompileCoordinator {
         backend: this.ctx.getState().params.backend,
         revision: this.ctx.getSourceRevision(),
       };
-      const output = await render(renderArgs)({ now });
+      const output = await this._render(renderArgs)({ now });
       if (!isCurrent()) return; // a newer render/preview superseded this one
       if (output.revision !== undefined && output.revision !== this.ctx.getSourceRevision()) {
         // Sources changed since this render was requested — drop the stale result.
