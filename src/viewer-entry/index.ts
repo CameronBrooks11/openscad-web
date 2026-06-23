@@ -9,7 +9,7 @@
 
 import '../components/elements/osc-geometry-viewer.ts';
 import { ViewerController, type GeometryViewer } from '../viewer-host/controller.ts';
-import { BrowserParentTransport } from '../viewer-host/transports/browser-parent.ts';
+import { selectViewerTransport } from '../viewer-host/transports/select.ts';
 
 const root = document.getElementById('viewer-root')!;
 const viewer = document.createElement('osc-geometry-viewer') as GeometryViewer;
@@ -17,4 +17,5 @@ const viewer = document.createElement('osc-geometry-viewer') as GeometryViewer;
 viewer.generateThumbnails = false;
 root.appendChild(viewer);
 
-new ViewerController(viewer, new BrowserParentTransport());
+// Auto-select the transport for the host (VS Code webview vs iframe parent).
+new ViewerController(viewer, selectViewerTransport());
