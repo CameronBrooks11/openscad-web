@@ -112,6 +112,22 @@ describe('FSAPI handle scoping (#62)', () => {
     expect(host.downloadBlob).not.toHaveBeenCalled();
   });
 
+  it('saves a lone binary asset via buildZip — never as 0-byte text (#121)', async () => {
+    const host = mockHost();
+    const state = singleSourceState('/home/part.stl');
+    // A single binary `local` source: bytes on the FS, no inline text content.
+    state.params.sources = [{ kind: 'local', path: '/home/part.stl' }];
+    const model = new Model(makeFs(), state, undefined, undefined, host);
+
+    await model.saveProject();
+
+    // The text shortcut (which would download a 0-byte file or truncate via a
+    // handle) must NOT run; it routes through buildZip instead. JSZip is mocked
+    // here, so buildZip surfaces an error rather than the silent 0-byte save.
+    expect(host.downloadBlob).not.toHaveBeenCalled();
+    expect(model.state.error).toBeTruthy();
+  });
+
   it('does not reuse a stale handle after a ZIP import replaces the project', async () => {
     const { writable } = stubPicker('a.scad', 'cube(10);');
     const host = mockHost();

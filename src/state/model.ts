@@ -361,7 +361,14 @@ export class Model extends EventTarget {
   }
 
   async saveProject() {
-    if (this.state.params.sources.length == 1) {
+    // The single-file text shortcut applies ONLY when that source has inline
+    // text. A lone binary `local` asset (contentOf == undefined) must go through
+    // buildZip — re-reading its bytes from the FS — or the text path below would
+    // save a 0-byte file and `saveViaHandle('')` would truncate the on-disk file
+    // (#121).
+    const onlyText =
+      this.state.params.sources.length == 1 && contentOf(this.state.params.sources[0]) != undefined;
+    if (onlyText) {
       const content = contentOf(this.state.params.sources[0]) ?? '';
       // Write back through the FSAPI handle for the *active* source, if it was
       // opened that way; otherwise fall back to a download.
