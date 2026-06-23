@@ -1,4 +1,5 @@
 import type { ProjectFileSystem } from '../../fs/project-filesystem.ts';
+import type { CompileBackend } from '../../runner/openscad-runner.ts';
 import type { State } from '../app-state.ts';
 import type { HostAdapter } from '../web-host-adapter.ts';
 
@@ -27,4 +28,6 @@ export interface ServiceContext {
   readonly host: HostAdapter;
   /** The project filesystem (narrow read/write surface). */
   readonly fs: ProjectFileSystem;
+  /** This session's compile engine; the schedulers submit jobs to it (ADR 0007). */
+  readonly backend: CompileBackend;
 }

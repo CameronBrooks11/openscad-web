@@ -109,6 +109,7 @@ function makeCtx(partial: Partial<State['params']> & { is2D?: boolean; output?: 
     getActiveSource: () => '',
     host,
     fs: { readFileSync: vi.fn(), writeFile: vi.fn() },
+    backend: { spawn: vi.fn(), cancel: vi.fn(), dispose: vi.fn() },
   };
   return { ctx, host, getState: () => state };
 }

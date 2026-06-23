@@ -17,17 +17,22 @@ import type { ServiceContext } from './service-context.ts';
  * through the host adapter).
  */
 export class ExportService {
-  constructor(private ctx: ServiceContext) {}
+  constructor(private ctx: ServiceContext) {
+    // Built here reading the `ctx` PARAMETER (always bound), not a field
+    // initializer reading `this.ctx` — unconditionally correct regardless of
+    // `useDefineForClassFields` ordering.
+    this._renderExport = createRenderExportDelayable(ctx.backend);
+  }
 
   // Identifies the latest export. A superseded export (e.g. a second click, or
   // the 3MF path which does not run through the delayable) must not clobber the
   // newer one's result/download when its async work finally settles.
   private _exportSeq = 0;
 
-  // This service's own export render scheduler (per session, ADR 0007), kept
-  // distinct from the coordinator's render delayable so an auto-preview never
-  // cancels an in-flight export.
-  private readonly _renderExport = createRenderExportDelayable();
+  // This service's own export render scheduler (per session, ADR 0007), bound to
+  // this session's engine and kept distinct from the coordinator's render
+  // delayable so an auto-preview never cancels an in-flight export.
+  private readonly _renderExport: ReturnType<typeof createRenderExportDelayable>;
 
   // The in-flight format-conversion render job, if any. The export-token logic
   // stops a superseded export from committing a stale result, but the branches

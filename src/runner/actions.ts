@@ -4,7 +4,7 @@ import type { Diagnostic } from '../diagnostics.ts';
 import {
   ProcessStreams,
   isExpectedJobCancellation,
-  spawnOpenSCAD,
+  type CompileBackend,
   type JobPriority,
 } from './openscad-runner.ts';
 import { processMergedOutputs } from './output-parser.ts';
@@ -27,11 +27,11 @@ type SyntaxCheckOutput = {
   parameterSet?: ParameterSet;
   revision?: number;
 };
-const syntaxJob = (sargs: SyntaxCheckArgs) => {
+const syntaxJob = (backend: CompileBackend, sargs: SyntaxCheckArgs) => {
   const { activePath, sources, revision } = sargs;
 
   const outFile = 'out.json';
-  const job = spawnOpenSCAD(
+  const job = backend.spawn(
     {
       mountArchives: true,
       inputs: sources,
@@ -84,9 +84,11 @@ const syntaxJob = (sargs: SyntaxCheckArgs) => {
   });
 };
 
-/** A fresh syntax-check scheduler (own debounce + supersession). One per session
- *  so independent sessions don't cancel each other's checks (ADR 0007). */
-export const createSyntaxDelayable = () => turnIntoDelayableExecution(syntaxDelay, syntaxJob);
+/** A fresh syntax-check scheduler bound to `backend` (own debounce + supersession).
+ *  One per session so independent sessions don't cancel each other's checks and
+ *  each runs on its own engine (ADR 0007). */
+export const createSyntaxDelayable = (backend: CompileBackend) =>
+  turnIntoDelayableExecution(syntaxDelay, (sargs: SyntaxCheckArgs) => syntaxJob(backend, sargs));
 
 const renderDelay = 1000;
 export type RenderOutput = {
@@ -191,7 +193,7 @@ export function buildOpenScadArgs(request: OpenScadArgsRequest): string[] {
   return args;
 }
 
-const renderJob = (renderArgs: RenderArgs) => {
+const renderJob = (engine: CompileBackend, renderArgs: RenderArgs) => {
   const {
     scadPath,
     sources,
@@ -237,7 +239,7 @@ const renderJob = (renderArgs: RenderArgs) => {
     extraArgs,
   });
 
-  const job = spawnOpenSCAD(
+  const job = engine.spawn(
     {
       mountArchives: mountArchives,
       inputs: sources.map((s) => (s.path === scadPath ? { path: s.path, content } : s)),
@@ -312,11 +314,13 @@ const renderJob = (renderArgs: RenderArgs) => {
 
 // Preview and full render share ONE delayable instance per coordinator: they
 // debounce and supersede each other (only one geometry compile should be live at
-// a time). One per session (ADR 0007).
-export const createRenderDelayable = () => turnIntoDelayableExecution(renderDelay, renderJob);
+// a time). One per session, bound to that session's engine (ADR 0007).
+export const createRenderDelayable = (backend: CompileBackend) =>
+  turnIntoDelayableExecution(renderDelay, (args: RenderArgs) => renderJob(backend, args));
 
 // Export gets its OWN delayable instance so it does not share the supersession
 // signal with preview/render — an auto-preview must not cancel an in-flight
 // export, nor an export an in-flight preview. Callers pass `priority: 'export'`
 // for host-side scheduling precedence.
-export const createRenderExportDelayable = () => turnIntoDelayableExecution(renderDelay, renderJob);
+export const createRenderExportDelayable = (backend: CompileBackend) =>
+  turnIntoDelayableExecution(renderDelay, (args: RenderArgs) => renderJob(backend, args));

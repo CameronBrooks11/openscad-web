@@ -13,6 +13,7 @@ import { ProjectFileSystem } from '../fs/project-filesystem.ts';
 import { contentOf, isProbablyTextPath } from './project-source.ts';
 import { ProjectStore } from './project-store.ts';
 import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
+import { WasmWorkerBackend, type CompileBackend } from '../runner/openscad-runner.ts';
 import { applyUserFacingError } from './apply-user-facing-error.ts';
 import { CompileCoordinator } from './services/compile-coordinator.ts';
 import { ExportService } from './services/export-service.ts';
@@ -46,6 +47,9 @@ export class Model extends EventTarget {
     private setStateCallback?: (state: State) => void,
     private statePersister?: StatePersister,
     private host: HostAdapter = new WebHostAdapter(),
+    // This session's compile engine. Default-constructed so a lone `new Model`
+    // (and tests) keep working; OpenScadSession passes its own (ADR 0007).
+    private backend: CompileBackend = new WasmWorkerBackend(),
   ) {
     super();
     this.projectStore = new ProjectStore(fs);
@@ -66,6 +70,7 @@ export class Model extends EventTarget {
       getActiveSource: () => this.source,
       host: this.host,
       fs: this.fs,
+      backend: this.backend,
     };
   }
 

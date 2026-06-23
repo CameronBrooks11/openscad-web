@@ -107,13 +107,28 @@ let _pageFirstCompileRequested = false;
 let _pageFirstCompileCompleted = false;
 
 /**
+ * The compile engine boundary: submit a compile, cancel one, tear the engine
+ * down. The browser-WASM runner is one implementation; a future native backend
+ * implements the same shape without touching callers (ADR 0007).
+ */
+export interface CompileBackend {
+  spawn(
+    invocation: OpenSCADInvocation,
+    streamsCallback: (ps: ProcessStreams) => void,
+    priority?: JobPriority,
+  ): AbortablePromise<OpenSCADInvocationResults>;
+  cancel(id: string, reason?: string): void;
+  dispose(): void;
+}
+
+/**
  * The browser-WASM compile engine: owns one persistent Worker plus the pending
  * jobs, id space, worker generation, and queue/exec timeout timers that drive
  * it. Instance-scoped so independent sessions get fully isolated engines (ADR
- * 0007). The app runs a single `defaultBackend`; `spawnOpenSCAD` delegates to it,
- * so behavior is identical to the previous module-singleton.
+ * 0007). The app runs one backend per session; `spawnOpenSCAD` + `defaultBackend`
+ * remain for the direct-importing runner tests.
  */
-export class WasmWorkerBackend {
+export class WasmWorkerBackend implements CompileBackend {
   /** @internal Pending jobs by id; exposed for cross-instance isolation tests. */
   readonly pending = new Map<string, PendingJob>();
   /** @internal Monotonic job id counter (per backend). */
