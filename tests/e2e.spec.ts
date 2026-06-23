@@ -754,11 +754,28 @@ test.describe('embed mode', () => {
     expect(errMsg?.data?.code).toBe('unsupported-version');
     expect(errMsg?.data?.requestId).toBe('bad-1');
 
+    // ready advertises the artifact-identity capability (ADR 0008).
+    const readyMsg = messages.find((m) => m.data?.type === 'ready');
+    expect(readyMsg?.data?.capabilities).toEqual(
+      expect.objectContaining({ artifactIdentity: true }),
+    );
+
     const renderComplete = messages.find((m) => m.data?.type === 'renderComplete');
+    // renderComplete now carries durable metadata PLUS immutable identity.
     expect(renderComplete?.data?.artifact).toEqual(
-      expect.objectContaining({ name: expect.any(String) }),
+      expect.objectContaining({
+        name: expect.any(String),
+        artifactId: expect.any(String),
+        operationId: expect.any(String),
+        sourceRevision: expect.any(Number),
+        mediaType: expect.any(String),
+      }),
     );
     expect('outFileURL' in (renderComplete?.data ?? {})).toBe(false);
+    const renderedArtifactId = (
+      renderComplete?.data?.artifact as { artifactId?: string } | undefined
+    )?.artifactId;
+    expect(typeof renderedArtifactId).toBe('string');
 
     // The transferred ArrayBuffer does not survive serialization back to Node,
     // so inspect it inside the page realm.
@@ -778,6 +795,74 @@ test.describe('embed mode', () => {
     });
     expect(artifact.available).toBe(true);
     expect(artifact.byteLength).toBeGreaterThan(0);
+
+    // Fetch the SAME render by its immutable artifactId (ADR 0008): the embed
+    // serves the exact bytes and echoes the id, not a racy "current output".
+    await page.evaluate((artifactId) => {
+      const iframe = document.getElementById('embed-frame') as HTMLIFrameElement | null;
+      iframe?.contentWindow?.postMessage(
+        { protocolVersion: 2, type: 'getArtifact', requestId: 'art-2', artifactId },
+        window.location.origin,
+      );
+    }, renderedArtifactId);
+    await waitForEmbedMessageCount(page, 'artifact', 2);
+
+    const byId = await page.evaluate(() => {
+      const messages = (
+        window as Window & {
+          __embedMessages?: Array<{
+            data?: {
+              type?: string;
+              requestId?: string;
+              available?: boolean;
+              artifactId?: string;
+              bytes?: ArrayBuffer;
+            };
+          }>;
+        }
+      ).__embedMessages;
+      const msg = messages?.find(
+        (m) => m?.data?.type === 'artifact' && m?.data?.requestId === 'art-2',
+      );
+      return {
+        available: msg?.data?.available ?? false,
+        artifactId: msg?.data?.artifactId ?? null,
+        byteLength: msg?.data?.bytes?.byteLength ?? 0,
+      };
+    });
+    expect(byId.available).toBe(true);
+    expect(byId.artifactId).toBe(renderedArtifactId);
+    expect(byId.byteLength).toBeGreaterThan(0);
+
+    // An unknown/evicted artifactId is a clean miss: available:false, no bytes —
+    // never a fallback to the current output (ADR 0008).
+    await page.evaluate(() => {
+      const iframe = document.getElementById('embed-frame') as HTMLIFrameElement | null;
+      iframe?.contentWindow?.postMessage(
+        { protocolVersion: 2, type: 'getArtifact', requestId: 'art-3', artifactId: 'no-such-id' },
+        window.location.origin,
+      );
+    });
+    await waitForEmbedMessageCount(page, 'artifact', 3);
+
+    const miss = await page.evaluate(() => {
+      const messages = (
+        window as Window & {
+          __embedMessages?: Array<{
+            data?: { type?: string; requestId?: string; available?: boolean; bytes?: ArrayBuffer };
+          }>;
+        }
+      ).__embedMessages;
+      const msg = messages?.find(
+        (m) => m?.data?.type === 'artifact' && m?.data?.requestId === 'art-3',
+      );
+      return {
+        available: msg?.data?.available ?? true,
+        hasBytes: msg?.data?.bytes !== undefined,
+      };
+    });
+    expect(miss.available).toBe(false);
+    expect(miss.hasBytes).toBe(false);
   });
 
   test('rejects host messages when parentOrigin does not match the real parent origin', async ({

@@ -11,6 +11,7 @@ import type { Model } from '../../state/model.ts';
 import './osc-viewer-panel.ts';
 import './osc-customizer-panel.ts';
 import { validateInbound, outbound, isTrustedOrigin } from '../../embed/protocol.ts';
+import { outputArtifactRef } from '../../embed/artifact-event.ts';
 
 // ---------------------------------------------------------------------------
 // postMessage protocol — see src/embed/protocol.ts and docs/EMBED.md
@@ -38,16 +39,6 @@ function coerceUrlVars(vars: Record<string, string>): Record<string, unknown> {
     }
   }
   return result;
-}
-
-/** Durable artifact descriptor sent to the host instead of a blob URL. */
-function artifactMeta(file: File): Record<string, unknown> {
-  const dot = file.name.lastIndexOf('.');
-  return {
-    name: file.name,
-    size: file.size,
-    format: dot >= 0 ? file.name.slice(dot + 1).toLowerCase() : '',
-  };
 }
 
 function getVarsSnapshot(st: State): Record<string, unknown> {
@@ -133,6 +124,10 @@ export class OscEmbedShell extends LitElement {
     this._notifyHost('ready', {
       vars: getVarsSnapshot(st),
       ...(st.parameterSet ? { parameterSet: st.parameterSet } : {}),
+      // Feature flags so a host can detect this build's optional behaviours
+      // (ADR 0008). `artifactIdentity`: renderComplete/artifact carry immutable
+      // ids and `getArtifact` accepts an `artifactId`.
+      capabilities: { artifactIdentity: true },
     });
   }
   private _onState = (e: Event) => {
@@ -154,10 +149,11 @@ export class OscEmbedShell extends LitElement {
     if (st.output && !st.rendering && !st.previewing) {
       if (st.output.outFileURL !== this._lastSentRenderURL) {
         this._lastSentRenderURL = st.output.outFileURL;
-        // Send durable metadata only; the host fetches bytes on demand via
-        // `getArtifact`. A blob URL owned by the iframe document is not even
+        // Send durable metadata + immutable identity only; the host fetches
+        // bytes on demand via `getArtifact` (optionally by the advertised
+        // `artifactId`). A blob URL owned by the iframe document is not even
         // usable cross-origin, so it is never leaked into the event.
-        this._notifyHost('renderComplete', { artifact: artifactMeta(st.output.outFile) });
+        this._notifyHost('renderComplete', { artifact: outputArtifactRef(st.output) });
       }
     }
   };
@@ -192,29 +188,46 @@ export class OscEmbedShell extends LitElement {
         });
         break;
       case 'getArtifact':
-        void this._sendArtifact(requestId);
+        void this._sendArtifact(requestId, msg.artifactId);
         break;
     }
   };
 
-  /** Respond to `getArtifact` with the current render bytes (transferred). */
-  private async _sendArtifact(requestId: string | undefined) {
-    const output = this._model.state.output;
-    if (!output) {
+  /**
+   * Respond to `getArtifact` with bytes + immutable identity (transferred).
+   * With no `artifactId` this is the current output (byte-identical to v2); with
+   * one it is that specific artifact's exact bytes, or `available: false` if it
+   * is unknown or has been evicted from the per-session store (ADR 0008).
+   */
+  private async _sendArtifact(requestId: string | undefined, artifactId: string | undefined) {
+    const resolved = this._resolveArtifact(artifactId);
+    if (!resolved) {
       this._notifyHost('artifact', { available: false, ...(requestId ? { requestId } : {}) });
       return;
     }
-    const bytes = await output.outFile.arrayBuffer();
+    const bytes = await resolved.file.arrayBuffer();
     this._notifyHost(
       'artifact',
       {
         available: true,
-        ...artifactMeta(output.outFile),
+        ...resolved.ref,
         bytes,
         ...(requestId ? { requestId } : {}),
       },
       [bytes],
     );
+  }
+
+  /** The requested artifact's ref + File: a specific one from the store, or —
+   *  when no id is given — the current output read straight off state (never the
+   *  store, so a burst of previews cannot evict the live result). */
+  private _resolveArtifact(artifactId: string | undefined) {
+    if (artifactId !== undefined) {
+      const stored = this._model.getStoredArtifact(artifactId);
+      return stored ? { ref: stored.ref, file: stored.bytes } : undefined;
+    }
+    const output = this._model.state.output;
+    return output ? { ref: outputArtifactRef(output), file: output.outFile } : undefined;
   }
 
   override connectedCallback() {

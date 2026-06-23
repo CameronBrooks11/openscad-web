@@ -15,7 +15,7 @@ import { ProjectStore } from './project-store.ts';
 import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
 import { WasmWorkerBackend, type CompileBackend } from '../runner/openscad-runner.ts';
 import { newId } from '../runner/compile-contract.ts';
-import { ArtifactStore } from './artifact-store.ts';
+import { ArtifactStore, type StoredArtifact } from './artifact-store.ts';
 import { applyUserFacingError } from './apply-user-facing-error.ts';
 import { CompileCoordinator } from './services/compile-coordinator.ts';
 import { ExportService } from './services/export-service.ts';
@@ -119,11 +119,11 @@ export class Model extends EventTarget {
     }
   }
 
-  /** The exact bytes a prior operation produced, by immutable artifactId, or
-   *  undefined if unknown/evicted (ADR 0008). Lets a consumer (embed/MCP) fetch a
-   *  specific result rather than the racy "current output". */
-  getArtifact(artifactId: string): File | undefined {
-    return this.artifacts.get(artifactId)?.bytes;
+  /** A prior operation's exact bytes and immutable identity ref, by artifactId,
+   *  or undefined if unknown/evicted (ADR 0008). Lets a consumer (embed/MCP)
+   *  fetch a specific result rather than the racy "current output". */
+  getStoredArtifact(artifactId: string): StoredArtifact | undefined {
+    return this.artifacts.get(artifactId);
   }
 
   private setState(state: State) {
