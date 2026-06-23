@@ -102,6 +102,33 @@ describe('scoped persistence (#58)', () => {
     expect(persister.set).toHaveBeenCalledTimes(1); // no extra write
   });
 
+  it('flushPersist writes a pending durable change immediately, bypassing the debounce', async () => {
+    const { model, persister } = makeModel();
+    model.mutate((s) => (s.view.showAxes = false));
+    expect(persister.set).not.toHaveBeenCalled(); // still inside the debounce window
+
+    await model.flushPersist();
+    expect(persister.set).toHaveBeenCalledTimes(1);
+
+    // The debounce timer was cancelled by the flush — it must not fire a 2nd write.
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(persister.set).toHaveBeenCalledTimes(1);
+  });
+
+  it('flushPersist on no pending change is a no-op', async () => {
+    const { model, persister } = makeModel();
+    await model.flushPersist();
+    expect(persister.set).not.toHaveBeenCalled();
+  });
+
+  it('dispose cancels a pending persist timer so it never writes', async () => {
+    const { model, persister } = makeModel();
+    model.mutate((s) => (s.view.showAxes = false));
+    model.dispose();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(persister.set).not.toHaveBeenCalled();
+  });
+
   it('swallows persister errors without throwing', async () => {
     const { model, persister } = makeModel();
     persister.set.mockRejectedValueOnce(new Error('disk full'));

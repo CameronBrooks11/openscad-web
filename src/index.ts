@@ -123,6 +123,16 @@ window.addEventListener('load', async () => {
   const model = new Model(fs, initialState, undefined, statePersister);
   setModel(model);
 
+  // Persistence is debounced, so an edit made right before the tab is hidden or
+  // closed could otherwise be lost. Force a flush on `pagehide` and when the
+  // page becomes hidden (the latter is the reliable signal on mobile, where
+  // `pagehide`/`beforeunload` often don't fire). Both are idempotent — a flush
+  // with no durable change is a no-op.
+  window.addEventListener('pagehide', () => void model.flushPersist());
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') void model.flushPersist();
+  });
+
   // The shell module download was started at the top of bootstrap; awaiting it
   // here guarantees the custom element is defined before it is created/upgraded.
   await shellModule;
