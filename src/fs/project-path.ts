@@ -72,3 +72,18 @@ export function normalizeProjectPath(rawPath: string): string {
 
   return segments.join('/');
 }
+
+/** The project root every source lives under (matches the ZIP-import convention). */
+export const PROJECT_HOME = '/home/';
+
+/**
+ * Canonicalize a host- or project-supplied path to the absolute `/home/<rel>`
+ * form that `State.params.sources` uses. Accepts either a project-relative path
+ * (`main.scad`, `lib/a.scad`) or an already-absolute `/home/...` path, and applies
+ * the same traversal/control-character/absolute-elsewhere rejection as
+ * `normalizeProjectPath`. Throws {@link ProjectPathError} on an unsafe path.
+ */
+export function canonicalProjectHomePath(path: string): string {
+  const rel = path.startsWith(PROJECT_HOME) ? path.slice(PROJECT_HOME.length) : path;
+  return `${PROJECT_HOME}${normalizeProjectPath(rel)}`;
+}

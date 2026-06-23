@@ -532,3 +532,102 @@ describe('Model — stale-result rejection (#56)', () => {
     expect(model.state.checkingSyntax).toBeFalsy();
   });
 });
+
+// ---------------------------------------------------------------------------
+// describe: multi-file project contract (#123)
+// ---------------------------------------------------------------------------
+
+describe('Model — multi-file project contract (#123)', () => {
+  it('setProject replaces sources + entry and recompiles', async () => {
+    model.setProject(
+      [
+        { path: 'a.scad', content: 'cube(1);' },
+        { path: 'main.scad', content: 'use <a.scad>\nsphere(1);' },
+      ],
+      'main.scad',
+    );
+    await nextTicks();
+
+    expect(model.state.params.sources.map((s) => s.path)).toEqual([
+      '/home/a.scad',
+      '/home/main.scad',
+    ]);
+    expect(model.state.params.activePath).toBe('/home/main.scad');
+    expect(mockRender).toHaveBeenCalled(); // processSource drove a preview
+  });
+
+  it('setProject surfaces an error for an unsafe path (no throw out of the method)', () => {
+    model.setProject([{ path: '../escape.scad', content: 'x' }]);
+    expect(model.state.error).toBeTruthy();
+  });
+
+  it('updateFile replaces a non-active file and recompiles the entry', async () => {
+    model.setProject(
+      [
+        { path: 'main.scad', content: 'use <a.scad>' },
+        { path: 'a.scad', content: 'cube(1);' },
+      ],
+      'main.scad',
+    );
+    await nextTicks();
+    vi.clearAllMocks();
+
+    model.updateFile('a.scad', 'cube(2);');
+    await nextTicks();
+
+    const a = model.state.params.sources.find((s) => s.path === '/home/a.scad');
+    expect(a && 'content' in a ? a.content : undefined).toBe('cube(2);');
+    expect(model.state.params.activePath).toBe('/home/main.scad'); // unchanged
+    expect(mockRender).toHaveBeenCalled(); // entry recompiled (it `use`s a.scad)
+  });
+
+  it('setEntryPoint switches the active file and recompiles', async () => {
+    model.setProject([
+      { path: 'a.scad', content: 'cube(1);' },
+      { path: 'b.scad', content: 'sphere(1);' },
+    ]);
+    await nextTicks();
+    vi.clearAllMocks();
+
+    model.setEntryPoint('b.scad');
+    await nextTicks();
+
+    expect(model.state.params.activePath).toBe('/home/b.scad');
+    expect(mockRender).toHaveBeenCalled();
+  });
+
+  it('setEntryPoint is a no-op for an unknown file', () => {
+    model.setProject([{ path: 'a.scad', content: 'A' }]);
+    const before = model.state.params.activePath;
+    model.setEntryPoint('ghost.scad');
+    expect(model.state.params.activePath).toBe(before);
+  });
+
+  it('setEntryPoint is a no-op (no recompile) when the file is already active', async () => {
+    model.setProject([{ path: 'a.scad', content: 'A' }], 'a.scad');
+    await nextTicks();
+    vi.clearAllMocks();
+    model.setEntryPoint('a.scad'); // already active
+    await nextTicks();
+    expect(mockRender).not.toHaveBeenCalled();
+  });
+
+  it('removeFile of the active entry re-points deterministically and recompiles', async () => {
+    model.setProject(
+      [
+        { path: 'a.scad', content: 'cube(1);' },
+        { path: 'main.scad', content: 'sphere(1);' },
+      ],
+      'a.scad',
+    );
+    await nextTicks();
+    vi.clearAllMocks();
+
+    model.removeFile('a.scad');
+    await nextTicks();
+
+    expect(model.state.params.sources.map((s) => s.path)).toEqual(['/home/main.scad']);
+    expect(model.state.params.activePath).toBe('/home/main.scad');
+    expect(mockRender).toHaveBeenCalled();
+  });
+});

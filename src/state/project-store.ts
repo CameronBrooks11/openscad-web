@@ -4,6 +4,7 @@ import { ProjectFileSystem } from '../fs/project-filesystem.ts';
 import { contentOf, isProbablyTextPath, type SerializableSource } from './project-source.ts';
 import { fetchSource } from '../utils.ts';
 import {
+  canonicalProjectHomePath,
   MAX_COMPRESSED_ZIP_BYTES,
   MAX_PROJECT_FILE_COUNT,
   MAX_PROJECT_TOTAL_BYTES,
@@ -15,6 +16,24 @@ import {
 export interface ProjectSnapshot {
   sources: SerializableSource[];
   activePath: string;
+}
+
+/** One text file in a host-supplied project (the multi-file contract, #123). A
+ *  binary variant is a future widening (see #121) and does not change this shape. */
+export interface ProjectFile {
+  path: string;
+  content: string;
+}
+
+/**
+ * Pick the entry point for a set of absolute source paths: a top-level
+ * `/home/main.scad`, else the first `.scad`, else the first path. The ZIP-import
+ * convention, applied to the absolute paths the contract operates on.
+ */
+function selectEntryPath(paths: string[]): string {
+  return (
+    paths.find((p) => p === '/home/main.scad') ?? paths.find((p) => p.endsWith('.scad')) ?? paths[0]
+  );
 }
 
 /**
@@ -95,6 +114,96 @@ export class ProjectStore {
     }
     const withoutExisting = sources.filter((src) => src.path !== path);
     return { sources: [...withoutExisting, { kind: 'text', path, content }], activePath: path };
+  }
+
+  /** Write a text file, creating its parent dirs first (mkdir -p). Best-effort:
+   *  the in-memory sources drive compilation, so an FS failure must not abort. */
+  private writeTextFile(path: string, content: string): void {
+    try {
+      if (this.fs.mkdirSync) {
+        for (const dir of ancestorDirsOf(path)) {
+          try {
+            this.fs.mkdirSync(dir);
+          } catch {
+            /* already exists */
+          }
+        }
+      }
+      this.fs.writeFile(path, content);
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  /**
+   * Replace the whole project with `files` (text only — #121), selecting
+   * `entryPoint` as the active file (or the {@link selectEntryPath} rule when it
+   * is absent/unknown). All paths are validated and canonicalized up front, so a
+   * single unsafe path rejects the whole call before any file is written (atomic,
+   * like ZIP import). An empty file list yields one fresh empty file so the
+   * "there is always an active file" invariant holds.
+   */
+  setProject(files: ProjectFile[], entryPoint?: string): ProjectSnapshot {
+    const canon = files.map((f) => ({
+      path: canonicalProjectHomePath(f.path),
+      content: f.content,
+    }));
+    const seen = new Set<string>();
+    for (const f of canon) {
+      if (seen.has(f.path)) throw new ProjectPathError(`Duplicate path in project: ${f.path}`);
+      seen.add(f.path);
+    }
+    // Canonicalize the entry point up front too, so an unsafe entryPoint rejects
+    // the whole call BEFORE any file is written (truly atomic, like ZIP import).
+    const requested = entryPoint !== undefined ? canonicalProjectHomePath(entryPoint) : undefined;
+    if (canon.length === 0) return this.newFile([]);
+    for (const f of canon) this.writeTextFile(f.path, f.content);
+    const sources: SerializableSource[] = canon.map((f) => ({
+      kind: 'text',
+      path: f.path,
+      content: f.content,
+    }));
+    const activePath =
+      requested && sources.some((s) => s.path === requested)
+        ? requested
+        : selectEntryPath(sources.map((s) => s.path));
+    return { sources, activePath };
+  }
+
+  /**
+   * Add or replace one text file's content, leaving the active file unchanged.
+   * Returns the new sources array (caller applies it + recompiles — even for a
+   * non-active file, since the entry may `include`/`use` it).
+   */
+  updateFile(sources: SerializableSource[], path: string, content: string): SerializableSource[] {
+    const target = canonicalProjectHomePath(path);
+    const existing = sources.find((s) => s.path === target);
+    // Refuse to overwrite a binary asset with text — the same protection
+    // `set source` gives the editor, so a text update can't silently destroy the
+    // bytes of a `{kind:'local'}` asset (#153 / ADR 0006).
+    if (existing?.kind === 'local' && !isProbablyTextPath(target)) {
+      throw new ProjectPathError(`Cannot replace the binary asset ${target} with text content.`);
+    }
+    this.writeTextFile(target, content);
+    if (existing) {
+      return sources.map((s) => (s.path === target ? { kind: 'text', path: target, content } : s));
+    }
+    return [...sources, { kind: 'text', path: target, content }];
+  }
+
+  /**
+   * Remove one source. If it was the active file, re-point the entry
+   * deterministically via {@link selectEntryPath} over the survivors; if it was
+   * the last file, create a fresh empty one so an active file always exists.
+   * Returns the original snapshot unchanged when `path` isn't present.
+   */
+  removeFile(sources: SerializableSource[], activePath: string, path: string): ProjectSnapshot {
+    const target = canonicalProjectHomePath(path);
+    const next = sources.filter((s) => s.path !== target);
+    if (next.length === sources.length) return { sources, activePath }; // not present
+    if (next.length === 0) return this.newFile([]);
+    const newActive = target === activePath ? selectEntryPath(next.map((s) => s.path)) : activePath;
+    return { sources: next, activePath: newActive };
   }
 
   /** Add a binary asset: write its bytes to the FS and record a content-less
