@@ -634,6 +634,7 @@ export class OscEditorPanel extends LitElement {
           : html`<textarea
               class="osc-editor-textarea"
               aria-label="OpenSCAD source editor"
+              ?readonly=${this._isActiveBinary(st)}
               .value=${this._model?.source ?? ''}
               @input=${(e: Event) => {
                 this._model.source = (e.target as HTMLTextAreaElement).value;
