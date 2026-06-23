@@ -1,7 +1,8 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { getModel } from '../../state/model-context.ts';
+import { provideSession } from '../../state/session-context.ts';
+import type { OpenScadSession } from '../../state/session.ts';
 import {
   createAppCommands,
   matchKeybinding,
@@ -23,6 +24,9 @@ export class OscAppShell extends LitElement {
     return this;
   }
 
+  /** The session this shell hosts (set by the booter before connection). */
+  session!: OpenScadSession;
+
   @state() private _st: State | null = null;
   private _model!: Model;
   private _commands: AppCommand[] = [];
@@ -32,7 +36,8 @@ export class OscAppShell extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    this._model = getModel();
+    provideSession(this, this.session); // descendants resolve this session
+    this._model = this.session.model;
     this._commands = createAppCommands(this._model);
     this._model.addEventListener('state', this._onState);
     this._st = this._model.state;

@@ -2,7 +2,8 @@
 // CustomizerShell — minimal viewer + customizer panel for ?mode=customizer URLs.
 import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { getModel } from '../../state/model-context.ts';
+import { provideSession } from '../../state/session-context.ts';
+import type { OpenScadSession } from '../../state/session.ts';
 import { UrlModeParams, fetchExternalModel } from '../../state/url-mode.ts';
 import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
@@ -72,6 +73,8 @@ export class OscCustomizerShell extends LitElement {
   `;
 
   @property({ attribute: false }) urlParams!: UrlModeParams;
+  /** The session this shell hosts (set by the booter before connection). */
+  session!: OpenScadSession;
   @state() private _st: State | null = null;
   @state() private _loadError: string | null = null;
   private _model!: Model;
@@ -81,7 +84,8 @@ export class OscCustomizerShell extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    this._model = getModel();
+    provideSession(this, this.session);
+    this._model = this.session.model;
     this._model.addEventListener('state', this._onState);
     this._st = this._model.state;
     this._initialize();

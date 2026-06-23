@@ -1,7 +1,7 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 import { LitElement, html, css } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
-import { getModel } from '../../state/model-context.ts';
+import { resolveSession } from '../../state/session-context.ts';
 import { getFS } from '../../state/fs-context.ts';
 import { clearHomeDirectory } from '../../fs/filesystem.ts';
 import { isInStandaloneMode } from '../../utils.ts';
@@ -86,7 +86,7 @@ export class OscSettingsMenu extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    this._model = getModel();
+    this._model = resolveSession(this).model;
     this._model.addEventListener('state', this._onState);
     this._st = this._model.state;
     document.addEventListener('click', this._closeOnOutsideClick);

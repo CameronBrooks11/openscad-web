@@ -6,7 +6,7 @@ import * as monacoTypes from 'monaco-editor/esm/vs/editor/editor.api';
 // Monaco's stylesheet ships with the editor so it loads only when the editor
 // panel does — embed/customizer surfaces never fetch it.
 import 'monaco-editor/min/vs/editor/editor.main.css';
-import { getModel } from '../../state/model-context.ts';
+import { resolveSession } from '../../state/session-context.ts';
 import { isProjectScopedPath, staleModelPaths } from './editor-model-ownership.ts';
 import { isProbablyTextPath } from '../../state/project-source.ts';
 import { getFS } from '../../state/fs-context.ts';
@@ -155,7 +155,7 @@ export class OscEditorPanel extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    this._model = getModel();
+    this._model = resolveSession(this).model;
     this._model.addEventListener('state', this._onState);
     this._st = this._model.state;
     document.addEventListener('click', this._closeMenu);

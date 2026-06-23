@@ -1,7 +1,8 @@
-// app-stability.test.ts — Guards the Phase 6 Lit migration foundations.
-// Verifies model singleton pattern and EventTarget state emission.
+// app-stability.test.ts — Guards the Lit migration foundations.
+// Verifies the session provider and EventTarget state emission.
 import { Model } from '../state/model.ts';
-import { setModel, getModel } from '../state/model-context.ts';
+import { provideSession, resolveSession } from '../state/session-context.ts';
+import type { OpenScadSession } from '../state/session.ts';
 import { State } from '../state/app-state.ts';
 
 const minimalState: State = {
@@ -19,22 +20,45 @@ const minimalState: State = {
 };
 
 /**
- * Test Gate 1 — Model singleton (replaces the useRef test from the React era).
+ * Test Gate 1 — the session provider (replaces the former getModel singleton).
  *
- * Verifies that setModel/getModel provide a stable singleton reference,
- * mirroring the stability guarantee that useRef gave in App.tsx.
+ * A shell provides its session to its DOM subtree; a descendant resolves the
+ * nearest one, and an element mounted outside any provider fails loudly.
  */
-describe('Model singleton via setModel/getModel', () => {
-  it('getModel returns the exact instance registered via setModel', () => {
-    const model = new Model({} as unknown as FS, minimalState);
-    setModel(model);
-    expect(getModel()).toBe(model);
+describe('session provider (provideSession / resolveSession)', () => {
+  it('resolves the session from the nearest provider ancestor', () => {
+    const session = { id: 'A' } as unknown as OpenScadSession;
+    const host = document.createElement('div');
+    const child = document.createElement('span');
+    host.appendChild(child);
+    document.body.appendChild(host);
+    provideSession(host, session);
+
+    expect(resolveSession(child)).toBe(session);
+    host.remove();
   });
 
-  it('getModel returns same instance on repeated calls', () => {
-    const model = new Model({} as unknown as FS, minimalState);
-    setModel(model);
-    expect(getModel()).toBe(getModel());
+  it('resolves across a shadow boundary (the customizer/embed shadow shells)', () => {
+    // The provider lives on the host; the consumer is in the host's shadow tree.
+    // resolveSession uses composed:true so the request escapes the shadow root to
+    // reach the host listener — the exact path the shadow-DOM shells rely on.
+    const session = { id: 'S' } as unknown as OpenScadSession;
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const shadow = host.attachShadow({ mode: 'open' });
+    const child = document.createElement('span');
+    shadow.appendChild(child);
+    provideSession(host, session);
+
+    expect(resolveSession(child)).toBe(session);
+    host.remove();
+  });
+
+  it('throws when no provider is in the ancestry (no silent default)', () => {
+    const orphan = document.createElement('span');
+    document.body.appendChild(orphan);
+    expect(() => resolveSession(orphan)).toThrow(/No OpenScadSession provider/);
+    orphan.remove();
   });
 });
 

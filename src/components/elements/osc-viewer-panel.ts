@@ -1,7 +1,7 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 import { LitElement, html } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { getModel } from '../../state/model-context.ts';
+import { resolveSession } from '../../state/session-context.ts';
 import { blurHashToImage, imageToThumbhash, thumbHashToImage } from '../../io/image_hashes.ts';
 import { getViewerOutputMode } from './viewer-output-mode.ts';
 import './osc-geometry-viewer.ts';
@@ -40,7 +40,7 @@ export class OscViewerPanel extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    this._model = getModel();
+    this._model = resolveSession(this).model;
     this._model.addEventListener('state', this._onState);
     this._st = this._model.state;
     this._lastOutFile = this._st.output?.outFile;
