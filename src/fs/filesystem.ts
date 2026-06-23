@@ -4,6 +4,7 @@ import { getBrowserFS } from '../runtime/browserfs-runtime.ts';
 import { resolveRuntimeAssetUrl } from '../runtime/asset-urls.ts';
 import { fetchAssetBytes } from '../runtime/fetch-asset.ts';
 import { zipArchives, ZipArchive } from './zip-archives.generated.ts';
+import { isProbablyTextPath } from '../state/project-source.ts';
 
 // Re-export for consumers that need the type
 export type { ZipArchive };
@@ -125,7 +126,15 @@ export async function createEditorFS({
     }
   }
 
-  return { fs: browserFS.BFSRequire('fs'), libraries: new LibraryMounter(rootMFS) };
+  const fs: FS = browserFS.BFSRequire('fs');
+  // BrowserFS needs its own Buffer for a byte write; a bare Uint8Array writes
+  // zeros and writeFileSync throws (ADR 0006). Install the conversion here so
+  // domain code can write bytes via a plain `fs.writeBytes(path, u8)`.
+  const BfsBuffer = browserFS.BFSRequire('buffer').Buffer;
+  fs.writeBytes = (path: string, content: Uint8Array): void => {
+    fs.writeFile(path, BfsBuffer.from(content));
+  };
+  return { fs, libraries: new LibraryMounter(rootMFS) };
 }
 
 // ---------------------------------------------------------------------------
@@ -268,19 +277,29 @@ export async function symlinkLibraries(
  * the opened source (so write-back targets the right file even after other
  * sources are opened) and pass it back to `saveViaHandle()`.
  */
-export async function openLocalFile(): Promise<{
-  name: string;
-  content: string;
-  handle: FileSystemFileHandle;
-} | null> {
+export type OpenedLocalFile =
+  | { name: string; content: string; bytes?: undefined; handle: FileSystemFileHandle }
+  | { name: string; content?: undefined; bytes: Uint8Array; handle: FileSystemFileHandle };
+
+export async function openLocalFile(): Promise<OpenedLocalFile | null> {
   if (!('showOpenFilePicker' in window)) return null;
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [handle] = (await (window as any).showOpenFilePicker({
-      types: [{ description: 'OpenSCAD files', accept: { 'text/plain': ['.scad'] } }],
+      types: [
+        { description: 'OpenSCAD files', accept: { 'text/plain': ['.scad'] } },
+        {
+          description: 'Models & assets',
+          accept: { 'application/octet-stream': ['.stl', '.off', '.3mf', '.dxf', '.amf', '.png'] },
+        },
+      ],
     })) as FileSystemFileHandle[];
     const file = await handle.getFile();
-    return { name: file.name, content: await file.text(), handle };
+    // A non-text asset is read as raw bytes so it is not UTF-8-corrupted (#121).
+    if (isProbablyTextPath(file.name)) {
+      return { name: file.name, content: await file.text(), handle };
+    }
+    return { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()), handle };
   } catch (e) {
     if ((e as Error).name === 'AbortError') return null; // user cancelled
     throw e;

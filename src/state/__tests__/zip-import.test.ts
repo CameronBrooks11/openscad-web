@@ -36,6 +36,7 @@ function makeMockFs() {
   return {
     readFileSync: vi.fn(() => new Uint8Array(0)),
     writeFile: vi.fn(),
+    writeBytes: vi.fn(),
     mkdirSync: vi.fn(),
     isFile: vi.fn(() => false),
   };
@@ -188,6 +189,33 @@ describe('importProjectZip validation (#50)', () => {
     // The whole import is rejected before the write phase, so nothing is written.
     expect(mockFs.writeFile).not.toHaveBeenCalled();
     expect(model.state.error).toBeTruthy();
+  });
+
+  it('imports a binary entry as a content-less local source, writing the bytes uncorrupted', async () => {
+    // A .stl alongside a .scad that references it. The STL must reach the FS as
+    // raw bytes (writeBytes), not a UTF-8-decoded string.
+    const stl = new Uint8Array([0, 65, 200, 255, 0, 128]);
+    mockLoadAsync.mockResolvedValue(
+      fakeZip({ 'main.scad': 'import("part.stl");', 'part.stl': stl }),
+    );
+
+    await model.importProjectZip(new ArrayBuffer(0));
+
+    // The text .scad is written via writeFile; the binary asset via writeBytes,
+    // byte-exact.
+    expect(mockFs.writeFile).toHaveBeenCalledWith('/home/main.scad', 'import("part.stl");');
+    expect(mockFs.writeBytes).toHaveBeenCalledTimes(1);
+    const [bytePath, bytes] = mockFs.writeBytes.mock.calls[0];
+    expect(bytePath).toBe('/home/part.stl');
+    expect(Array.from(bytes as Uint8Array)).toEqual(Array.from(stl));
+
+    // The binary asset is a content-less `local` source; the .scad is the active
+    // text entry.
+    const sources = model.state.params.sources;
+    const stlSource = sources.find((s) => s.path === '/home/part.stl');
+    expect(stlSource?.kind).toBe('local');
+    expect('content' in (stlSource ?? {})).toBe(false);
+    expect(model.state.params.activePath).toBe('/home/main.scad');
   });
 
   it('rejects when an entry fails to decompress (stream error)', async () => {

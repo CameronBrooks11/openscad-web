@@ -30,6 +30,49 @@ async function loadSrc(page: Page, src: string): Promise<void> {
   await page.goto(url.toString());
 }
 
+/** A valid little-endian binary STL of a tetrahedron (4 triangles). Its float
+ *  bytes include values > 127, so any UTF-8 round-trip would corrupt it — which
+ *  makes a successful import proof of byte-exact handling end to end. */
+function binaryStlTetrahedron(): Uint8Array {
+  const tris = [
+    [
+      [0, 0, 0],
+      [10, 0, 0],
+      [0, 10, 0],
+    ],
+    [
+      [0, 0, 0],
+      [10, 0, 0],
+      [0, 0, 10],
+    ],
+    [
+      [0, 0, 0],
+      [0, 10, 0],
+      [0, 0, 10],
+    ],
+    [
+      [10, 0, 0],
+      [0, 10, 0],
+      [0, 0, 10],
+    ],
+  ];
+  const buf = new ArrayBuffer(84 + tris.length * 50);
+  const dv = new DataView(buf);
+  dv.setUint32(80, tris.length, true); // triangle count
+  let off = 84;
+  for (const tri of tris) {
+    off += 12; // leave the normal as 0,0,0 — OpenSCAD recomputes it
+    for (const [x, y, z] of tri) {
+      dv.setFloat32(off, x, true);
+      dv.setFloat32(off + 4, y, true);
+      dv.setFloat32(off + 8, z, true);
+      off += 12;
+    }
+    off += 2; // attribute byte count
+  }
+  return new Uint8Array(buf);
+}
+
 /**
  * Wait until the WASM worker produces a settled render output. Deliberately does
  * NOT wait on the Three.js `viewer-canvas`: headless Firefox in CI has no WebGL,
@@ -172,4 +215,31 @@ test('imports a nested-dir ZIP project, lists the nested file, and compiles @fir
     null,
     { timeout: renderTimeoutMs },
   );
+});
+
+test('imports a binary STL asset and compiles a model that import()s it @firefox', async ({
+  page,
+}) => {
+  await page.goto(appBaseUrl);
+  await waitForRenderOutput(page);
+
+  // A project whose .scad imports a binary STL asset. The STL must survive the
+  // import → BrowserFS write → worker-transfer → OpenSCAD import chain byte-exact
+  // (it has bytes > 127); a UTF-8 round-trip anywhere would corrupt it and the
+  // compile would fail (ADR 0006 / #121).
+  const zip = new JSZip();
+  zip.file('main.scad', 'import("part.stl");\n');
+  zip.file('part.stl', binaryStlTetrahedron());
+  const bytes = await zip.generateAsync({ type: 'uint8array' });
+
+  await page.evaluate(async (data) => {
+    const shell = document.querySelector('osc-app-shell') as
+      | (Element & { _model?: { importProjectZip(buf: ArrayBuffer): Promise<void> } })
+      | null;
+    await shell?._model?.importProjectZip(new Uint8Array(data).buffer);
+  }, Array.from(bytes));
+
+  // The model compiled: the imported STL mesh is in the output (non-empty OFF).
+  await waitForRenderOutput(page);
+  await expectValidOff(page);
 });

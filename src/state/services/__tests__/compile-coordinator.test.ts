@@ -62,6 +62,82 @@ function renderOutput(revision: number) {
   };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeBinaryContext(readFileSync: () => any) {
+  const state = {
+    params: {
+      sources: [
+        { kind: 'text', path: '/home/main.scad', content: 'import("part.stl");' },
+        { kind: 'local', path: '/home/part.stl' }, // project-local binary asset
+        { kind: 'local', path: '/libraries/foo/bar.scad' }, // mount — stays content-less
+      ],
+      activePath: '/home/main.scad',
+      vars: {},
+      features: [],
+      exportFormat2D: 'svg',
+      backend: 'manifold',
+    },
+    is2D: false,
+    currentRunLogs: [],
+  } as unknown as State;
+  const host = {
+    createObjectURL: vi.fn(() => 'blob:fake-url'),
+    revokeObjectURL: vi.fn(),
+    playCompletionChime: vi.fn(),
+    baseUrl: () => 'http://localhost/',
+  };
+  const ctx: ServiceContext = {
+    getState: () => state,
+    mutate: (f) => {
+      f(state);
+      return true;
+    },
+    getSourceRevision: () => 1,
+    getActiveSource: () => 'import("part.stl");',
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    host: host as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fs: { readFileSync } as any,
+  };
+  return { ctx, state };
+}
+
+describe('CompileCoordinator binary-asset materialization (#121)', () => {
+  beforeEach(() => renderImpl.mockReset());
+
+  it('materializes a project-local asset’s bytes into the request; mounts stay content-less', async () => {
+    const stl = new Uint8Array([0, 65, 200, 255]);
+    const { ctx } = makeBinaryContext(() => stl);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let captured: any;
+    renderImpl.mockImplementation((renderArgs: unknown) => {
+      captured = renderArgs;
+      return Promise.resolve(renderOutput(1));
+    });
+
+    await new CompileCoordinator(ctx).render({ isPreview: false, now: true });
+
+    const byPath = (p: string) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      captured.sources.find((s: any) => s.path === p);
+    expect(Array.from(byPath('/home/part.stl').content as Uint8Array)).toEqual(Array.from(stl));
+    expect(byPath('/libraries/foo/bar.scad').content).toBeUndefined();
+    expect(byPath('/home/main.scad').content).toBe('import("part.stl");');
+  });
+
+  it('surfaces a clear error when a referenced local asset is missing from the FS', async () => {
+    const { ctx, state } = makeBinaryContext(() => {
+      throw new Error('ENOENT');
+    });
+    renderImpl.mockResolvedValue(renderOutput(1));
+
+    await new CompileCoordinator(ctx).render({ isPreview: false, now: true });
+
+    expect(String(state.error)).toMatch(/Asset not available/);
+    expect(renderImpl).not.toHaveBeenCalled();
+  });
+});
+
 describe('CompileCoordinator render staleness', () => {
   beforeEach(() => {
     renderImpl.mockReset();

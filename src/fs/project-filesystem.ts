@@ -12,6 +12,13 @@ export interface ProjectFileSystem {
   readFileSync(path: string): BufferSource;
   writeFile(path: string, content: string): void;
   /**
+   * Write raw bytes uncorrupted (binary project assets). Optional because most
+   * consumers only write text; the real BrowserFS-backed `FS` provides it (it
+   * converts through BrowserFS's `Buffer` — a bare `Uint8Array` would be written
+   * as zeros). See ADR 0006.
+   */
+  writeBytes?(path: string, content: Uint8Array): void;
+  /**
    * Create a single directory. Optional because most consumers never need it;
    * the real BrowserFS-backed `FS` provides it. Callers create parents in order
    * (mkdir -p) and ignore an already-exists error.

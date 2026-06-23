@@ -1,7 +1,7 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import { AbortablePromise } from '../utils.ts';
-import { Source } from '../state/app-state.ts';
+import type { WireSource } from '../state/project-source.ts';
 import { markPerf, measurePerf, recordPerfDuration } from '../perf/runtime-performance.ts';
 import { createOpenSCADWorker } from './worker-bootstrap.ts';
 import {
@@ -21,7 +21,7 @@ export type MergedOutputs = MergedOutput[];
 // Kept for consumers (actions.ts, output-parser.ts) that reference these types
 export type OpenSCADInvocation = {
   mountArchives: boolean;
-  inputs?: Source[];
+  inputs?: WireSource[];
   args: string[];
   outputPaths?: string[];
   /** Source/project revision stamped onto the request; echoed on the result. */

@@ -4,11 +4,31 @@ import {
   contentOf,
   fromFragment,
   fromWire,
+  isProbablyTextPath,
   toFragment,
   toWire,
   type ProjectSource,
   type WireSource,
 } from '../project-source.ts';
+
+describe('isProbablyTextPath', () => {
+  it('treats known text extensions (any case) as text', () => {
+    for (const p of ['/a.scad', '/lib/util.SCAD', '/data.json', '/notes.txt', '/m.svg', '/x.csv']) {
+      expect(isProbablyTextPath(p)).toBe(true);
+    }
+  });
+
+  it('treats binary and unknown/absent extensions as binary (lean-binary default)', () => {
+    for (const p of ['/part.stl', '/h.png', '/m.3mf', '/d.dxf', '/data.bin', '/README', '/a.']) {
+      expect(isProbablyTextPath(p)).toBe(false);
+    }
+  });
+
+  it('does not treat a dot in a parent directory as an extension', () => {
+    expect(isProbablyTextPath('/my.assets/part')).toBe(false); // dot precedes the last slash
+    expect(isProbablyTextPath('/my.assets/part.scad')).toBe(true);
+  });
+});
 
 describe('fromWire — classification', () => {
   it('classifies a text source', () => {

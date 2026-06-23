@@ -1,11 +1,17 @@
 import { checkSyntax, render, type RenderArgs } from '../../runner/actions.ts';
 import { isExpectedJobCancellation, type ProcessStreams } from '../../runner/openscad-runner.ts';
-import { isUserFacingOperationError } from '../../user-facing-errors.ts';
+import { isUserFacingOperationError, UserFacingOperationError } from '../../user-facing-errors.ts';
 import { fetchSource, formatBytes, formatMillis } from '../../utils.ts';
 import { applyUserFacingError } from '../apply-user-facing-error.ts';
 import type { State } from '../app-state.ts';
 import { is2DFormatExtension } from '../formats.ts';
-import { contentOf } from '../project-source.ts';
+import {
+  contentOf,
+  isProbablyTextPath,
+  toWire,
+  type SerializableSource,
+  type WireSource,
+} from '../project-source.ts';
 import type { ServiceContext } from './service-context.ts';
 
 /**
@@ -27,13 +33,48 @@ export class CompileCoordinator {
   private _renderSeq = 0;
   private _syntaxSeq = 0;
 
+  /**
+   * Convert the typed sources to the flat wire shape, reading each project-local
+   * file's bytes off the host FS so the worker's fresh per-job FS receives them
+   * (ADR 0006). `/libraries` + `/fonts` locals stay content-less — the worker has
+   * them via its read-only mounts. A project-local file with no bytes on disk
+   * (e.g. a shared-URL reload that carries the path but not the asset) surfaces a
+   * clear error rather than letting the worker compile a broken model.
+   */
+  private async materializeBinarySources(sources: SerializableSource[]): Promise<WireSource[]> {
+    return Promise.all(
+      sources.map(async (source): Promise<WireSource> => {
+        const isMount = source.path.startsWith('/libraries/') || source.path.startsWith('/fonts/');
+        if (source.kind !== 'local' || isMount) return toWire(source);
+        try {
+          const content = await fetchSource(
+            this.ctx.fs,
+            { path: source.path },
+            { baseUrl: this.ctx.host.baseUrl() },
+          );
+          return { path: source.path, content };
+        } catch {
+          throw new UserFacingOperationError({
+            message:
+              `Asset not available: ${source.path}. It is referenced by the model but ` +
+              `its bytes are not in this session (a shared link does not carry binary assets).`,
+          });
+        }
+      }),
+    );
+  }
+
   async processSource({ immediatePreview = false }: { immediatePreview?: boolean } = {}) {
     const src = this.ctx
       .getState()
       .params.sources.find((src) => src.path === this.ctx.getState().params.activePath);
-    // A source needs its content materialized when it is not yet inline text: an
-    // unloaded remote (fetch its url) or an on-disk local file (read the fs).
-    if (src && src.kind !== 'archive' && contentOf(src) == null) {
+    // A source needs its content materialized as TEXT when it is not yet inline:
+    // an unloaded remote (fetch its url) or an on-disk text local file (read the
+    // fs). A binary `local` asset (non-text extension) must NOT be text-decoded —
+    // that corrupts it; like `archive` it stays content-less and its bytes flow
+    // through the worker-transfer path instead (ADR 0006).
+    const isBinaryLocal = src?.kind === 'local' && !isProbablyTextPath(src.path);
+    if (src && src.kind !== 'archive' && !isBinaryLocal && contentOf(src) == null) {
       const requestedPath = src.path;
       const url = src.kind === 'remote' ? src.url : undefined;
       try {
@@ -78,8 +119,12 @@ export class CompileCoordinator {
     }
     // When autoCompile is explicitly disabled, skip automatic syntax check and render.
     if (this.ctx.getState().params.autoCompile === false) return;
-    if (this.ctx.getActiveSource().trim() !== '') {
-      const shouldCheckSyntax = this.ctx.getState().params.activePath.endsWith('.scad');
+    // Render when there is editable text OR the active file is a non-.scad asset
+    // (a binary local has no inline text but renders via the import() wrapper in
+    // render(), which materializes its bytes — #121).
+    const activePath = this.ctx.getState().params.activePath;
+    if (this.ctx.getActiveSource().trim() !== '' || !activePath.endsWith('.scad')) {
+      const shouldCheckSyntax = activePath.endsWith('.scad');
       if (immediatePreview) {
         // Keep the boot-time preview immediate and enqueue syntax only after the
         // first visible render has settled so startup stays user-visible first.
@@ -201,19 +246,22 @@ export class CompileCoordinator {
       ];
     }
 
-    const renderArgs: RenderArgs = {
-      mountArchives,
-      scadPath: activePath,
-      sources,
-      vars,
-      features,
-      isPreview,
-      renderFormat: is2D ? this.ctx.getState().params.exportFormat2D : 'off',
-      streamsCallback: this.rawStreamsCallback.bind(this),
-      backend: this.ctx.getState().params.backend,
-      revision: this.ctx.getSourceRevision(),
-    };
     try {
+      // Materialize binary /home assets' bytes into the request so the worker's
+      // fresh per-job FS has them (ADR 0006). Runs on the FINAL `sources` (after
+      // the non-.scad wrapper above) so a kept binary asset is included.
+      const renderArgs: RenderArgs = {
+        mountArchives,
+        scadPath: activePath,
+        sources: await this.materializeBinarySources(sources),
+        vars,
+        features,
+        isPreview,
+        renderFormat: is2D ? this.ctx.getState().params.exportFormat2D : 'off',
+        streamsCallback: this.rawStreamsCallback.bind(this),
+        backend: this.ctx.getState().params.backend,
+        revision: this.ctx.getSourceRevision(),
+      };
       const output = await render(renderArgs)({ now });
       if (!isCurrent()) return; // a newer render/preview superseded this one
       if (output.revision !== undefined && output.revision !== this.ctx.getSourceRevision()) {
