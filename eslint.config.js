@@ -174,6 +174,34 @@ export default tseslint.config(
     },
   },
 
+  // The session-host tier (the compile counterpart of viewer-host, #192/#179) MAY
+  // import the engine (state/runner) and the protocol + the reusable transports —
+  // it drives an OpenScadSession — but NOT the editor, Monaco, the language tooling,
+  // or the app shell, so the compile-capable session bundle stays lean.
+  {
+    files: ['src/session-host/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '**/language/**',
+                'monaco-editor',
+                'monaco-editor/**',
+                '**/osc-editor-panel*',
+                '**/osc-app-shell*',
+              ],
+              message:
+                'The session host must not import the editor, Monaco, language, or app shell.',
+            },
+          ],
+        },
+      ],
+    },
+  },
+
   // The app must not reach into the viewer-host transports (reverse direction):
   // host-binding code is consumed only by the viewer entry composition root.
   {
