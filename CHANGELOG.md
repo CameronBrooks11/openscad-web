@@ -15,6 +15,13 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ### Added
 
+- L1 `SessionController` (`src/session-host/`, #192): the compile counterpart of
+  `ViewerController` — binds a compiling `OpenScadSession` to a `Transport`,
+  validates inbound session commands and drives the session's `ProjectContract`,
+  streams the session's operation results to the host, and (embedded-viewer model)
+  renders a successful OFF result in-process into the session's viewer. State-free
+  behind a minimal `SessionHost` seam (with an `OpenScadSession` adapter), in a new
+  lint-fenced `session-host` tier.
 - L1 session protocol (`src/protocol/session-transport.ts`, #191): a host-neutral
   wire protocol for driving an `OpenScadSession`'s `ProjectContract` from a webview
   — `setProject`/`updateFile`/`removeFile`/`setEntryPoint`/`cancel`/`dispose`
