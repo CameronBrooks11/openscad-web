@@ -281,7 +281,7 @@ script-src ${webview.cspSource} 'nonce-${nonce}' 'wasm-unsafe-eval';
 worker-src blob:;
 style-src ${webview.cspSource} 'unsafe-inline';
 img-src ${webview.cspSource} data: blob:;
-connect-src ${webview.cspSource};
+connect-src ${webview.cspSource} blob:;
 ```
 
 - **`'wasm-unsafe-eval'`** — required to `WebAssembly.instantiate` the OpenSCAD
@@ -290,8 +290,12 @@ connect-src ${webview.cspSource};
   URL. Under a webview the packaged worker/asset URLs are cross-origin to the
   `vscode-webview://` document, so `new Worker(crossOriginUrl)` is SOP-blocked; the
   bundle instead `fetch`es the worker script (allowed) and runs it from a blob.
-- **`connect-src ${webview.cspSource}`** covers the runtime `fetch`es of the worker
-  script, the `.wasm`, and the library zips — all from the session dir.
+- **`connect-src ${webview.cspSource} blob:`** — `cspSource` covers the main
+  thread's `fetch`es of the worker script, the `.wasm`, and the library zips; `blob:`
+  is required because the worker itself fetches those assets from same-origin `blob:`
+  URLs. A `blob:` dedicated worker's `vscode-resource` fetches bypass the webview's
+  resource service worker (they 408), so the session pre-fetches each asset on the
+  main thread and hands the worker blob: URLs it can fetch instead (#203).
 - **No COOP/COEP headers.** The engine is single-threaded WASM (no
   `SharedArrayBuffer`), so cross-origin isolation is **not** required — do not add
   them.

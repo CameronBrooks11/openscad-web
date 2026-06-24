@@ -4,6 +4,7 @@ import {
   resolveDefaultRuntimeBaseUrl,
   resolveRuntimeAssetUrl,
   setRuntimeAssetBase,
+  setRuntimeAssetUrls,
 } from '../asset-urls.ts';
 
 describe('resolveRuntimeAssetUrl', () => {
@@ -71,6 +72,39 @@ describe('setRuntimeAssetBase (#196)', () => {
 
   it('an explicit base argument still overrides the pinned default', () => {
     setRuntimeAssetBase('https://abc.vscode-cdn.net/mount/');
+    expect(resolveRuntimeAssetUrl('x.zip', 'https://other.example/d/')).toBe(
+      'https://other.example/d/x.zip',
+    );
+  });
+});
+
+describe('setRuntimeAssetUrls (#203)', () => {
+  afterEach(() => {
+    setRuntimeAssetUrls(null); // restore default resolution
+    setRuntimeAssetBase(null);
+  });
+
+  it('returns a per-spec blob URL override for default-base lookups (normalized key)', () => {
+    setRuntimeAssetBase('https://abc.vscode-cdn.net/mount/');
+    setRuntimeAssetUrls({
+      'libraries/fonts.zip': 'blob:fonts',
+      'libraries/BOSL2.zip': 'blob:bosl',
+    });
+    // `./`-prefixed and bare specs both normalize to the map key.
+    expect(resolveRuntimeAssetUrl('libraries/fonts.zip')).toBe('blob:fonts');
+    expect(resolveRuntimeAssetUrl('./libraries/BOSL2.zip')).toBe('blob:bosl');
+  });
+
+  it('falls through to the base for specs not in the map', () => {
+    setRuntimeAssetBase('https://abc.vscode-cdn.net/mount/');
+    setRuntimeAssetUrls({ 'libraries/fonts.zip': 'blob:fonts' });
+    expect(resolveRuntimeAssetUrl('libraries/MCAD.zip')).toBe(
+      'https://abc.vscode-cdn.net/mount/libraries/MCAD.zip',
+    );
+  });
+
+  it('is bypassed when an explicit base is given (override is default-base only)', () => {
+    setRuntimeAssetUrls({ 'x.zip': 'blob:should-not-win' });
     expect(resolveRuntimeAssetUrl('x.zip', 'https://other.example/d/')).toBe(
       'https://other.example/d/x.zip',
     );

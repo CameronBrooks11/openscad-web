@@ -20,6 +20,8 @@ import type { ConfigureRequest } from './worker-protocol.ts';
 
 let blobWorkerUrl: string | null = null;
 let assetBaseOverride: string | undefined;
+let assetUrlsOverride: Record<string, string> | undefined;
+let wasmUrlOverride: string | undefined;
 
 /**
  * Configure the bootstrap for a host whose worker/asset URLs are cross-origin to
@@ -28,13 +30,24 @@ let assetBaseOverride: string | undefined;
  * same-origin `blob:` URL to instantiate from, and pin the base the worker resolves
  * assets against. Call once, before constructing the session. Idempotent-ish: the
  * blob URL is created once and reused across worker recycles.
+ *
+ * `assetUrls`/`wasmUrl` (optional): a webview's blob worker can't fetch the
+ * `vscode-resource` asset URLs (its fetches bypass the resource service worker,
+ * #203), so the host pre-fetches each asset on the main thread and passes
+ * same-origin `blob:` URLs the worker can fetch (`wasmUrl` becomes a blob too).
  */
-export async function configureWorkerBootstrap(opts: { assetBase: string }): Promise<void> {
+export async function configureWorkerBootstrap(opts: {
+  assetBase: string;
+  assetUrls?: Record<string, string>;
+  wasmUrl?: string;
+}): Promise<void> {
   if (!blobWorkerUrl) {
     const source = await fetch(openSCADWorkerUrl).then((r) => r.text());
     blobWorkerUrl = URL.createObjectURL(new Blob([source], { type: 'text/javascript' }));
   }
   assetBaseOverride = opts.assetBase;
+  assetUrlsOverride = opts.assetUrls;
+  wasmUrlOverride = opts.wasmUrl;
 }
 
 export function createOpenSCADWorker(): Worker {
@@ -54,7 +67,8 @@ export function workerConfigPayload(): ConfigureRequest {
   return {
     type: 'configure',
     assetBase: assetBaseOverride ?? resolveDefaultRuntimeBaseUrl(import.meta.env.BASE_URL),
-    wasmUrl: openSCADWasmUrl,
+    wasmUrl: wasmUrlOverride ?? openSCADWasmUrl,
+    ...(assetUrlsOverride ? { assetUrls: assetUrlsOverride } : {}),
   };
 }
 
