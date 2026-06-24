@@ -1,5 +1,8 @@
 node_modules
 dist
+dist-publish
+dist-viewer
+dist-session
 coverage
 libs
 src/wasm

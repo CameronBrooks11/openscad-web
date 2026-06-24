@@ -156,6 +156,9 @@ jobs:
       - name: Browser E2E (Chromium full + Firefox smoke)
         run: npm run test:e2e
 
+      - name: Session real-WASM acceptance (dist-session, #193)
+        run: npm run test:e2e:session
+
       - name: Upload Playwright artifacts
         if: always()
         uses: actions/upload-artifact@v7

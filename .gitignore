@@ -5,6 +5,7 @@ node_modules/
 dist/
 dist-publish/
 dist-viewer/
+dist-session/
 libs/
 openscad-web-publish.zip
 .publish-e2e/

@@ -4,18 +4,23 @@ const serverMode = process.env.E2E_SERVER_MODE ?? 'prod';
 const isDevelopmentServer = serverMode === 'dev';
 const isPublishRootServer = serverMode === 'publish-root';
 const isPublishSubpathServer = serverMode === 'publish-subpath';
+// The compile-capable distributable (#193): dist-session served at root (base
+// './'), so session.html sits at http://localhost:3000/session.html.
+const isSessionServer = serverMode === 'session';
 const appUrl = isDevelopmentServer
   ? 'http://localhost:4000/'
-  : isPublishRootServer
+  : isPublishRootServer || isSessionServer
     ? 'http://localhost:3000/'
     : isPublishSubpathServer
       ? 'http://localhost:3000/openscad-web/'
       : 'http://localhost:3000/dist/';
 const webServerCommand = isDevelopmentServer
   ? 'npm run start:development'
-  : isPublishRootServer || isPublishSubpathServer
-    ? 'node ./scripts/serve-publish-e2e.mjs'
-    : 'npm run start:production';
+  : isSessionServer
+    ? 'npm run serve:session'
+    : isPublishRootServer || isPublishSubpathServer
+      ? 'node ./scripts/serve-publish-e2e.mjs'
+      : 'npm run start:production';
 
 export default defineConfig({
   testDir: './tests',
@@ -76,6 +81,9 @@ export default defineConfig({
     url: appUrl,
     timeout: 180_000,
     reuseExistingServer:
-      process.env.CI !== 'true' && !isPublishRootServer && !isPublishSubpathServer,
+      process.env.CI !== 'true' &&
+      !isPublishRootServer &&
+      !isPublishSubpathServer &&
+      !isSessionServer,
   },
 });
