@@ -66,7 +66,6 @@ The WASM build was made possible by https://github.com/DSchroer/openscad-wasm.
   - [Lasercut](#lasercut)
   - [pathbuilder](#pathbuilder)
   - [openscad_attachable_text3d](#openscad_attachable_text3d)
-  - [Fork me on GitHub CSS ribbon](#fork-me-on-github-css-ribbon)
   - [Common licenses](#common-licenses)
     - [MIT](#mit)
     - [BSD 3-Clause](#bsd-3-clause)
@@ -948,14 +947,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
-
-## Fork me on GitHub CSS ribbon
-
-https://github.com/simonwhitaker/github-fork-ribbon-css
-
-Copyright (c) 2013 Simon Whitaker.
-
-Licensed under the [MIT License](#mit).
 
 ## Common licenses
 
