@@ -20,7 +20,21 @@ export type CancelRequest = {
   id: string;
 };
 
-export type WorkerRequest = CompileRequest | CancelRequest;
+/**
+ * Sent once, before any compile, so the worker resolves the WASM + runtime assets
+ * against a HOST-resolved base. The worker's own `import.meta.url`/`self.location`
+ * is unusable when it runs from a `blob:` URL (a VS Code webview, #196), so the
+ * asset base and the wasm URL are computed on the main thread and injected here.
+ */
+export type ConfigureRequest = {
+  type: 'configure';
+  /** Absolute base for resolving library/font/source assets. */
+  assetBase: string;
+  /** Host-resolved URL of the OpenSCAD WASM binary (Emscripten `locateFile`). */
+  wasmUrl: string;
+};
+
+export type WorkerRequest = CompileRequest | CancelRequest | ConfigureRequest;
 
 // Worker response types (worker → host)
 export type CompileStarted = { type: 'started'; id: string };
