@@ -15,6 +15,15 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ### Added
 
+- L1 session protocol (`src/protocol/session-transport.ts`, #191): a host-neutral
+  wire protocol for driving an `OpenScadSession`'s `ProjectContract` from a webview
+  — `setProject`/`updateFile`/`removeFile`/`setEntryPoint`/`cancel`/`dispose`
+  inbound, with validation + DoS caps, and a push-stream `operation-result`
+  outbound. Versioned by `SESSION_PROTOCOL_VERSION` (distinct from the result
+  payload's `L1_PROTOCOL_VERSION`). The DOM-free L1 data types (`OperationResult`
+  family, `Diagnostic`, `ArtifactRef`, `ProjectFile`) moved into
+  `src/protocol/session-contract.ts` (re-exported from their prior homes) so the
+  protocol stays self-contained and distributable.
 - L0 protocol: a fit-aware `setNamedView` inbound message (`VIEWER_NAMED_VIEWS`:
   Diagonal/Front/Right/Back/Left/Top/Bottom) that frames the model to its bounds
   viewer-side, so a host (e.g. a VS Code extension) can offer camera presets
