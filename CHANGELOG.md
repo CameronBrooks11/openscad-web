@@ -6,6 +6,13 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+### Fixed
+
+- OFF import: canonical multi-line headers (`OFF` on its own line, counts on the
+  next — as emitted by Meshlab and many tools) are no longer rejected with
+  "invalid vertex or face counts". The same-line form (`OFF 8 6 12`, as OpenSCAD
+  exports) is unchanged.
+
 ### Added
 
 - L0 protocol: a fit-aware `setNamedView` inbound message (`VIEWER_NAMED_VIEWS`:
