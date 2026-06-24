@@ -13,6 +13,18 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
   "invalid vertex or face counts". The same-line form (`OFF 8 6 12`, as OpenSCAD
   exports) is unchanged.
 
+### Changed
+
+- The compile worker is now host-configurable (#196), so it can run from a
+  same-origin `blob:` URL inside a VS Code webview (where `new Worker` of a
+  cross-origin asset URL is blocked, and a blob worker's `import.meta.url` /
+  `self.location` — `blob:` — can't resolve assets). The host now resolves the
+  WASM URL + asset base on the main thread and injects them via a one-time
+  `configure` message (`worker-bootstrap.ts` `configureWorkerBootstrap` /
+  `workerConfigPayload`, `runtime/asset-urls.ts` `setRuntimeAssetBase`); the
+  worker no longer derives its base from `import.meta.url`. Behavior-equivalent
+  for the normal page (verified by the e2e compile suite).
+
 ### Added
 
 - L1 `SessionController` (`src/session-host/`, #192): the compile counterpart of

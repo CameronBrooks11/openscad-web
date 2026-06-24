@@ -11,6 +11,7 @@ import {
 import { markPerf, measurePerf } from '../perf/runtime-performance.ts';
 import { createSerialQueue } from './serial-queue.ts';
 import { ensureWorkerBrowserFSLoaded } from '../runtime/browserfs-runtime.ts';
+import { setRuntimeAssetBase } from '../runtime/asset-urls.ts';
 import { createRuntime, OpenSCADRuntime } from './openscad-runtime.ts';
 import {
   CompileRequest,
@@ -26,10 +27,12 @@ import {
 import { fetchSource } from '../utils.ts';
 
 declare const self: DedicatedWorkerGlobalScope;
-// The worker bundle always lives under <mount>/assets/, so one parent hop from
-// import.meta.url recovers the app mount regardless of whether the build is
-// fixed-base (/openscad-web/) or relocatable (./).
-const appBaseUrl = new URL('../', import.meta.url).href;
+// Asset base + WASM URL are injected by the host's `configure` message (#196),
+// set before any compile. They are NOT derived from `import.meta.url` /
+// `self.location` — those are `blob:` (and throw when used to resolve a relative
+// asset) when this worker runs from a blob URL inside a VS Code webview.
+let appBaseUrl = '';
+let wasmUrl = '';
 
 // NOTE: runtimePromise is NOT a singleton — Emscripten's callMain calls exit() internally,
 // setting Module.ABORT=true. A second callMain on the same instance throws
@@ -43,6 +46,7 @@ const appBaseUrl = new URL('../', import.meta.url).href;
 // and compile jobs are serialized by the queue below regardless.
 function createJobRuntime(jobId: string, mergedOutputs: MergedOutput[]): Promise<OpenSCADRuntime> {
   return createRuntime({
+    wasmUrl,
     print: (text: string) => {
       self.postMessage({ type: 'stdout', id: jobId, text } satisfies CompileStdout);
       mergedOutputs.push({ stdout: text });
@@ -99,6 +103,12 @@ const compileQueue = createSerialQueue<CompileRequest>((request) => runCompile(r
 
 self.addEventListener('message', (e: MessageEvent<WorkerRequest>) => {
   const msg = e.data;
+  if (msg.type === 'configure') {
+    appBaseUrl = msg.assetBase;
+    wasmUrl = msg.wasmUrl;
+    setRuntimeAssetBase(msg.assetBase); // libraries/fonts/sources resolve here
+    return;
+  }
   if (msg.type === 'cancel') {
     compileQueue.cancel((request) => request.id === msg.id);
     return;

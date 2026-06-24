@@ -3,7 +3,7 @@
 import { AbortablePromise } from '../utils.ts';
 import type { WireSource } from '../state/project-source.ts';
 import { markPerf, measurePerf, recordPerfDuration } from '../perf/runtime-performance.ts';
-import { createOpenSCADWorker } from './worker-bootstrap.ts';
+import { createOpenSCADWorker, workerConfigPayload } from './worker-bootstrap.ts';
 import {
   CompileRequest,
   CancelRequest,
@@ -173,6 +173,8 @@ export class WasmWorkerBackend implements CompileBackend {
       this.worker.onmessage = (e: MessageEvent<WorkerResponse>) =>
         this.handleWorkerMessage(e, generation);
       this.worker.onerror = (e: ErrorEvent) => this.handleWorkerError(e);
+      // Inject the host-resolved asset base + wasm URL before any compile (#196).
+      this.worker.postMessage(workerConfigPayload());
     }
     return this.worker;
   }

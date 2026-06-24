@@ -54,8 +54,20 @@ export function resolveDefaultRuntimeBaseUrl(
   ).toString();
 }
 
+let overrideBase: string | null = null;
+
+/**
+ * Pin the base used to resolve runtime assets (libraries/fonts/sources). A blob
+ * worker — a VS Code webview's compile worker (#196) — can't derive its base from
+ * `self.location` (it's `blob:`), so the worker sets this from its `configure`
+ * handshake. `null` (the default, and the main thread) restores normal derivation.
+ */
+export function setRuntimeAssetBase(base: string | null): void {
+  overrideBase = base;
+}
+
 function getDefaultRuntimeBaseUrl(): string {
-  return resolveDefaultRuntimeBaseUrl(import.meta.env.BASE_URL);
+  return overrideBase ?? resolveDefaultRuntimeBaseUrl(import.meta.env.BASE_URL);
 }
 
 export function resolveRuntimeAssetUrl(

@@ -3,9 +3,15 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — no type declarations for the WASM module
 import OpenSCAD from '../wasm/openscad.js';
-import { openSCADWasmUrl } from './openscad-asset-urls.ts';
 
 export type RuntimeOptions = {
+  /**
+   * Host-resolved URL of `openscad.wasm` for Emscripten's `locateFile`. Injected
+   * (via the worker's `configure` handshake, #196) rather than imported here,
+   * because the worker may run from a `blob:` URL where the build's
+   * `import.meta.url`-relative `?url` literal would throw at module-eval time.
+   */
+  wasmUrl: string;
   print: (text: string) => void;
   printErr: (text: string) => void;
 };
@@ -32,7 +38,7 @@ export async function createRuntime(opts: RuntimeOptions): Promise<OpenSCADRunti
     noInitialRun: true,
     print: opts.print,
     printErr: opts.printErr,
-    locateFile: (path: string) => (path === 'openscad.wasm' ? openSCADWasmUrl : path),
+    locateFile: (path: string) => (path === 'openscad.wasm' ? opts.wasmUrl : path),
   });
 
   return {

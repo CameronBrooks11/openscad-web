@@ -1,6 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { resolveDefaultRuntimeBaseUrl, resolveRuntimeAssetUrl } from '../asset-urls.ts';
+import {
+  resolveDefaultRuntimeBaseUrl,
+  resolveRuntimeAssetUrl,
+  setRuntimeAssetBase,
+} from '../asset-urls.ts';
 
 describe('resolveRuntimeAssetUrl', () => {
   it('resolves dot-slash asset specifiers against a base URL', () => {
@@ -49,5 +53,26 @@ describe('resolveDefaultRuntimeBaseUrl', () => {
         workerHref: 'https://example.com/assets/openscad-worker-D3It6O_Y.js',
       }),
     ).toBe('https://example.com/');
+  });
+});
+
+describe('setRuntimeAssetBase (#196)', () => {
+  afterEach(() => setRuntimeAssetBase(null)); // restore default derivation
+
+  it('pins the base used to resolve library/font/source assets', () => {
+    setRuntimeAssetBase('https://abc.vscode-cdn.net/mount/');
+    expect(resolveRuntimeAssetUrl('libraries/fonts.zip')).toBe(
+      'https://abc.vscode-cdn.net/mount/libraries/fonts.zip',
+    );
+    expect(resolveRuntimeAssetUrl('./assets/runtime-worker.js')).toBe(
+      'https://abc.vscode-cdn.net/mount/assets/runtime-worker.js',
+    );
+  });
+
+  it('an explicit base argument still overrides the pinned default', () => {
+    setRuntimeAssetBase('https://abc.vscode-cdn.net/mount/');
+    expect(resolveRuntimeAssetUrl('x.zip', 'https://other.example/d/')).toBe(
+      'https://other.example/d/x.zip',
+    );
   });
 });
