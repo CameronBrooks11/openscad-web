@@ -4,6 +4,16 @@ Formal versioned releases are tracked below, newest first. History before `0.2.0
 was backfilled from git on 2026-03-15 and is grouped by delivery window rather than
 release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
+## [Unreleased]
+
+### Added
+
+- L0 protocol: a fit-aware `setNamedView` inbound message (`VIEWER_NAMED_VIEWS`:
+  Diagonal/Front/Right/Back/Left/Top/Bottom) that frames the model to its bounds
+  viewer-side, so a host (e.g. a VS Code extension) can offer camera presets
+  without knowing the geometry's scale. Additive — advertised in
+  `ready.capabilities`, no protocol-version bump. [#188]
+
 ## [0.2.0] - 2026-06-23
 
 The first release since versioning lapsed at `0.1.0` (2026-04-05) — it captures ~127

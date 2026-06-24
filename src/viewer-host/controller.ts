@@ -14,9 +14,11 @@ import {
   viewerError,
   viewerGeometryLoaded,
   viewerGeometrySet,
+  viewerNamedViewSet,
   viewerReady,
   viewerSettingsSet,
   type CameraPose,
+  type NamedView,
 } from '../protocol/viewer-transport.ts';
 import type { Transport } from './transport.ts';
 
@@ -34,6 +36,7 @@ export type GeometryViewer = HTMLElement & {
   showControls: boolean;
   generateThumbnails: boolean;
   setCamera(camera: CameraPose): void;
+  setNamedView(view: NamedView): void;
 };
 
 export class ViewerController {
@@ -53,7 +56,9 @@ export class ViewerController {
     // Attach the inbound handler BEFORE announcing readiness, so a host that
     // sends a command the instant it sees `ready` is never racing our listener.
     transport.subscribe(this.onInbound);
-    transport.send(viewerReady(['setGeometry', 'setViewerSettings', 'setCamera', 'dispose']));
+    transport.send(
+      viewerReady(['setGeometry', 'setViewerSettings', 'setCamera', 'setNamedView', 'dispose']),
+    );
   }
 
   private onCameraChange = (e: Event): void => {
@@ -96,6 +101,10 @@ export class ViewerController {
       case 'setCamera':
         this.viewer.setCamera(msg.camera);
         this.transport.send(viewerCameraSet(msg.opId));
+        break;
+      case 'setNamedView':
+        this.viewer.setNamedView(msg.view);
+        this.transport.send(viewerNamedViewSet(msg.opId));
         break;
       case 'dispose':
         this.transport.send(viewerDisposed(msg.opId)); // ack before tearing down
