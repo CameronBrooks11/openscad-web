@@ -19,6 +19,15 @@ export default defineConfig({
         find: /^@gltf-transform\/.+$/,
         replacement: resolvePath('./tests/mocks/empty-module.ts'),
       },
+      {
+        // The wasm binary is a build asset, not vendored before `test:unit` in
+        // CI's build-and-test job. Since #196 the main-thread worker bootstrap
+        // imports `openscad.wasm?url` (host-resolved, injected into the worker),
+        // pulling it into the eager unit-test graph; stub it to a URL string so
+        // tests never resolve the 9.6 MB binary.
+        find: /^.+openscad\.wasm(\?.*)?$/,
+        replacement: resolvePath('./tests/mocks/file-mock.ts'),
+      },
     ],
   },
   test: {
