@@ -8,7 +8,14 @@
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
-const DIR = path.resolve('dist-viewer/protocol');
+// Defaults to the Layer-0 viewer emit; `--dir` points it at the session emit
+// (dist-session/protocol) — the rewrite is identical for both.
+const dirArgIndex = process.argv.indexOf('--dir');
+const DIR = path.resolve(
+  dirArgIndex === -1
+    ? 'dist-viewer/protocol'
+    : (process.argv[dirArgIndex + 1] ?? 'dist-viewer/protocol'),
+);
 // A relative module specifier ending in `.ts` in any emitted form: a top-level
 // `from './x.ts'` or an inline `import('./x.ts')` type. Anchored on `from`/
 // `import(` so a `.ts` mention in a comment isn't rewritten.

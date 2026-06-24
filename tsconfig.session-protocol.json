@@ -1,0 +1,26 @@
+// Emit ONLY the Layer-1 session protocol (src/protocol/session*) as a standalone,
+// distributable module — compiled JS + .d.ts — into the session artifact (#194).
+// Mirrors tsconfig.protocol.json (the Layer-0 viewer emit). The repo authors
+// `.ts`-extension imports for the bundler; `rewriteRelativeImportExtensions`
+// rewrites those to `.js` in the emitted output so the protocol is importable on
+// its own by a separate consumer (a VS Code extension). The session protocol
+// imports nothing outside src/protocol/ (lint-enforced), so the emit is
+// self-contained.
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "rewriteRelativeImportExtensions": true,
+    "declaration": true,
+    "emitDeclarationOnly": false,
+    "rootDir": "src/protocol",
+    "outDir": "dist-session/protocol"
+  },
+  "include": [
+    "src/protocol/session.ts",
+    "src/protocol/session-transport.ts",
+    "src/protocol/session-contract.ts",
+    "src/protocol/envelope.ts"
+  ],
+  "exclude": ["src/protocol/__tests__/**"]
+}

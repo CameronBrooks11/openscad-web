@@ -8,6 +8,11 @@ iframe/`postMessage` integration) — the **same `viewer.html` runs in both** an
 iframe and a VS Code webview; only the transport binding differs, and it is
 auto-selected at runtime.
 
+§1–5 cover the **read-only viewer** (L0). [§6](#6-the-session-compile-artifact)
+covers the separate **compile-capable session artifact** (`dist-session`) that runs
+the OpenSCAD WASM engine in the webview and speaks the Layer-1 (L1) session
+protocol — vendor it instead of the viewer when you need live `.scad` compilation.
+
 The extension itself is a **separate codebase**. The boundary between the two
 repos is exactly: the built viewer assets + the L0 protocol. Nothing in this repo
 depends on VS Code (`@types/vscode` is not a dependency), and the extension never
@@ -228,9 +233,94 @@ GPU-capable job.
 
 ---
 
-## 6. Out of scope (future)
+## 6. The session (compile) artifact
 
-Live `.scad` preview (compile `.scad` → OFF and feed it to this same viewer host)
-depends on a separate **session webview** build — see the live-`.scad` session
-architecture issue. The read-only viewer host documented here is unchanged by
-that later milestone.
+Everything above is the **read-only** viewer: the extension already holds OFF
+geometry and just displays it. To compile `.scad` **inside** the webview — feed it
+a project, get geometry back — vendor the separate **session artifact**
+(`dist-session`, built by `npm run build:session`, gated by
+`scripts/verify-session-bundle.mjs`). It is the compile-capable sibling of
+`dist-viewer`: same relocatable, relative-URL, vendor-and-pin model, but it carries
+the OpenSCAD WASM + compile worker + BrowserFS and an **embedded** geometry viewer.
+
+Why a second artifact and not a flag on the viewer: the viewer artifact is
+gate-enforced to contain **no** WASM/worker/BrowserFS (so its CSP can stay strict);
+the session artifact is gate-enforced to contain them (and to **not** leak the
+editor shell or a service worker). The two never merge.
+
+### What it ships
+
+```
+dist-session/
+  session.html                 # entry; relative URLs (load exactly like viewer.html)
+  assets/                       # session chunk, three, openscad.wasm, openscad-worker-*.js
+  libraries/                    # OpenSCAD library zips + fonts.zip (fetched at compile time)
+  protocol/                     # the L1 session protocol, compiled (session.js + .d.ts)
+  session-manifest.json         # hashed integrity manifest (verify like viewer-manifest.json)
+```
+
+`session-manifest.json` mirrors `viewer-manifest.json` (§1): `schemaVersion`,
+`sessionVersion`, `protocolVersion` (the `SESSION_PROTOCOL_VERSION` source of
+truth), `sourceCommit`, per-file `sha256`, and an `allowlist`. Verify it on ingest
+the same way — it covers the multi-MB WASM and the zips, so a corrupt or
+partial vendor is caught before load.
+
+### Loading + CSP (the deltas vs the viewer)
+
+Load `session.html` exactly as `viewer.html` (§2): inject a `<base href>` for the
+relative URLs, restrict `localResourceRoots` to the session dir. Prefer
+`retainContextWhenHidden: true` here — a live compile session holds worker + WASM +
+FS state that is expensive to rebuild on every reveal.
+
+The CSP needs two directives the viewer's does **not**, because this bundle
+actually compiles WASM in a worker:
+
+```
+default-src 'none';
+script-src ${webview.cspSource} 'nonce-${nonce}' 'wasm-unsafe-eval';
+worker-src blob:;
+style-src ${webview.cspSource} 'unsafe-inline';
+img-src ${webview.cspSource} data: blob:;
+connect-src ${webview.cspSource};
+```
+
+- **`'wasm-unsafe-eval'`** — required to `WebAssembly.instantiate` the OpenSCAD
+  engine (the viewer needs none).
+- **`worker-src blob:`** — the worker is instantiated from a same-origin `blob:`
+  URL. Under a webview the packaged worker/asset URLs are cross-origin to the
+  `vscode-webview://` document, so `new Worker(crossOriginUrl)` is SOP-blocked; the
+  bundle instead `fetch`es the worker script (allowed) and runs it from a blob.
+- **`connect-src ${webview.cspSource}`** covers the runtime `fetch`es of the worker
+  script, the `.wasm`, and the library zips — all from the session dir.
+- **No COOP/COEP headers.** The engine is single-threaded WASM (no
+  `SharedArrayBuffer`), so cross-origin isolation is **not** required — do not add
+  them.
+
+### Speaking the L1 session protocol
+
+Import from the vendored session protocol (not the viewer's `index.js`):
+
+```ts
+import { SESSION_PROTOCOL_VERSION, type SessionInbound } from '<vendored>/protocol/session.js'; // .d.ts ships alongside
+```
+
+The handshake is the same shape as §4: wait for `ready` (its `capabilities` are the
+inbound command names) and assert `protocolVersion === SESSION_PROTOCOL_VERSION`
+before sending. Then **drive a project** rather than push geometry:
+
+- **Host → session:** `setProject { files:[{path,content}], entryPoint? }`,
+  `updateFile { path, content }`, `removeFile { path }`, `setEntryPoint { path }`,
+  `cancel`, `dispose`.
+- **Session → host:** `ready`, `operation-result { result }` (a **push stream** —
+  one edit fans out to multiple terminal results; correlate by the nested
+  `result.operationId` / `kind` / `sourceRevision`, **not** 1:1 with commands),
+  and `error { code, reason }`.
+
+Geometry is **not** sent over the wire: the session renders it **in-process** into
+its embedded viewer. The `operation-result` carries an `artifact` _reference_
+(id + format), not bytes; retrieving exported bytes (STL/3MF) to save to disk is a
+later, separate message (tracked by the export issue in the epic).
+
+> Compiling arbitrary `.scad` runs the full OpenSCAD engine on host-supplied input.
+> Push only files the user opened/trusts; the protocol caps file count/size, but
+> the compiler itself is the trust boundary.
