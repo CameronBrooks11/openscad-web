@@ -125,6 +125,15 @@ export class OscGeometryViewer extends LitElement {
     else this._pendingCamera = camera; // applied when firstUpdated() builds the scene
   }
 
+  /**
+   * Frame the model from a fit-aware named view (the same logic as the on-canvas
+   * preset buttons). No-op before the scene mounts — a named view fits to the
+   * current geometry's bounds, so it is only meaningful once there is geometry.
+   */
+  setNamedView(view: string): void {
+    this._scene?.setCameraPosition(view);
+  }
+
   private async _loadGeometry(offText: string) {
     const scene = this._scene;
     if (!scene) return;

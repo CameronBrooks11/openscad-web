@@ -170,7 +170,7 @@ panel.webview.onDidReceiveMessage((m) => {
       // version skew — surface a clear error; do not proceed.
       return;
     }
-    // m.capabilities: ['setGeometry','setViewerSettings','setCamera','dispose']
+    // m.capabilities: ['setGeometry','setViewerSettings','setCamera','setNamedView','dispose']
     sendGeometry(offText);
   }
 });
@@ -183,12 +183,13 @@ correlation.
 
 **Host → viewer (inbound):**
 
-| Type                | Payload                                                      | Notes                                                              |
-| ------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------ |
-| `setGeometry`       | `{ offText }`                                                | OFF text (≤ 64 MiB). Acked `geometry-set`; render outcome follows. |
-| `setViewerSettings` | `{ color?, showAxes?, active?, background?, showControls? }` | Only provided fields apply. Acked `viewer-settings-set`.           |
-| `setCamera`         | `{ camera: { position:[x,y,z], target:[x,y,z], zoom } }`     | Acked `camera-set`.                                                |
-| `dispose`           | `{}`                                                         | Tears down the viewer. Acked `disposed`.                           |
+| Type                | Payload                                                                      | Notes                                                                                                                   |
+| ------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `setGeometry`       | `{ offText }`                                                                | OFF text (≤ 64 MiB). Acked `geometry-set`; render outcome follows.                                                      |
+| `setViewerSettings` | `{ color?, showAxes?, active?, background?, showControls? }`                 | Only provided fields apply. Acked `viewer-settings-set`.                                                                |
+| `setCamera`         | `{ camera: { position:[x,y,z], target:[x,y,z], zoom } }`                     | Raw pose. Acked `camera-set`.                                                                                           |
+| `setNamedView`      | `{ view }` (`VIEWER_NAMED_VIEWS`: Diagonal/Front/Right/Back/Left/Top/Bottom) | **Fit-aware** preset — frames the model to its bounds viewer-side (no host-side bounds needed). Acked `named-view-set`. |
+| `dispose`           | `{}`                                                                         | Tears down the viewer. Acked `disposed`.                                                                                |
 
 **Viewer → host (outbound), all `protocolVersion`-stamped:**
 

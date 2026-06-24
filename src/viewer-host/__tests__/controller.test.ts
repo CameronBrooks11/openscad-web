@@ -17,9 +17,13 @@ class FakeViewer extends EventTarget {
   showControls = true;
   generateThumbnails = false;
   camera: unknown;
+  namedView: string | undefined;
   removed = false;
   setCamera(camera: unknown): void {
     this.camera = camera;
+  }
+  setNamedView(view: string): void {
+    this.namedView = view;
   }
   remove(): void {
     this.removed = true;
@@ -41,7 +45,25 @@ describe('ViewerController', () => {
     expect(transport.sent).toHaveLength(1);
     expect(transport.sent[0]).toMatchObject({
       type: 'ready',
-      capabilities: ['setGeometry', 'setViewerSettings', 'setCamera', 'dispose'],
+      capabilities: ['setGeometry', 'setViewerSettings', 'setCamera', 'setNamedView', 'dispose'],
+    });
+  });
+
+  it('applies setNamedView and acks with named-view-set', () => {
+    const { viewer, transport } = setup();
+    transport.receive({ protocolVersion: V, type: 'setNamedView', view: 'Front', opId: 'n1' });
+    expect(viewer.namedView).toBe('Front');
+    expect(transport.sent.at(-1)).toMatchObject({ type: 'named-view-set', opId: 'n1' });
+  });
+
+  it('rejects an unknown named view as a correlated invalid-payload error', () => {
+    const { viewer, transport } = setup();
+    transport.receive({ protocolVersion: V, type: 'setNamedView', view: 'Sideways', opId: 'n2' });
+    expect(viewer.namedView).toBeUndefined();
+    expect(transport.sent.at(-1)).toMatchObject({
+      type: 'error',
+      code: 'invalid-payload',
+      opId: 'n2',
     });
   });
 

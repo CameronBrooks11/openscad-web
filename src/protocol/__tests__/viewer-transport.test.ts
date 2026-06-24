@@ -125,6 +125,17 @@ describe('validateViewerInbound', () => {
     }
   });
 
+  it('accepts a known named view and rejects unknown/non-string ones', () => {
+    expect(
+      validateViewerInbound({ protocolVersion: v, type: 'setNamedView', view: 'Top', opId: 'n1' }),
+    ).toEqual({ ok: true, message: { type: 'setNamedView', view: 'Top', opId: 'n1' } });
+    for (const bad of ['Sideways', 'front', '', 42, undefined]) {
+      expect(
+        validateViewerInbound({ protocolVersion: v, type: 'setNamedView', view: bad }),
+      ).toMatchObject({ ok: false, code: 'invalid-payload' });
+    }
+  });
+
   it('accepts dispose', () => {
     expect(validateViewerInbound({ protocolVersion: v, type: 'dispose' })).toEqual({
       ok: true,
