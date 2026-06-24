@@ -1,11 +1,30 @@
-// Layer-1 compile contract (ADR 0008): a host-side, DOM-free description of a
-// compile operation and its result, sitting ABOVE the CompileBackend boundary.
-// The worker protocol is unchanged; these types are derived host-side and are the
-// unit the host / embed / (future) MCP correlate on.
+// Layer-1 compile contract (ADR 0008): the in-process scheduler COMMAND shapes and
+// the result CONSTRUCTORS, sitting ABOVE the CompileBackend boundary. The DOM-free
+// result/payload TYPES (`OperationResult` family, `Diagnostic`, `ArtifactRef`,
+// `OperationKind`, `L1_PROTOCOL_VERSION`) now live in src/protocol/session-contract.ts
+// so the protocol stays distributable; they are re-exported here for existing
+// importers, who are unaffected.
 
-import type { Diagnostic } from '../diagnostics.ts';
+import {
+  L1_PROTOCOL_VERSION,
+  type ArtifactRef,
+  type OperationBase,
+  type OperationCancelled,
+  type OperationFailure,
+  type OperationKind,
+  type OperationSuccess,
+} from '../protocol/session-contract.ts';
 
-export type OperationKind = 'syntaxCheck' | 'preview' | 'render' | 'export';
+export {
+  L1_PROTOCOL_VERSION,
+  type ArtifactRef,
+  type OperationBase,
+  type OperationCancelled,
+  type OperationFailure,
+  type OperationKind,
+  type OperationResult,
+  type OperationSuccess,
+} from '../protocol/session-contract.ts';
 
 export interface OperationCommand {
   /** Shared envelope version (ADR 0005). */
@@ -27,47 +46,9 @@ export interface CancelCommand {
   operationId: string;
 }
 
-interface OperationResultBase {
-  protocolVersion: number;
-  sessionId: string;
-  operationId: string;
-  /** Echoed from the command; the #56/#99 stale-drop is unchanged. */
-  sourceRevision: number;
-  kind: OperationKind;
-  elapsedMillis: number;
-  /** Host-neutral markers (ADR 0001). */
-  diagnostics: Diagnostic[];
-  logText: string;
-}
-
-export interface OperationSuccess extends OperationResultBase {
-  status: 'success';
-  artifact?: ArtifactRef;
-}
-export interface OperationFailure extends OperationResultBase {
-  status: 'error';
-  code: string;
-  reason: string;
-}
-export interface OperationCancelled extends OperationResultBase {
-  status: 'cancelled';
-}
-
-/** Exactly one terminal result per `operationId`. */
-export type OperationResult = OperationSuccess | OperationFailure | OperationCancelled;
-
-/**
- * Layer-1 envelope version (ADR 0005 axis). Distinct from `EMBED_PROTOCOL_VERSION`
- * — that versions the embed *wire*; this versions the host-side operation result.
- */
-export const L1_PROTOCOL_VERSION = 1;
-
 /** Coarse failure code pending a real taxonomy when the MCP binding needs to
  *  branch on it; `reason` carries the user-facing message today. */
 export const OPERATION_FAILED = 'operation_failed';
-
-/** The shared, status-independent fields of a terminal result. */
-export type OperationBase = Omit<OperationResultBase, 'protocolVersion'>;
 
 export function operationSuccess(base: OperationBase, artifact?: ArtifactRef): OperationSuccess {
   // Omit the key entirely when artifact-less (e.g. a syntax check), so `'artifact'
@@ -90,21 +71,6 @@ export function operationFailure(
 
 export function operationCancelled(base: OperationBase): OperationCancelled {
   return { protocolVersion: L1_PROTOCOL_VERSION, status: 'cancelled', ...base };
-}
-
-/**
- * An immutable handle to a produced artifact's exact bytes. `artifactId` keys a
- * per-session store so `getArtifact(artifactId)` returns those exact bytes — not a
- * racy "current output".
- */
-export interface ArtifactRef {
-  artifactId: string; // v4 UUID; immutable
-  operationId: string;
-  sourceRevision: number;
-  format: string; // 'off' | 'svg' | 'stl' | '3mf' | 'glb' | …
-  mediaType: string;
-  size: number;
-  name: string;
 }
 
 /**

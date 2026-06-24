@@ -18,12 +18,11 @@ export interface ProjectSnapshot {
   activePath: string;
 }
 
-/** One text file in a host-supplied project (the multi-file contract, #123). A
- *  binary variant is a future widening (see #121) and does not change this shape. */
-export interface ProjectFile {
-  path: string;
-  content: string;
-}
+// `ProjectFile` (one text file in a host-supplied project, the multi-file contract
+// #123; binary variant deferred, #121) is a wire payload, so its type lives in
+// src/protocol/session-contract.ts and is re-exported here for existing importers.
+import type { ProjectFile } from '../protocol/session-contract.ts';
+export type { ProjectFile };
 
 /**
  * Pick the entry point for a set of absolute source paths: a top-level

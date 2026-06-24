@@ -1,26 +1,14 @@
 // Host-neutral compile diagnostics. Domain and runner code produce and consume
 // these; each host (the Monaco editor today, others later) converts them to its
 // own representation at its boundary, so the core never depends on an editor API.
+//
+// The `Diagnostic` TYPE itself lives in src/protocol/session-contract.ts — it's a
+// wire payload (carried by `OperationResult`) — and is re-exported here so the
+// existing importers and these utilities are unchanged.
 
-export type DiagnosticSeverity = 'error' | 'warning' | 'info';
+import type { Diagnostic, DiagnosticSeverity } from './protocol/session-contract.ts';
 
-export interface Diagnostic {
-  severity: DiagnosticSeverity;
-  message: string;
-  // 1-based line/column range (compatible with common editor marker APIs).
-  startLineNumber: number;
-  startColumn: number;
-  endLineNumber: number;
-  endColumn: number;
-  /** Optional source/tool that produced the diagnostic. */
-  source?: string;
-  /**
-   * File the diagnostic belongs to, as reported by the compiler (e.g.
-   * `/home/playground.scad`). Lets a host route the marker to the right editor
-   * model instead of dumping every file's diagnostics on the active one.
-   */
-  path?: string;
-}
+export type { Diagnostic, DiagnosticSeverity };
 
 const SEVERITY_RANK: Record<DiagnosticSeverity, number> = { info: 0, warning: 1, error: 2 };
 
