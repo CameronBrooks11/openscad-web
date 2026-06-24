@@ -1,6 +1,6 @@
 import { normalizeBasePath } from './base-path.ts';
 
-function normalizeAssetSpecifier(assetSpecifier: string): string {
+export function normalizeAssetSpecifier(assetSpecifier: string): string {
   return assetSpecifier.replace(/^\.\//, '');
 }
 
@@ -70,9 +70,26 @@ function getDefaultRuntimeBaseUrl(): string {
   return overrideBase ?? resolveDefaultRuntimeBaseUrl(import.meta.env.BASE_URL);
 }
 
-export function resolveRuntimeAssetUrl(
-  assetSpecifier: string,
-  baseUrl = getDefaultRuntimeBaseUrl(),
-): string {
-  return new URL(normalizeAssetSpecifier(assetSpecifier), baseUrl).toString();
+let assetUrlOverrides: Record<string, string> | null = null;
+
+/**
+ * Pin per-spec asset URL overrides (normalized spec → URL), consulted before the
+ * default base. A `blob:` compile worker in a VS Code webview can't fetch the
+ * `vscode-resource` asset URLs (its fetches bypass the resource service worker,
+ * #203), so the host pre-fetches each asset and hands the worker same-origin
+ * `blob:` URLs via the `configure` handshake. `null` (the default) disables it.
+ * Only consulted for default-base lookups — an explicit `baseUrl` bypasses it.
+ */
+export function setRuntimeAssetUrls(overrides: Record<string, string> | null): void {
+  assetUrlOverrides = overrides;
+}
+
+export function resolveRuntimeAssetUrl(assetSpecifier: string, baseUrl?: string): string {
+  const normalized = normalizeAssetSpecifier(assetSpecifier);
+  if (baseUrl === undefined) {
+    const override = assetUrlOverrides?.[normalized];
+    if (override !== undefined) return override;
+    return new URL(normalized, getDefaultRuntimeBaseUrl()).toString();
+  }
+  return new URL(normalized, baseUrl).toString();
 }

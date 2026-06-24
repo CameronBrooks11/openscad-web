@@ -56,4 +56,15 @@ describe('worker bootstrap (#196)', () => {
 
     expect(workerConfigPayload().assetBase).toBe('https://abc.vscode-cdn.net/mount/');
   });
+
+  it('configure with blob asset URLs → the payload carries them + the blob wasm (#203)', async () => {
+    await configureWorkerBootstrap({
+      assetBase: 'https://abc.vscode-cdn.net/mount/',
+      assetUrls: { 'libraries/fonts.zip': 'blob:fonts' },
+      wasmUrl: 'blob:wasm',
+    });
+    const payload = workerConfigPayload();
+    expect(payload.wasmUrl).toBe('blob:wasm');
+    expect(payload.assetUrls).toEqual({ 'libraries/fonts.zip': 'blob:fonts' });
+  });
 });

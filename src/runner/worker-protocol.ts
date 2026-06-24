@@ -32,6 +32,14 @@ export type ConfigureRequest = {
   assetBase: string;
   /** Host-resolved URL of the OpenSCAD WASM binary (Emscripten `locateFile`). */
   wasmUrl: string;
+  /**
+   * Optional per-spec asset URL overrides (normalized spec → URL), consulted before
+   * `assetBase`. In a VS Code webview the worker is a `blob:` worker whose
+   * `vscode-resource` fetches bypass the webview's resource service worker (HTTP 408,
+   * #203); the host pre-fetches each runtime asset on the main thread and provides a
+   * same-origin `blob:` URL the worker CAN fetch. `wasmUrl` is likewise a blob then.
+   */
+  assetUrls?: Record<string, string>;
 };
 
 export type WorkerRequest = CompileRequest | CancelRequest | ConfigureRequest;

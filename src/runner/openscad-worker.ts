@@ -11,7 +11,7 @@ import {
 import { markPerf, measurePerf } from '../perf/runtime-performance.ts';
 import { createSerialQueue } from './serial-queue.ts';
 import { ensureWorkerBrowserFSLoaded } from '../runtime/browserfs-runtime.ts';
-import { setRuntimeAssetBase } from '../runtime/asset-urls.ts';
+import { setRuntimeAssetBase, setRuntimeAssetUrls } from '../runtime/asset-urls.ts';
 import { createRuntime, OpenSCADRuntime } from './openscad-runtime.ts';
 import {
   CompileRequest,
@@ -107,6 +107,9 @@ self.addEventListener('message', (e: MessageEvent<WorkerRequest>) => {
     appBaseUrl = msg.assetBase;
     wasmUrl = msg.wasmUrl;
     setRuntimeAssetBase(msg.assetBase); // libraries/fonts/sources resolve here
+    // In a webview the worker can't fetch vscode-resource URLs; the host hands it
+    // same-origin blob: URLs for each runtime asset (#203). null on a normal page.
+    setRuntimeAssetUrls(msg.assetUrls ?? null);
     return;
   }
   if (msg.type === 'cancel') {
