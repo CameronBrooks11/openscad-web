@@ -1,20 +1,16 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 export default `/*
-  Hello there!
+  Welcome!
 
-  If you're new to OpenSCAD, please learn the basics here:
-  https://openscad.org/documentation.html
+  This is a starter model — edit the code and the preview
+  updates as you go.
 
-  There are lots of amazing libraries in the OpenSCAD ecosystem
-  (see this list: https://openscad.org/libraries.html).
+  A handful of example libraries are bundled in the file
+  explorer above (search for "demo" or "example"); you can
+  include them directly from your own models.
 
-  Some of these libraries are bundled with this playground
-  (search for "demo" or "example" in the file explorer above)
-  and can be included directly from your models.
-
-  Any bugs (this is an Alpha!) or ideas of features?
-  https://github.com/openscad/openscad-playground/issues/new
+  Happy modeling!
 */
 
 title = "OpenSCAD";
