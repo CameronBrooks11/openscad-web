@@ -1,10 +1,71 @@
 # Changelog
 
-This changelog was backfilled from git history on 2026-03-15.
+Formal versioned releases are tracked below, newest first. History before `0.2.0`
+was backfilled from git on 2026-03-15 and is grouped by delivery window rather than
+release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
-The repository did not previously maintain a changelog or publish version tags, so the entries below are grouped by major delivery milestones and maintenance windows rather than formal releases.
+## [0.2.0] - 2026-06-23
 
-Latest update represented here: 2026-03-15 (`74e184a`, `tighten accessibility semantics across the app shell`).
+The first release since versioning lapsed at `0.1.0` (2026-04-05) — it captures ~127
+merged PRs. Headline work: the foundation for a read-only VS Code geometry viewer
+(host-neutral viewer + Layer-0 protocol, distributable as a pinned artifact), an
+instance-scoped multi-session compile engine, a large `Model` decomposition, and a
+broad correctness/security hardening pass. The app still self-describes as Alpha;
+each merge continues to auto-deploy to GitHub Pages.
+
+### Added — read-only viewer foundation
+
+- Layer-0 viewer transport over a shared envelope/validation core, versioned by `VIEWER_PROTOCOL_VERSION` (ADR 0005). [#133, #134]
+- Model-independent `osc-geometry-viewer` with imperative `setCamera`, optional thumbnails, theme CSS vars, and `background`/`showControls` settings. [#135, #140, #181]
+- `ViewerController` + pluggable transports (iframe parent, VS Code webview, in-process), with correlated acks and `event.source`/origin hardening. [#141, #142, #180, #182]
+- Standalone, distributable viewer build (`build:viewer`) with a hashed integrity manifest, the L0 protocol exported as a portable artifact, and a VS Code embedding guide. [#136, #183, #184, #185]
+
+### Added — multi-session engine & Layer-1 contract (Gate B)
+
+- Instance-scoped `OpenScadSession` replacing the global model singleton, with per-session compile schedulers and WASM worker backends, plus a two-session isolation capstone (ADR 0007). [#154, #156–#160]
+- Layer-1 compile contract with stable artifact identity, a per-session artifact store, `getArtifact` by id, terminal `OperationResult`s, a project-mutation API, and `cancel()` (ADR 0008). [#161–#171]
+
+### Added — product features
+
+- OFF→GLB export via Three.js `GLTFExporter`. [#118]
+- Binary-asset import end-to-end (read-only in the editor, excluded from syntax inputs). [#152, #155]
+- Versioned, validated `postMessage` embed protocol with origin hardening; URL-fragment round-trip of backend/autoCompile/camera. [#92, #115]
+- PWA update-available reload prompt instead of a forced reload. [#79, #93]
+
+### Changed — architecture & refactors
+
+- Decomposed the monolithic `Model` into `ProjectStore`, `ExportService`, `CompileCoordinator`, `LayoutController`, a `HostAdapter` side-effect seam, and typed `ProjectSource` unions; scoped persistence to a debounced durable-state seam. [#88–#105, #166, #167]
+- Domain code now depends on a narrow `ProjectFileSystem`; diagnostics are host-neutral (Monaco removed from the domain). [#81, #97]
+- Enforced architectural import boundaries and a no-DOM rule for the compile/state engine via lint; boot chunk-splitting (Monaco/Three) + deferred shell imports; semantic color-token palette. [#106, #107, #108, #109]
+
+### Fixed — robustness, lifecycle & correctness
+
+- Runner: recover a wedged worker on timeout, deterministic debounce/supersede, split queue-wait vs execution budgets, per-job output routing, source-revision stamping to drop stale results. [#72, #73, #99, #111, #139]
+- Compile/export: recheck staleness after data-url reads, revoke leaked blob URLs, dedicated export channel, cancel in-flight render on supersede, settle every terminal path. [#112, #117, #127, #130, #149]
+- State/persistence: flush on tab hide/close, roll back deep mutations on throw, revoke object URLs on manual download. [#145, #147, #148]
+- Editor/diagnostics: paste via Ctrl/Cmd+V, dispose project-scoped Monaco models, route markers per model/source path. [#70, #116, #129, #146]
+- Service worker: order the CacheFirst large-asset route before the broad stale-while-revalidate. [#144]
+
+### Security
+
+- Validate and bound imported ZIP archives; enforce import size limits while streaming (not after buffering); harden runtime asset fetches; validate customizer values before building `-D` args. [#75, #76, #77, #150]
+
+### Build, CI & tooling
+
+- Unified `ok` CI gate + conservative dependabot auto-merge; gzipped bundle-size budgets; per-module coverage thresholds; Firefox e2e smoke matrix + nested-ZIP project e2e; routine dependency updates. [#87, #94, #96, #151]
+
+### Docs
+
+- Architecture/boundary/lifecycle docs and ADRs 0005/0007/0008 (+ project-contract decisions); service-worker precache rationale. [#84, #114, #131, #132, #154, #161, #171]
+
+### Chore
+
+- Removed the last fork-me ribbon remnant and neutralized the default model's welcome comment. [#186]
+
+## [0.1.0] - 2026-04-05
+
+Tagged release snapshot; no changelog was recorded at the time. The backfilled
+history below covers the work it contained.
 
 ## 2026-03-11 to 2026-03-15
 
