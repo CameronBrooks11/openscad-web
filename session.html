@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OpenSCAD session</title>
+    <meta
+      name="description"
+      content="Compile-capable OpenSCAD session, driven over a postMessage host transport. Boots the OpenSCAD WASM engine and an embedded read-only geometry viewer; no editor or service worker."
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: var(--osc-viewer-bg, #1e1e1e);
+      }
+      #session-root,
+      osc-geometry-viewer {
+        display: block;
+        width: 100%;
+        height: 100vh;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="session-root"></div>
+    <script type="module" src="/src/session-entry/index.ts"></script>
+  </body>
+</html>
