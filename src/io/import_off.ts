@@ -10,10 +10,12 @@ export function parseOff(content: string): IndexedPolyhedron {
 
   let counts: string;
   let currentLine = 0;
-  if (lines[0].match(/^OFF(\s|$)/)) {
+  if (/^OFF\s+\S/.test(lines[0])) {
+    // Header and counts on the same line: "OFF 8 6 12".
     counts = lines[0].substring(3).trim();
     currentLine = 1;
-  } else if (lines[currentLine] === 'OFF' && lines.length > 1) {
+  } else if (lines[0] === 'OFF' && lines.length > 1) {
+    // Canonical multi-line form: "OFF" alone, counts on the next line.
     counts = lines[1];
     currentLine = 2;
   } else {
