@@ -31,13 +31,13 @@ jobs:
       - run: npm ci
       - run: npm run security:check-install-scripts
 
-      - name: Install Playwright Chromium
+      - name: Install Playwright browsers
         if: matrix.node.name == 'supported'
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install --with-deps chromium firefox
 
       - name: Cache build libs
         id: cache-libs
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: |
             libs/
