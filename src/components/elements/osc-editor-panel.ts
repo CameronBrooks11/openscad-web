@@ -519,62 +519,64 @@ export class OscEditorPanel extends LitElement {
           >
             ⋯
           </button>
-          ${this._menuOpen
-            ? html`
-                <div class="osc-editor-menu" role="menu" aria-label="Editor menu">
-                  <a
-                    href="#new-project"
-                    role="menuitem"
-                    @click=${async (e: Event) => {
-                      e.preventDefault();
-                      window.open(
-                        await buildUrlForStateParams(getBlankProjectState()),
-                        '_blank',
-                        'noopener,noreferrer',
-                      );
-                      this._menuOpen = false;
-                    }}
-                    >New project</a
-                  >
-                  <hr />
-                  <button disabled role="menuitem">Share project</button>
-                  <hr />
-                  <button disabled role="menuitem">New file</button>
-                  <button disabled role="menuitem">Copy to new file</button>
-                  <button disabled role="menuitem">Upload file(s)</button>
-                  <button disabled role="menuitem">Download sources</button>
-                  <hr />
-                  <button
-                    role="menuitem"
-                    @click=${async () => {
-                      this._menuOpen = false;
-                      await this._pasteFromClipboard();
-                    }}
-                  >
-                    Paste
-                  </button>
-                  <button
-                    role="menuitem"
-                    @click=${() => {
-                      this._editor?.trigger(activePath, 'editor.action.selectAll', null);
-                      this._menuOpen = false;
-                    }}
-                  >
-                    Select All
-                  </button>
-                  <hr />
-                  <button
-                    role="menuitem"
-                    @click=${() => {
-                      this._editor?.trigger(activePath, 'actions.find', null);
-                      this._menuOpen = false;
-                    }}
-                  >
-                    Find
-                  </button>
-                </div>
-              `
-            : ''}
+          ${
+            this._menuOpen
+              ? html`
+                  <div class="osc-editor-menu" role="menu" aria-label="Editor menu">
+                    <a
+                      href="#new-project"
+                      role="menuitem"
+                      @click=${async (e: Event) => {
+                        e.preventDefault();
+                        window.open(
+                          await buildUrlForStateParams(getBlankProjectState()),
+                          '_blank',
+                          'noopener,noreferrer',
+                        );
+                        this._menuOpen = false;
+                      }}
+                      >New project</a
+                    >
+                    <hr />
+                    <button disabled role="menuitem">Share project</button>
+                    <hr />
+                    <button disabled role="menuitem">New file</button>
+                    <button disabled role="menuitem">Copy to new file</button>
+                    <button disabled role="menuitem">Upload file(s)</button>
+                    <button disabled role="menuitem">Download sources</button>
+                    <hr />
+                    <button
+                      role="menuitem"
+                      @click=${async () => {
+                        this._menuOpen = false;
+                        await this._pasteFromClipboard();
+                      }}
+                    >
+                      Paste
+                    </button>
+                    <button
+                      role="menuitem"
+                      @click=${() => {
+                        this._editor?.trigger(activePath, 'editor.action.selectAll', null);
+                        this._menuOpen = false;
+                      }}
+                    >
+                      Select All
+                    </button>
+                    <hr />
+                    <button
+                      role="menuitem"
+                      @click=${() => {
+                        this._editor?.trigger(activePath, 'actions.find', null);
+                        this._menuOpen = false;
+                      }}
+                    >
+                      Find
+                    </button>
+                  </div>
+                `
+              : ''
+          }
         </div>
 
         <select
@@ -604,42 +606,48 @@ export class OscEditorPanel extends LitElement {
           )}
         </select>
 
-        ${st.params.autoCompile === false
-          ? html`
-              <button
-                class="toolbar-btn"
-                @click=${() => this._model.render({ isPreview: false, now: true })}
-                title="Build (F6)"
-              >
-                ▶ Build
-              </button>
-            `
-          : ''}
-        ${activePath !== defaultSourcePath
-          ? html`
-              <button
-                class="toolbar-btn"
-                @click=${() => this._model.openFile(defaultSourcePath)}
-                title="Go back to ${defaultSourcePath}"
-              >
-                ← Back
-              </button>
-            `
-          : ''}
+        ${
+          st.params.autoCompile === false
+            ? html`
+                <button
+                  class="toolbar-btn"
+                  @click=${() => this._model.render({ isPreview: false, now: true })}
+                  title="Build (F6)"
+                >
+                  ▶ Build
+                </button>
+              `
+            : ''
+        }
+        ${
+          activePath !== defaultSourcePath
+            ? html`
+                <button
+                  class="toolbar-btn"
+                  @click=${() => this._model.openFile(defaultSourcePath)}
+                  title="Go back to ${defaultSourcePath}"
+                >
+                  ← Back
+                </button>
+              `
+            : ''
+        }
       </div>
 
       <div class="osc-editor-body">
-        ${isMonacoSupported
-          ? html`<div class="osc-editor-monaco"></div>`
-          : html`<textarea
-              class="osc-editor-textarea"
-              aria-label="OpenSCAD source editor"
-              ?readonly=${this._isActiveBinary(st)}
-              .value=${this._model?.source ?? ''}
-              @input=${(e: Event) => {
-                this._model.source = (e.target as HTMLTextAreaElement).value;
-              }}
-            ></textarea>`}
+        ${
+          isMonacoSupported
+            ? html`<div class="osc-editor-monaco"></div>`
+            : html`<textarea
+                class="osc-editor-textarea"
+                aria-label="OpenSCAD source editor"
+                ?readonly=${this._isActiveBinary(st)}
+                .value=${this._model?.source ?? ''}
+                @input=${(e: Event) => {
+                  this._model.source = (e.target as HTMLTextAreaElement).value;
+                }}
+              ></textarea>`
+        }
       </div>
 
       <div

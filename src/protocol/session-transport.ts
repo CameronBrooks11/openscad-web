@@ -51,8 +51,7 @@ export type SessionInbound =
   | { type: 'dispose' };
 
 export type SessionValidation =
-  | { ok: true; message: SessionInbound }
-  | { ok: false; code: ProtocolErrorCode; reason: string };
+  { ok: true; message: SessionInbound } | { ok: false; code: ProtocolErrorCode; reason: string };
 
 function readString(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined;

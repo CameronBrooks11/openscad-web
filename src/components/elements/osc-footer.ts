@@ -172,40 +172,46 @@ export class OscFooter extends LitElement {
     );
 
     return html`
-      ${st.error
-        ? html`
-            <div class="error-banner" data-testid="error-banner" role="alert">
-              <div class="error-banner-header">
-                <div class="error-banner-message">${st.error}</div>
-                <button class="foot-btn danger" @click=${() => this._model.clearError()}>
-                  Dismiss
-                </button>
+      ${
+        st.error
+          ? html`
+              <div class="error-banner" data-testid="error-banner" role="alert">
+                <div class="error-banner-header">
+                  <div class="error-banner-message">${st.error}</div>
+                  <button class="foot-btn danger" @click=${() => this._model.clearError()}>
+                    Dismiss
+                  </button>
+                </div>
+                <div class="error-banner-actions">
+                  ${
+                    st.currentRunLogs?.length
+                      ? html`
+                          <button
+                            class="foot-btn"
+                            @click=${() => {
+                              this._model.logsVisible = true;
+                            }}
+                          >
+                            Show Logs
+                          </button>
+                        `
+                      : ''
+                  }
+                </div>
+                ${
+                  st.errorDetails
+                    ? html`
+                        <details class="error-details">
+                          <summary>Technical details</summary>
+                          <pre>${st.errorDetails}</pre>
+                        </details>
+                      `
+                    : ''
+                }
               </div>
-              <div class="error-banner-actions">
-                ${st.currentRunLogs?.length
-                  ? html`
-                      <button
-                        class="foot-btn"
-                        @click=${() => {
-                          this._model.logsVisible = true;
-                        }}
-                      >
-                        Show Logs
-                      </button>
-                    `
-                  : ''}
-              </div>
-              ${st.errorDetails
-                ? html`
-                    <details class="error-details">
-                      <summary>Technical details</summary>
-                      <pre>${st.errorDetails}</pre>
-                    </details>
-                  `
-                : ''}
-            </div>
-          `
-        : ''}
+            `
+          : ''
+      }
       <div
         class="progress-bar-track"
         style="visibility:${busy ? 'visible' : 'hidden'};"
@@ -216,43 +222,45 @@ export class OscFooter extends LitElement {
         <div class="progress-bar-indeterminate"></div>
       </div>
       <div class="footer-row">
-        ${st.output && !st.output.isPreview
-          ? html`<osc-export-button></osc-export-button>`
-          : st.previewing
-            ? html`<button class="foot-btn" disabled>⚡ Previewing…</button>`
-            : st.output?.isPreview
-              ? html`<button
-                  class="foot-btn"
-                  @click=${() => this._model.render({ isPreview: false, now: true })}
-                  ?disabled=${st.rendering}
-                >
-                  ⚡ ${st.rendering ? 'Rendering…' : 'Render'}
-                </button>`
-              : ''}
+        ${
+          st.output && !st.output.isPreview
+            ? html`<osc-export-button></osc-export-button>`
+            : st.previewing
+              ? html`<button class="foot-btn" disabled>⚡ Previewing…</button>`
+              : st.output?.isPreview
+                ? html`<button
+                    class="foot-btn"
+                    @click=${() => this._model.render({ isPreview: false, now: true })}
+                    ?disabled=${st.rendering}
+                  >
+                    ⚡ ${st.rendering ? 'Rendering…' : 'Render'}
+                  </button>`
+                : ''
+        }
 
         <osc-multimaterial-dialog></osc-multimaterial-dialog>
 
-        ${hasDiagnostics
-          ? html`
-              <button
-                class="foot-btn ${maxSev === 'error'
-                  ? 'danger'
-                  : maxSev === 'warning'
-                    ? 'warning'
-                    : ''}"
-                title="Toggle log output"
-                aria-label="Toggle log output"
-                aria-pressed=${st.view.logs ? 'true' : 'false'}
-                @click=${() => {
-                  this._model.logsVisible = !st.view.logs;
-                }}
-              >
-                ≡ ${errCount > 0 ? html`<span class="badge badge-danger">${errCount}</span>` : ''}
-                ${warnCount > 0 ? html`<span class="badge badge-warning">${warnCount}</span>` : ''}
-                ${infoCount > 0 ? html`<span class="badge badge-info">${infoCount}</span>` : ''}
-              </button>
-            `
-          : ''}
+        ${
+          hasDiagnostics
+            ? html`
+                <button
+                  class="foot-btn ${
+                    maxSev === 'error' ? 'danger' : maxSev === 'warning' ? 'warning' : ''
+                  }"
+                  title="Toggle log output"
+                  aria-label="Toggle log output"
+                  aria-pressed=${st.view.logs ? 'true' : 'false'}
+                  @click=${() => {
+                    this._model.logsVisible = !st.view.logs;
+                  }}
+                >
+                  ≡ ${errCount > 0 ? html`<span class="badge badge-danger">${errCount}</span>` : ''}
+                  ${warnCount > 0 ? html`<span class="badge badge-warning">${warnCount}</span>` : ''}
+                  ${infoCount > 0 ? html`<span class="badge badge-info">${infoCount}</span>` : ''}
+                </button>
+              `
+            : ''
+        }
 
         <div class="spacer"></div>
 

@@ -202,30 +202,32 @@ export class OscGeometryViewer extends LitElement {
         style="flex:1;position:relative;width:100%;height:100%;"
       ></div>
       ${this._toastMessage ? html`<div class="osc-toast">${this._toastMessage}</div>` : ''}
-      ${this.showControls
-        ? html`
-            <div
-              aria-label="Viewer camera presets"
-              style="position:absolute;bottom:8px;right:8px;display:flex;flex-direction:column;gap:2px;z-index:2;"
-            >
-              ${NAMED_POSITIONS.map(
-                ({ name }) => html`
-                  <button
-                    title="${name} view"
-                    aria-label=${`Set ${name} view`}
-                    @click=${() => {
-                      this._scene?.setCameraPosition(name);
-                      this._showToast(`${name} view`);
-                    }}
-                    style="font-size:0.65rem;padding:2px 6px;cursor:pointer;opacity:0.75;background:var(--osc-viewer-control-background, var(--osc-overlay, rgba(0, 0, 0, 0.6)));color:var(--osc-viewer-control-foreground, var(--osc-on-accent, #fff));border:none;border-radius:3px;"
-                  >
-                    ${name}
-                  </button>
-                `,
-              )}
-            </div>
-          `
-        : ''}
+      ${
+        this.showControls
+          ? html`
+              <div
+                aria-label="Viewer camera presets"
+                style="position:absolute;bottom:8px;right:8px;display:flex;flex-direction:column;gap:2px;z-index:2;"
+              >
+                ${NAMED_POSITIONS.map(
+                  ({ name }) => html`
+                    <button
+                      title="${name} view"
+                      aria-label=${`Set ${name} view`}
+                      @click=${() => {
+                        this._scene?.setCameraPosition(name);
+                        this._showToast(`${name} view`);
+                      }}
+                      style="font-size:0.65rem;padding:2px 6px;cursor:pointer;opacity:0.75;background:var(--osc-viewer-control-background, var(--osc-overlay, rgba(0, 0, 0, 0.6)));color:var(--osc-viewer-control-foreground, var(--osc-on-accent, #fff));border:none;border-radius:3px;"
+                    >
+                      ${name}
+                    </button>
+                  `,
+                )}
+              </div>
+            `
+          : ''
+      }
     `;
   }
 }

@@ -79,8 +79,4 @@ export type CompileError = {
 export type MergedOutput = { stdout?: string; stderr?: string; error?: string };
 
 export type WorkerResponse =
-  | CompileStarted
-  | CompileStdout
-  | CompileStderr
-  | CompileResult
-  | CompileError;
+  CompileStarted | CompileStdout | CompileStderr | CompileResult | CompileError;
