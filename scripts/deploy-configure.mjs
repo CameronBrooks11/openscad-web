@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import AdmZip from 'adm-zip';
-import yaml from 'js-yaml';
+import { load as loadYaml } from 'js-yaml';
 import os from 'node:os';
 import path from 'node:path';
 import { cp, mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
@@ -184,7 +184,7 @@ function parseCliArgs(argv) {
 function parseYamlConfig(fileContents, configPath) {
   let parsedConfig;
   try {
-    parsedConfig = yaml.load(fileContents);
+    parsedConfig = loadYaml(fileContents);
   } catch (error) {
     throw new Error(
       `Failed to parse publish config ${configPath}: ${error instanceof Error ? error.message : String(error)}`,
