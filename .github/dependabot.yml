@@ -17,6 +17,13 @@ updates:
       interval: 'weekly'
     commit-message:
       prefix: 'chore(deps): '
+    # prettier 3.9.x is non-idempotent on our lit-html templates: `--write`
+    # then `--check` still disagrees on indentation inside html`` expressions,
+    # so `format:check` can never pass. Hold at 3.8.x until upstream stabilizes;
+    # 3.10+ is allowed through so the fix isn't blocked.
+    ignore:
+      - dependency-name: 'prettier'
+        versions: ['3.9.x']
     groups:
       npm-production:
         dependency-type: 'production'
