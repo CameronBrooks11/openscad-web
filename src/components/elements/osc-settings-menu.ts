@@ -113,9 +113,11 @@ export class OscSettingsMenu extends LitElement {
             @click=${() =>
               this._model.changeLayout(st.view.layout.mode === 'multi' ? 'single' : 'multi')}
           >
-            ${st.view.layout.mode === 'multi'
-              ? 'Switch to single panel mode'
-              : 'Switch to side-by-side mode'}
+            ${
+              st.view.layout.mode === 'multi'
+                ? 'Switch to single panel mode'
+                : 'Switch to side-by-side mode'
+            }
           </button>
           <hr />
           <button
@@ -149,9 +151,11 @@ export class OscSettingsMenu extends LitElement {
                 s.params.autoCompile = !(s.params.autoCompile ?? true);
               })}
           >
-            ${(st.params.autoCompile ?? true)
-              ? 'Disable auto-compile on edit'
-              : 'Enable auto-compile on edit'}
+            ${
+              (st.params.autoCompile ?? true)
+                ? 'Disable auto-compile on edit'
+                : 'Enable auto-compile on edit'
+            }
           </button>
           <button
             class="item"
@@ -162,9 +166,11 @@ export class OscSettingsMenu extends LitElement {
                 s.view.customizerGroupsCollapsed = !(s.view.customizerGroupsCollapsed ?? false);
               })}
           >
-            ${(st.view.customizerGroupsCollapsed ?? false)
-              ? 'Expand customizer groups by default'
-              : 'Collapse customizer groups by default'}
+            ${
+              (st.view.customizerGroupsCollapsed ?? false)
+                ? 'Expand customizer groups by default'
+                : 'Collapse customizer groups by default'
+            }
           </button>
           <hr />
           <button
@@ -177,14 +183,16 @@ export class OscSettingsMenu extends LitElement {
           >
             ${backend === 'manifold' ? 'Switch to CGAL backend' : 'Switch to Manifold backend'}
           </button>
-          ${isInStandaloneMode()
-            ? html`
-                <hr />
-                <button class="item danger" role="menuitem" @click=${this._clearLocalData}>
-                  Clear local data
-                </button>
-              `
-            : ''}
+          ${
+            isInStandaloneMode()
+              ? html`
+                  <hr />
+                  <button class="item danger" role="menuitem" @click=${this._clearLocalData}>
+                    Clear local data
+                  </button>
+                `
+              : ''
+          }
         </div>
       </details>
     `;

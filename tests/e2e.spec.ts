@@ -302,8 +302,7 @@ async function waitForCustomizerShell(page: Page): Promise<void> {
   await page.waitForFunction(
     () => {
       const shell = document.querySelector('osc-customizer-shell') as
-        | (Element & { _st?: unknown })
-        | null;
+        (Element & { _st?: unknown }) | null;
       const state =
         shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
       const output =
@@ -334,8 +333,7 @@ async function waitForEmbedViewer(frame: Frame): Promise<void> {
   await frame.waitForFunction(
     () => {
       const shell = document.querySelector('osc-embed-shell') as
-        | (Element & { _st?: unknown })
-        | null;
+        (Element & { _st?: unknown }) | null;
       const state =
         shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
       const output =
@@ -353,8 +351,7 @@ async function waitForEmbedParameter(frame: Frame, name: string, timeout = 45_00
   await frame.waitForFunction(
     (expectedName) => {
       const shell = document.querySelector('osc-embed-shell') as
-        | (Element & { _st?: unknown })
-        | null;
+        (Element & { _st?: unknown }) | null;
       const state =
         shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
       const parameterSet =
@@ -581,8 +578,7 @@ test.describe('worker integration', () => {
     await page.waitForFunction(
       () => {
         const shell = document.querySelector('osc-app-shell') as
-          | (Element & { _st?: unknown })
-          | null;
+          (Element & { _st?: unknown }) | null;
         const state =
           shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
         const lastCheckerRun =
@@ -654,8 +650,7 @@ test.describe('embed mode', () => {
     await frame.waitForFunction(
       () => {
         const shell = document.querySelector('osc-embed-shell') as
-          | (Element & { _st?: unknown })
-          | null;
+          (Element & { _st?: unknown }) | null;
         const state =
           shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
         return (
@@ -694,8 +689,7 @@ test.describe('embed mode', () => {
     expect(
       (
         parameterSetMessage?.data?.parameterSet as
-          | { parameters?: Array<{ name?: string }> }
-          | undefined
+          { parameters?: Array<{ name?: string }> } | undefined
       )?.parameters?.some((parameter) => parameter?.name === 'myVar'),
     ).toBe(true);
     expect(varsChangedMessage?.data?.vars).toMatchObject({ myVar: 20 });
@@ -889,8 +883,7 @@ test.describe('embed mode', () => {
     const messages = await getEmbedMessages(page);
     const vars = await frame.evaluate(() => {
       const shell = document.querySelector('osc-embed-shell') as
-        | (Element & { _st?: unknown })
-        | null;
+        (Element & { _st?: unknown }) | null;
       const state =
         shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
       return (state?.params as { vars?: Record<string, unknown> } | undefined)?.vars ?? null;
@@ -978,8 +971,7 @@ test.describe('conformance — geometry primitives', () => {
     const thumbhash = await page.evaluate(async () => {
       for (let i = 0; i < 50; i++) {
         const shell = document.querySelector('osc-app-shell') as
-          | (Element & { _st?: unknown })
-          | null;
+          (Element & { _st?: unknown }) | null;
         const state =
           shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
         const preview =
@@ -1009,8 +1001,7 @@ test.describe('e2e — keyboard shortcuts', () => {
     await page.waitForFunction(
       (prevUrl) => {
         const shell = document.querySelector('osc-app-shell') as
-          | (Element & { _st?: unknown })
-          | null;
+          (Element & { _st?: unknown }) | null;
         const state =
           shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
         const output =
@@ -1039,8 +1030,7 @@ test.describe('e2e — keyboard shortcuts', () => {
     await page.waitForFunction(
       (prevUrl) => {
         const shell = document.querySelector('osc-app-shell') as
-          | (Element & { _st?: unknown })
-          | null;
+          (Element & { _st?: unknown }) | null;
         const state =
           shell && '_st' in shell ? (shell._st as Record<string, unknown> | undefined) : null;
         const output =

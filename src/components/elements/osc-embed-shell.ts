@@ -280,16 +280,20 @@ export class OscEmbedShell extends LitElement {
       <div class="viewer-wrap">
         <osc-viewer-panel></osc-viewer-panel>
       </div>
-      ${params?.embedControls
-        ? html`<osc-customizer-panel style="max-height:40vh;"></osc-customizer-panel>`
-        : ''}
-      ${params?.embedDownload
-        ? html`
-            <div class="download-bar">
-              <button @click=${() => this._model.export()}>Download STL</button>
-            </div>
-          `
-        : ''}
+      ${
+        params?.embedControls
+          ? html`<osc-customizer-panel style="max-height:40vh;"></osc-customizer-panel>`
+          : ''
+      }
+      ${
+        params?.embedDownload
+          ? html`
+              <div class="download-bar">
+                <button @click=${() => this._model.export()}>Download STL</button>
+              </div>
+            `
+          : ''
+      }
     `;
   }
 }

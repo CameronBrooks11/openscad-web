@@ -119,8 +119,7 @@ describe('Model — render triggering', () => {
 
     expect(mockRender).toHaveBeenCalledTimes(1);
     const scheduledRender = mockRender.mock.results[0]?.value as
-      | ReturnType<typeof vi.fn>
-      | undefined;
+      ReturnType<typeof vi.fn> | undefined;
     expect(scheduledRender).toBeDefined();
     expect(scheduledRender).toHaveBeenCalledWith({ now: true });
   });
@@ -166,8 +165,7 @@ describe('Model — render triggering', () => {
     await nextTicks();
     expect(mockRender).toHaveBeenCalled();
     const scheduledRender = mockRender.mock.results[0]?.value as
-      | ReturnType<typeof vi.fn>
-      | undefined;
+      ReturnType<typeof vi.fn> | undefined;
     expect(scheduledRender).toBeDefined();
     expect(scheduledRender).toHaveBeenCalledWith({ now: false });
   });
@@ -323,8 +321,7 @@ describe('Model — format changes', () => {
     const renderCall = mockRender.mock.calls[0]?.[0];
     expect(renderCall.renderFormat).toBe('dxf');
     const scheduledRender = mockRender.mock.results[0]?.value as
-      | ReturnType<typeof vi.fn>
-      | undefined;
+      ReturnType<typeof vi.fn> | undefined;
     expect(scheduledRender).toHaveBeenCalledWith({ now: true });
   });
 });

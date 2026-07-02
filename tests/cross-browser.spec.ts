@@ -179,8 +179,7 @@ test('imports a nested-dir ZIP project, lists the nested file, and compiles @fir
   // compile path in the browser.
   await page.evaluate(async (data) => {
     const shell = document.querySelector('osc-app-shell') as
-      | (Element & { _model?: { importProjectZip(buf: ArrayBuffer): Promise<void> } })
-      | null;
+      (Element & { _model?: { importProjectZip(buf: ArrayBuffer): Promise<void> } }) | null;
     const buf = new Uint8Array(data).buffer;
     await shell?._model?.importProjectZip(buf);
   }, Array.from(bytes));
@@ -197,8 +196,7 @@ test('imports a nested-dir ZIP project, lists the nested file, and compiles @fir
   // Navigating to the nested file makes it the active source.
   await page.evaluate(() => {
     const shell = document.querySelector('osc-app-shell') as
-      | (Element & { _model?: { openFile(path: string): void } })
-      | null;
+      (Element & { _model?: { openFile(path: string): void } }) | null;
     shell?._model?.openFile('/home/lib/part.scad');
   });
   await page.waitForFunction(
@@ -234,8 +232,7 @@ test('imports a binary STL asset and compiles a model that import()s it @firefox
 
   await page.evaluate(async (data) => {
     const shell = document.querySelector('osc-app-shell') as
-      | (Element & { _model?: { importProjectZip(buf: ArrayBuffer): Promise<void> } })
-      | null;
+      (Element & { _model?: { importProjectZip(buf: ArrayBuffer): Promise<void> } }) | null;
     await shell?._model?.importProjectZip(new Uint8Array(data).buffer);
   }, Array.from(bytes));
 

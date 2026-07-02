@@ -158,49 +158,55 @@ export class OscExportButton extends LitElement {
           ▾
         </button>
       </div>
-      ${this._open
-        ? html`
-            <div
-              class="menu"
-              role="menu"
-              aria-label="Export format options"
-              style="position:absolute; z-index:1000; margin-top:30px;"
-            >
-              ${options.map(
-                (f) => html`
-                  <button
-                    class="menu-item"
-                    role="menuitemradio"
-                    aria-checked=${currentKey === f.key ? 'true' : 'false'}
-                    @click=${() => this._selectFormat(f.key, is2D)}
-                  >
-                    ${f.label}
-                  </button>
-                `,
-              )}
-              ${!is2D
-                ? html`
-                    <hr />
+      ${
+        this._open
+          ? html`
+              <div
+                class="menu"
+                role="menu"
+                aria-label="Export format options"
+                style="position:absolute; z-index:1000; margin-top:30px;"
+              >
+                ${options.map(
+                  (f) => html`
                     <button
                       class="menu-item"
-                      role="menuitem"
-                      @click=${() => {
-                        this._open = false;
-                        this._model.mutate((s) => {
-                          s.view.extruderPickerVisibility = 'editing';
-                        });
-                      }}
+                      role="menuitemradio"
+                      aria-checked=${currentKey === f.key ? 'true' : 'false'}
+                      @click=${() => this._selectFormat(f.key, is2D)}
                     >
-                      Edit
-                      materials${(st.params.extruderColors ?? []).length > 0
-                        ? ` (${(st.params.extruderColors ?? []).length})`
-                        : ''}
+                      ${f.label}
                     </button>
-                  `
-                : ''}
-            </div>
-          `
-        : ''}
+                  `,
+                )}
+                ${
+                  !is2D
+                    ? html`
+                        <hr />
+                        <button
+                          class="menu-item"
+                          role="menuitem"
+                          @click=${() => {
+                            this._open = false;
+                            this._model.mutate((s) => {
+                              s.view.extruderPickerVisibility = 'editing';
+                            });
+                          }}
+                        >
+                          Edit
+                          materials${
+                            (st.params.extruderColors ?? []).length > 0
+                              ? ` (${(st.params.extruderColors ?? []).length})`
+                              : ''
+                          }
+                        </button>
+                      `
+                    : ''
+                }
+              </div>
+            `
+          : ''
+      }
     `;
   }
 

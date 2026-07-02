@@ -134,31 +134,37 @@ export class OscAppShell extends LitElement {
         ${shellStyles}
         <osc-panel-switcher></osc-panel-switcher>
         <div class="panels-multi">
-          ${layout.editor
-            ? html`
-                <osc-editor-panel
-                  id="panel-editor"
-                  style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow:hidden;"
-                ></osc-editor-panel>
-              `
-            : ''}
-          ${layout.viewer
-            ? html`
-                <osc-viewer-panel
-                  id="panel-viewer"
-                  ?active=${true}
-                  style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow:hidden;"
-                ></osc-viewer-panel>
-              `
-            : ''}
-          ${layout.customizer
-            ? html`
-                <osc-customizer-panel
-                  id="panel-customizer"
-                  style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow-y:auto;"
-                ></osc-customizer-panel>
-              `
-            : ''}
+          ${
+            layout.editor
+              ? html`
+                  <osc-editor-panel
+                    id="panel-editor"
+                    style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow:hidden;"
+                  ></osc-editor-panel>
+                `
+              : ''
+          }
+          ${
+            layout.viewer
+              ? html`
+                  <osc-viewer-panel
+                    id="panel-viewer"
+                    ?active=${true}
+                    style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow:hidden;"
+                  ></osc-viewer-panel>
+                `
+              : ''
+          }
+          ${
+            layout.customizer
+              ? html`
+                  <osc-customizer-panel
+                    id="panel-customizer"
+                    style="flex:1 1 ${pct};max-width:${pct};min-width:0;overflow-y:auto;"
+                  ></osc-customizer-panel>
+                `
+              : ''
+          }
         </div>
         <osc-footer></osc-footer>
         <osc-update-banner></osc-update-banner>

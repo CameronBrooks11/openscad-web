@@ -143,47 +143,51 @@ export class OscViewerPanel extends LitElement {
           line-height: 1.5;
         }
       </style>
-      ${isCompiling && placeholderUri
-        ? html`
-            <img
-              src=${placeholderUri}
-              alt=""
-              style="animation:osc-pulse 1.5s ease-in-out infinite;position:absolute;pointer-events:none;width:100%;height:100%;z-index:1;"
-            />
-          `
-        : ''}
-      ${shows3DViewer
-        ? html`
-            <osc-geometry-viewer
-              .offText=${this._offText}
-              color=${st?.view.color ?? DEFAULT_COLOR}
-              ?showAxes=${!!st?.view.showAxes}
-              ?active=${this.active}
-              .camera=${(st?.view.camera ?? null) as CameraState | null}
-              @camera-change=${(e: CustomEvent<CameraState>) =>
-                this._model.mutate((s) => {
-                  s.view.camera = e.detail;
-                })}
-              @geometry-loaded=${(e: CustomEvent<{ thumbhash: string }>) =>
-                this._model.mutate((s) => {
-                  s.preview = { thumbhash: e.detail.thumbhash };
-                })}
-            ></osc-geometry-viewer>
-          `
-        : outputMode === 'svg'
+      ${
+        isCompiling && placeholderUri
           ? html`
               <img
-                class="svg-preview"
-                data-testid="viewer-svg"
-                src=${st?.output?.outFileURL ?? ''}
-                alt="Rendered SVG preview"
+                src=${placeholderUri}
+                alt=""
+                style="animation:osc-pulse 1.5s ease-in-out infinite;position:absolute;pointer-events:none;width:100%;height:100%;z-index:1;"
               />
             `
-          : html`
-              <div class="dxf-placeholder" data-testid="viewer-dxf-placeholder">
-                DXF exported. Click Download to open it in your CAD tool.
-              </div>
-            `}
+          : ''
+      }
+      ${
+        shows3DViewer
+          ? html`
+              <osc-geometry-viewer
+                .offText=${this._offText}
+                color=${st?.view.color ?? DEFAULT_COLOR}
+                ?showAxes=${!!st?.view.showAxes}
+                ?active=${this.active}
+                .camera=${(st?.view.camera ?? null) as CameraState | null}
+                @camera-change=${(e: CustomEvent<CameraState>) =>
+                  this._model.mutate((s) => {
+                    s.view.camera = e.detail;
+                  })}
+                @geometry-loaded=${(e: CustomEvent<{ thumbhash: string }>) =>
+                  this._model.mutate((s) => {
+                    s.preview = { thumbhash: e.detail.thumbhash };
+                  })}
+              ></osc-geometry-viewer>
+            `
+          : outputMode === 'svg'
+            ? html`
+                <img
+                  class="svg-preview"
+                  data-testid="viewer-svg"
+                  src=${st?.output?.outFileURL ?? ''}
+                  alt="Rendered SVG preview"
+                />
+              `
+            : html`
+                <div class="dxf-placeholder" data-testid="viewer-dxf-placeholder">
+                  DXF exported. Click Download to open it in your CAD tool.
+                </div>
+              `
+      }
     `;
   }
 }
