@@ -64,7 +64,7 @@ export type SessionExportFormat = (typeof SESSION_EXPORT_FORMATS)[number];
  *  plus `export` (#216), `getArtifact` (bytes-by-id, #197), and `dispose` for
  *  worker teardown. */
 export type SessionInbound =
-  | { type: 'setProject'; files: ProjectFile[]; entryPoint?: string }
+  | { type: 'setProject'; files: ProjectFile[]; entryPoint?: string; requestId?: string }
   | { type: 'updateFile'; path: string; content: string }
   | { type: 'removeFile'; path: string }
   | { type: 'setEntryPoint'; path: string }
@@ -153,12 +153,23 @@ export function validateSessionInbound(data: unknown): SessionValidation {
       if (data.entryPoint !== undefined && entryPoint === undefined) {
         return err('invalid-payload', 'entryPoint must be a string');
       }
+      // Optional correlation id (#227): when present, the session replies with
+      // project-ack { requestId, sourceRevision } so the host can correlate
+      // this push's results EXACTLY (by revision) instead of heuristically.
+      const requestId = data.requestId === undefined ? undefined : readString(data.requestId);
+      if (data.requestId !== undefined && requestId === undefined) {
+        return err('invalid-payload', 'requestId must be a string');
+      }
+      if (requestId !== undefined && requestId.length > SESSION_MAX_ID_LENGTH) {
+        return err('too-large', 'an id is too long');
+      }
       return {
         ok: true,
         message: {
           type: 'setProject',
           files: result.files,
           ...(entryPoint !== undefined ? { entryPoint } : {}),
+          ...(requestId !== undefined ? { requestId } : {}),
         },
       };
     }
@@ -311,6 +322,26 @@ export function sessionArtifact(
         bytes: resolved.bytes,
       }
     : { protocolVersion: SESSION_PROTOCOL_VERSION, type: 'artifact', requestId, available: false };
+}
+
+/** The reply to a `setProject` that carried a `requestId` (#227): echoes the id
+ *  with the engine's ASSIGNED source revision, so the host can accept exactly
+ *  the results of this push (each `setProject` bumps the revision once). A
+ *  rejected push is detectable: the acked revision equals the previous one. */
+export type SessionProjectAck = {
+  protocolVersion: number;
+  type: 'project-ack';
+  requestId: string;
+  sourceRevision: number;
+};
+
+export function sessionProjectAck(requestId: string, sourceRevision: number): SessionProjectAck {
+  return {
+    protocolVersion: SESSION_PROTOCOL_VERSION,
+    type: 'project-ack',
+    requestId,
+    sourceRevision,
+  };
 }
 
 /** A protocol-level rejection of an inbound message (validation failure). */

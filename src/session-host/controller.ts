@@ -14,6 +14,7 @@ import {
   sessionArtifact,
   sessionError,
   sessionOperationResult,
+  sessionProjectAck,
   sessionReady,
   validateSessionInbound,
 } from '../protocol/session-transport.ts';
@@ -42,6 +43,9 @@ export interface SessionHost {
   /** Subscribe to terminal operation results (the Model's `'operation'` stream);
    *  returns an unsubscribe. */
   onOperation(handler: (result: OperationResult) => void): () => void;
+  /** The engine's current monotonic source revision — read right after a
+   *  `setProject` dispatch to ack the assigned revision (#227). */
+  currentSourceRevision(): number;
   /** The exact OFF text of a produced artifact (race-free, by id), or undefined. */
   readArtifactText(artifactId: string): Promise<string | undefined>;
   /** A produced artifact's immutable identity + exact bytes (by id), for the
@@ -88,6 +92,15 @@ export class SessionController {
       switch (msg.type) {
         case 'setProject':
           this.session.setProject(msg.files, msg.entryPoint);
+          // Ack with the ASSIGNED revision (#227): setProject is synchronous
+          // (including its internal error handling), so the revision read here
+          // is exactly this push's — or, for a REJECTED push, the unchanged
+          // previous one, which is how a host detects the rejection.
+          if (msg.requestId !== undefined) {
+            this.transport.send(
+              sessionProjectAck(msg.requestId, this.session.currentSourceRevision()),
+            );
+          }
           break;
         case 'updateFile':
           this.session.updateFile(msg.path, msg.content);

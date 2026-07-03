@@ -139,6 +139,12 @@ export class Model extends EventTarget {
     return this.artifacts.get(artifactId);
   }
 
+  /** The current monotonic source revision (#56) — read by the session host to
+   *  ack a `setProject` with its assigned revision (#227). */
+  getSourceRevision(): number {
+    return this._sourceRevision;
+  }
+
   private setState(state: State) {
     // bubbleUpDeepMutations gives params.sources a fresh identity exactly when
     // its contents change (and not on view/var-only edits), so a reference

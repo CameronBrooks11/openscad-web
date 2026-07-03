@@ -6,8 +6,16 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-07-03
+
 ### Added
 
+- `setProject` ack (#227): `setProject { …, requestId? }` is answered with
+  `project-ack { requestId, sourceRevision }` — the engine's assigned revision
+  for that push. A host can then accept exactly that push's results instead of
+  the monotonic-revision heuristic (closing the last stale-settle window), and
+  a REJECTED push becomes detectable on the wire: the acked revision equals
+  the previous one. Additive to protocol v2.
 - Targeted cancel over the L1 wire (#226): `cancel { requestId? }` — with an
   id, only the operation started by the command carrying that id is cancelled
   (render #219 / export #216), covering the pre-spawn windows too; auto

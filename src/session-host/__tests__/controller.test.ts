@@ -11,6 +11,8 @@ const flush = () => new Promise((r) => setTimeout(r));
 class FakeSession implements SessionHost {
   calls: string[] = [];
   disposed = false;
+  /** Mirrors the engine: each setProject bumps the revision exactly once. */
+  revision = 0;
   throwOnUpdate = false;
   throwOnRead = false;
   useDeferredReads = false;
@@ -19,7 +21,11 @@ class FakeSession implements SessionHost {
   private readDeferreds = new Map<string, (text: string | undefined) => void>();
 
   setProject(files: { path: string }[], entryPoint?: string) {
+    this.revision++;
     this.calls.push(`setProject:${files.length}:${entryPoint ?? ''}`);
+  }
+  currentSourceRevision() {
+    return this.revision;
   }
   updateFile(path: string) {
     if (this.throwOnUpdate) throw new Error('ProjectPathError: unsafe path');
@@ -262,6 +268,63 @@ describe('SessionController', () => {
     session.emit(result({ kind: 'render', sourceRevision: 3, artifactId: 'a1' }));
     await flush();
     expect(viewer.offText).toBeNull();
+  });
+
+  it('setProject with a requestId is acked with the ASSIGNED revision (#227)', () => {
+    const { session, transport } = setup();
+    transport.receive({
+      protocolVersion: V,
+      type: 'setProject',
+      files: [{ path: '/a', content: 'x' }],
+      requestId: 'push-1',
+    });
+    expect(transport.sent.at(-1)).toEqual({
+      protocolVersion: V,
+      type: 'project-ack',
+      requestId: 'push-1',
+      sourceRevision: 1,
+    });
+    // A second push acks the bumped revision.
+    transport.receive({
+      protocolVersion: V,
+      type: 'setProject',
+      files: [{ path: '/a', content: 'y' }],
+      requestId: 'push-2',
+    });
+    expect(transport.sent.at(-1)).toMatchObject({ requestId: 'push-2', sourceRevision: 2 });
+    expect(session.calls.filter((c) => c.startsWith('setProject'))).toHaveLength(2);
+  });
+
+  it('setProject without a requestId sends no ack (pre-#227 behavior)', () => {
+    const { transport } = setup();
+    transport.receive({
+      protocolVersion: V,
+      type: 'setProject',
+      files: [{ path: '/a', content: 'x' }],
+    });
+    expect(sentTypes(transport)).toEqual(['ready']);
+  });
+
+  it('a REJECTED push acks the UNCHANGED revision (host-detectable, #227)', () => {
+    const { session, transport } = setup();
+    transport.receive({
+      protocolVersion: V,
+      type: 'setProject',
+      files: [{ path: '/a', content: 'x' }],
+      requestId: 'push-1',
+    });
+    // Model swallows contract errors internally without bumping the revision;
+    // simulate by making setProject a no-op on the revision.
+    session.setProject = (files: { path: string }[]) => {
+      session.calls.push(`setProject-rejected:${files.length}`);
+    };
+    transport.receive({
+      protocolVersion: V,
+      type: 'setProject',
+      files: [{ path: '/a', content: 'y' }],
+      requestId: 'push-2',
+    });
+    expect(transport.sent.at(-1)).toMatchObject({ requestId: 'push-2', sourceRevision: 1 });
   });
 
   it('getArtifact: replies with the ref + exact bytes, correlated by requestId', async () => {
