@@ -91,10 +91,28 @@ export class CompileCoordinator {
    * executing `callMain` in the worker finishes there; its result is discarded by
    * id (same as supersession).
    */
-  cancel(): void {
+  cancel(requestId?: string): void {
+    if (requestId !== undefined) {
+      // Targeted (#226): only the render started by the command carrying this
+      // id. Auto syntax checks / previews never carry one, so they survive —
+      // cancelling a slow wire render no longer kills a concurrent save's
+      // compile. The mark also covers the pre-spawn window (source
+      // materialization is async): a render cancelled before its job exists
+      // checks the mark before spawning.
+      this._cancelledRenderRequestId = requestId;
+      if (requestId === this._activeRenderRequestId) this._activeRender?.kill();
+      return;
+    }
     this._activeSyntax?.kill();
     this._activeRender?.kill();
   }
+
+  /** The correlation id of the in-flight render (undefined for auto previews
+   *  or when settled) — the target a `cancel { requestId }` must match. */
+  private _activeRenderRequestId: string | undefined;
+  /** The id a targeted cancel was called with — lets a render that has not yet
+   *  spawned its job observe the cancellation (#226). */
+  private _cancelledRenderRequestId: string | undefined;
 
   /**
    * Convert the typed sources to the flat wire shape, reading each project-local
@@ -425,11 +443,24 @@ export class CompileCoordinator {
         backend: this.ctx.getState().params.backend,
         revision: this.ctx.getSourceRevision(),
       };
+      if (requestId !== undefined && this._cancelledRenderRequestId === requestId) {
+        // A targeted cancel landed during source materialization, before any
+        // job existed: honor it without spawning.
+        this._cancelledRenderRequestId = undefined;
+        this.ctx.mutate((s) => setRendering(s, false));
+        this.emitResult(operationCancelled(base()));
+        return;
+      }
       const renderJob = this._render(renderArgs)({ now });
-      // Retain the handle so cancel() can kill it; clear it once it settles.
+      // Retain the handle (and its correlation id, for targeted cancel #226)
+      // so cancel() can kill it; clear both once it settles.
       this._activeRender = renderJob;
+      this._activeRenderRequestId = requestId;
       const output = await renderJob.finally(() => {
-        if (this._activeRender === renderJob) this._activeRender = null;
+        if (this._activeRender === renderJob) {
+          this._activeRender = null;
+          this._activeRenderRequestId = undefined;
+        }
       });
       if (!isCurrent()) {
         this.emitResult(operationCancelled(base())); // superseded

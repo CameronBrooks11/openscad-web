@@ -323,7 +323,10 @@ before sending. Then **drive a project** rather than push geometry:
   `setProject` it fails with a `no-project` result rather than rendering the
   default model),
   `export { format, requestId? }` (`stl`/`off`/`glb`/`3mf`/`svg`/`dxf` — #216/#223),
-  `getArtifact { artifactId, requestId }`, `cancel`, `dispose`.
+  `getArtifact { artifactId, requestId }`, `cancel { requestId? }` (with an id:
+  cancel ONLY the operation started by the command that carried it — a slow
+  full render can be cancelled without killing a concurrent save's compile;
+  without: everything in flight — #226), `dispose`.
 - **Session → host:** `ready`, `operation-result { result }` (a **push stream** —
   one edit fans out to multiple terminal results; correlate by the nested
   `result.operationId` / `kind` / `sourceRevision`, **not** 1:1 with commands),

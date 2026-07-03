@@ -36,7 +36,8 @@ export interface SessionHost {
    *  ArtifactRef, or a failure — e.g. a dimensionality mismatch), echoing
    *  `requestId` when the command carried one (#223). */
   exportArtifact(format: SessionExportFormat, requestId?: string): void;
-  cancel(): void;
+  /** Cancel everything, or with `requestId` only that command's operation (#226). */
+  cancel(requestId?: string): void;
   dispose(): void;
   /** Subscribe to terminal operation results (the Model's `'operation'` stream);
    *  returns an unsubscribe. */
@@ -107,7 +108,7 @@ export class SessionController {
           void this.sendArtifact(msg.requestId, msg.artifactId);
           break;
         case 'cancel':
-          this.session.cancel();
+          this.session.cancel(msg.requestId);
           break;
         case 'dispose':
           this.dispose();

@@ -6,6 +6,15 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+### Added
+
+- Targeted cancel over the L1 wire (#226): `cancel { requestId? }` — with an
+  id, only the operation started by the command carrying that id is cancelled
+  (render #219 / export #216), covering the pre-spawn windows too; auto
+  previews and syntax checks survive, so cancelling a slow full render no
+  longer kills a concurrent save's compile. Without an id the pre-existing
+  cancel-everything behavior is unchanged. Additive to protocol v2.
+
 ## [0.3.3] - 2026-07-03
 
 ### Added
