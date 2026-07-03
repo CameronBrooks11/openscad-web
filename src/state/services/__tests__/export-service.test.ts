@@ -38,6 +38,11 @@ import type { OperationResult } from '../../../runner/compile-contract.ts';
  * own and kill the in-flight render. The promise stays pending until `resolve`
  * (or `reject`) is called by the test.
  */
+/** Flush the conversion branch's `await outFile.text()` so the export reaches
+ *  its renderExport spawn before the test's next action (the input is shipped
+ *  as content now — the spawn is no longer synchronous). */
+const tick = () => new Promise((r) => setTimeout(r, 0));
+
 function hangingRender() {
   let resolve!: (v: RenderOutput) => void;
   let reject!: (e: unknown) => void;
@@ -198,6 +203,13 @@ describe('ExportService', () => {
     expect(mockRenderExport).toHaveBeenCalledTimes(1);
     // Export runs on its own scheduling priority (preempts background compiles).
     expect(mockRenderExport.mock.calls[0][0].priority).toBe('export');
+    // The conversion input ships as CONTENT, never a blob URL: a webview blob
+    // URL's origin can never satisfy the worker's external-source policy
+    // (v0.3.1 regression guard).
+    const inputSource = mockRenderExport.mock.calls[0][0].sources[1];
+    expect(inputSource.path).toBe('m.off');
+    expect(inputSource.content).toBe('x');
+    expect(inputSource.url).toBeUndefined();
     expect(host.download).toHaveBeenCalledWith('blob:new', 'model.stl');
     // The committed export's artifactId resolves in the store to the exact File
     // (shared id, byte-identical write-through — ADR 0008).
@@ -230,6 +242,7 @@ describe('ExportService', () => {
     mockRenderExport.mockReturnValueOnce(first.inner).mockReturnValueOnce(secondInner);
 
     const p1 = svc.export(); // token 1 — awaits the hanging conversion
+    await tick(); // let it reach the (hanging) renderExport spawn
     const p2 = svc.export(); // token 2 — resolves and commits
     await p2;
     // The superseding export killed the first render job.
@@ -248,6 +261,53 @@ describe('ExportService', () => {
     expect(getState().exporting).toBe(false);
     // Two terminal results: the superseded op is cancelled, the newer succeeds.
     expect(results.map((r) => r.status).sort()).toEqual(['cancelled', 'success']);
+  });
+
+  it('an export superseded during the input read cancels without spawning its render', async () => {
+    const { ctx, host, getState, results } = makeCtx({
+      is2D: false,
+      exportFormat3D: 'stl',
+      output: fileOutput('m.off'),
+    });
+    const svc = new ExportService(ctx);
+    const secondInner = vi.fn().mockResolvedValue({
+      outFile: new File(['second'], 'second.stl'),
+      logText: '',
+      markers: [],
+      elapsedMillis: 1,
+    });
+    mockRenderExport.mockReturnValueOnce(secondInner);
+
+    // NO tick between them: export 1 is still awaiting outFile.text() when
+    // export 2 supersedes it, so export 1 must cancel pre-spawn — consuming NO
+    // mocked render (the single mock belongs to export 2).
+    const p1 = svc.export();
+    const p2 = svc.export();
+    await Promise.all([p1, p2]);
+
+    expect(mockRenderExport).toHaveBeenCalledTimes(1);
+    expect(host.download.mock.calls.map((c) => c[1])).toEqual(['second.stl']);
+    expect(results.map((r) => r.status).sort()).toEqual(['cancelled', 'success']);
+    expect(getState().exporting).toBe(false);
+  });
+
+  it('cancel() during the input read cancels pre-spawn and clears the spinner', async () => {
+    const { ctx, host, getState, results } = makeCtx({
+      is2D: false,
+      exportFormat3D: 'stl',
+      output: fileOutput('m.off'),
+    });
+    const svc = new ExportService(ctx);
+
+    const p = svc.export(); // suspended at the outFile.text() read
+    svc.cancel(); // no job exists yet — the mark must still take effect
+    await p;
+
+    expect(mockRenderExport).not.toHaveBeenCalled();
+    expect(host.download).not.toHaveBeenCalled();
+    expect(getState().exporting).toBe(false); // still-current → clears its own spinner
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('cancelled');
   });
 
   it('treats a superseded (cancelled) export as supersession, not a user-facing error', async () => {
@@ -279,6 +339,7 @@ describe('ExportService', () => {
     mockRenderExport.mockReturnValueOnce(first.inner);
 
     const p1 = svc.export(); // token 1 — STL conversion hangs, exporting=true
+    await tick(); // let it reach the (hanging) renderExport spawn
     // User switches to a pass-through format (OFF) and exports again.
     ctx.mutate((s) => {
       s.params.exportFormat3D = 'off';
@@ -314,6 +375,7 @@ describe('ExportService', () => {
     mockRenderExport.mockReturnValueOnce(first.inner);
 
     const p1 = svc.export(); // token 1 — exporting=true
+    await tick(); // let it reach the (hanging) renderExport spawn
     // User switches to 3MF (no extruder colors) and exports → the picker shows.
     ctx.mutate((s) => {
       s.params.exportFormat3D = '3mf';
@@ -355,6 +417,7 @@ describe('ExportService', () => {
     mockRenderExport.mockReturnValueOnce(first.inner).mockReturnValueOnce(secondInner);
 
     const p1 = svc.export(); // token 1 — hangs
+    await tick(); // let it reach the (hanging) renderExport spawn
     const p2 = svc.export(); // token 2 — resolves and commits
     await p2;
     // The stale first export now fails with a non-cancellation error.
@@ -393,7 +456,7 @@ describe('ExportService', () => {
     const svc = new ExportService(ctx);
 
     const p = svc.export(); // worker-conversion branch; sets _activeRender, awaits
-    await Promise.resolve();
+    await tick();
     expect(getState().exporting).toBe(true);
 
     svc.cancel();

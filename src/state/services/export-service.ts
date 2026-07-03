@@ -70,10 +70,17 @@ export class ExportService {
 
   /** Cancel an in-flight format-conversion render (best-effort, #123). The killed
    *  job rejects with an expected cancellation, so the existing catch emits one
-   *  terminal `cancelled` result and clears the exporting spinner. */
+   *  terminal `cancelled` result and clears the exporting spinner. The mark also
+   *  covers the pre-spawn window (reading the conversion input is async now):
+   *  an export cancelled before its job exists checks the mark after the read. */
   cancel(): void {
+    this._cancelledToken = this._exportSeq;
     this._activeRender?.kill();
   }
+
+  /** The export token cancel() was called against (-1 = none) — lets an export
+   *  that has not yet spawned its job observe the cancellation. */
+  private _cancelledToken = -1;
 
   /** Route a terminal result to the optional sink, guarding the commit path: a
    *  throwing sink must never corrupt committed state or double-emit (ADR 0008).
@@ -220,17 +227,40 @@ export class ExportService {
           markers: [],
         };
       } else {
+        // Ship the rendered output's CONTENT, not its blob URL: the worker's
+        // external-source policy requires a blob URL's origin to match the base
+        // origin, which holds on a normal page but not in a VS Code webview
+        // (blob URLs mint under the webview's own opaque origin while the asset
+        // base is the vscode-resource origin) — the fetch was rejected outright
+        // and every conversion export failed there. The output is OFF/SVG text,
+        // so the plain content source works everywhere.
+        const inputName = state.output.outFile.name;
+        const inputText = await state.output.outFile.text();
+        if (!isCurrent()) {
+          // Superseded during the read: the newer export owns the spinner.
+          this.emitResult(operationCancelled(base()));
+          return;
+        }
+        if (this._cancelledToken === token) {
+          // cancel() landed during the read, before any job existed: still
+          // current, so clear our own spinner (nothing newer owns it).
+          mutate((s) => {
+            s.exporting = false;
+          });
+          this.emitResult(operationCancelled(base()));
+          return;
+        }
         const job = this._renderExport({
           mountArchives: false,
           scadPath: '/export.scad',
           sources: [
             {
               path: '/export.scad',
-              content: `import("${state.output?.outFile.name}");`,
+              content: `import("${inputName}");`,
             },
             {
-              path: state.output?.outFile.name,
-              url: state.output?.outFileURL,
+              path: inputName,
+              content: inputText,
             },
           ],
           extraArgs: [],
@@ -279,8 +309,9 @@ export class ExportService {
       mutate((s) => {
         s.exporting = false;
         // A prior pass-through export ALIASES the live output's URL
-        // (s.export = s.output); revoking it would break the next conversion's
-        // worker fetch of state.output.outFileURL (review of #216).
+        // (s.export = s.output); that URL is the viewer/download URL of the
+        // LIVE output, so revoking it here would break it for everyone still
+        // holding it (review of #216).
         if (
           (s.export?.outFileURL?.startsWith('blob:') ?? false) &&
           s.export!.outFileURL !== s.output?.outFileURL
