@@ -25,8 +25,11 @@ import { AbortablePromise } from '../../utils.ts';
 // in 'hang' mode — never resolves and rejects on kill() like the real delayable.
 class FakeBackend implements CompileBackend {
   mode: 'ok' | 'hang' = 'ok';
+  /** Every invocation received, so tests can assert what crossed to the worker. */
+  invocations: OpenSCADInvocation[] = [];
 
   spawn(invocation: OpenSCADInvocation): AbortablePromise<OpenSCADInvocationResults> {
+    this.invocations.push(invocation);
     if (this.mode === 'hang') {
       return AbortablePromise<OpenSCADInvocationResults>(
         (_res, rej) => () => rej(new Error('Cancelled')),
@@ -55,9 +58,19 @@ const host = {
   baseUrl: () => 'http://localhost/',
 } as unknown as HostAdapter;
 
+// Stateful: binary assets written by setProject (#172) are read back at compile
+// time by materializeBinarySources (ADR 0006), so the fake must round-trip them.
+const fsStore = new Map<string, Uint8Array>();
 const fakeFs = {
-  readFileSync: () => new Uint8Array(),
+  readFileSync: (path: string) => {
+    const bytes = fsStore.get(path);
+    if (!bytes) throw new Error(`ENOENT: ${path}`);
+    return bytes;
+  },
   writeFile: () => {},
+  writeBytes: (path: string, bytes: Uint8Array) => {
+    fsStore.set(path, bytes);
+  },
 } as unknown as ProjectFileSystem;
 
 function baseState(): State {
@@ -96,7 +109,10 @@ function makeModel(backend: FakeBackend) {
 const settle = () => vi.advanceTimersByTimeAsync(1200);
 
 describe('#123 multi-file project contract — headless end to end', () => {
-  beforeEach(() => vi.useFakeTimers());
+  beforeEach(() => {
+    vi.useFakeTimers();
+    fsStore.clear();
+  });
   afterEach(() => vi.useRealTimers());
 
   it('setProject → render commits a retrievable artifact and a success result', async () => {
@@ -127,6 +143,62 @@ describe('#123 multi-file project contract — headless end to end', () => {
       expect(stored).toBeDefined();
       expect(stored!.bytes).toBe(model.state.output!.outFile);
     }
+  });
+
+  it('setProject with a binary asset lands a local source and ships its exact bytes to the worker (#172)', async () => {
+    const backend = new FakeBackend();
+    const { model, ops } = makeModel(backend);
+    const stlBytes = Uint8Array.from([0x53, 0x54, 0x4c, 0x00, 0xff, 0x01]);
+
+    model.setProject(
+      [
+        { path: 'main.scad', content: 'import("part.stl");' },
+        { path: 'assets/part.stl', bytes: stlBytes },
+      ],
+      'main.scad',
+    );
+    await settle();
+
+    // The binary landed as a content-less `local` source; the text stayed editable.
+    expect(model.state.params.sources).toEqual(
+      expect.arrayContaining([
+        { kind: 'local', path: '/home/assets/part.stl' },
+        { kind: 'text', path: '/home/main.scad', content: 'import("part.stl");' },
+      ]),
+    );
+    expect(model.state.params.activePath).toBe('/home/main.scad');
+
+    // The compile succeeded, and the worker request carried the asset's EXACT
+    // bytes (materialized off the FS — ADR 0006), not a stringified corruption.
+    expect(ops.find((o) => o.status === 'success' && o.artifact)).toBeDefined();
+    const wire = backend.invocations
+      .flatMap((i) => i.inputs ?? [])
+      .find((s) => s.path === '/home/assets/part.stl');
+    expect(wire).toBeDefined();
+    expect(wire!.content).toEqual(stlBytes);
+  });
+
+  it('setProject rejects a binary entryPoint atomically (a binary cannot compile)', async () => {
+    const { model, ops } = makeModel(new FakeBackend());
+    const before = model.state.params.sources;
+
+    model.setProject(
+      [
+        { path: 'main.scad', content: 'cube(1);' },
+        { path: 'part.stl', bytes: Uint8Array.from([1, 2, 3]) },
+      ],
+      'part.stl',
+    );
+    await settle();
+
+    // The whole call rejected before any mutation: sources unchanged, the error
+    // surfaced as a user-facing model error (the generic load message, with the
+    // specific reason in details — the standing mapping for 'model' ops), and
+    // no compile was driven.
+    expect(model.state.params.sources).toBe(before);
+    expect(model.state.error).toBeDefined();
+    expect(model.state.errorDetails).toMatch(/binary asset/);
+    expect(ops).toEqual([]);
   });
 
   it('updateFile → setEntryPoint → removeFile drive deterministic recompiles', async () => {

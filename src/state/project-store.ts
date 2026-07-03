@@ -18,8 +18,8 @@ export interface ProjectSnapshot {
   activePath: string;
 }
 
-// `ProjectFile` (one text file in a host-supplied project, the multi-file contract
-// #123; binary variant deferred, #121) is a wire payload, so its type lives in
+// `ProjectFile` (one file in a host-supplied project — editable text or a binary
+// asset's bytes; #123/#172) is a wire payload, so its type lives in
 // src/protocol/session-contract.ts and is re-exported here for existing importers.
 import type { ProjectFile } from '../protocol/session-contract.ts';
 export type { ProjectFile };
@@ -115,6 +115,26 @@ export class ProjectStore {
     return { sources: [...withoutExisting, { kind: 'text', path, content }], activePath: path };
   }
 
+  /** Write a binary file, creating its parent dirs first (mkdir -p). Best-effort
+   *  like {@link writeTextFile}: a failed write surfaces later as the compiler's
+   *  clear "asset not available" error, not an aborted project push. */
+  private writeBinaryFile(path: string, bytes: Uint8Array): void {
+    try {
+      if (this.fs.mkdirSync) {
+        for (const dir of ancestorDirsOf(path)) {
+          try {
+            this.fs.mkdirSync(dir);
+          } catch {
+            /* already exists */
+          }
+        }
+      }
+      this.fs.writeBytes?.(path, bytes);
+    } catch {
+      /* best-effort */
+    }
+  }
+
   /** Write a text file, creating its parent dirs first (mkdir -p). Best-effort:
    *  the in-memory sources drive compilation, so an FS failure must not abort. */
   private writeTextFile(path: string, content: string): void {
@@ -135,18 +155,20 @@ export class ProjectStore {
   }
 
   /**
-   * Replace the whole project with `files` (text only — #121), selecting
-   * `entryPoint` as the active file (or the {@link selectEntryPath} rule when it
-   * is absent/unknown). All paths are validated and canonicalized up front, so a
-   * single unsafe path rejects the whole call before any file is written (atomic,
-   * like ZIP import). An empty file list yields one fresh empty file so the
-   * "there is always an active file" invariant holds.
+   * Replace the whole project with `files` — editable text and/or binary assets
+   * (#172) — selecting `entryPoint` as the active file (or the
+   * {@link selectEntryPath} rule when it is absent). All paths are validated and
+   * canonicalized up front, so a single unsafe path rejects the whole call
+   * before any file is written (atomic, like ZIP import); a requested entry
+   * that names a binary asset rejects too (a binary can't compile), while an
+   * absent/unknown one falls back to the rule as before. Binary
+   * files land as content-less `local` sources whose bytes live on the FS and
+   * are materialized into the compile request when referenced (ADR 0006). An
+   * empty file list yields one fresh empty file so the "there is always an
+   * active file" invariant holds.
    */
   setProject(files: ProjectFile[], entryPoint?: string): ProjectSnapshot {
-    const canon = files.map((f) => ({
-      path: canonicalProjectHomePath(f.path),
-      content: f.content,
-    }));
+    const canon = files.map((f) => ({ ...f, path: canonicalProjectHomePath(f.path) }));
     const seen = new Set<string>();
     for (const f of canon) {
       if (seen.has(f.path)) throw new ProjectPathError(`Duplicate path in project: ${f.path}`);
@@ -155,13 +177,21 @@ export class ProjectStore {
     // Canonicalize the entry point up front too, so an unsafe entryPoint rejects
     // the whole call BEFORE any file is written (truly atomic, like ZIP import).
     const requested = entryPoint !== undefined ? canonicalProjectHomePath(entryPoint) : undefined;
+    if (
+      requested !== undefined &&
+      canon.some((f) => f.path === requested && f.bytes !== undefined)
+    ) {
+      throw new ProjectPathError(`entryPoint ${requested} is a binary asset and cannot compile.`);
+    }
     if (canon.length === 0) return this.newFile([]);
-    for (const f of canon) this.writeTextFile(f.path, f.content);
-    const sources: SerializableSource[] = canon.map((f) => ({
-      kind: 'text',
-      path: f.path,
-      content: f.content,
-    }));
+    const sources: SerializableSource[] = canon.map((f) => {
+      if (f.bytes !== undefined) {
+        this.writeBinaryFile(f.path, f.bytes);
+        return { kind: 'local', path: f.path };
+      }
+      this.writeTextFile(f.path, f.content);
+      return { kind: 'text', path: f.path, content: f.content };
+    });
     const activePath =
       requested && sources.some((s) => s.path === requested)
         ? requested
