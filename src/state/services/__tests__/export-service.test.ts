@@ -310,6 +310,31 @@ describe('ExportService', () => {
     expect(results[0].status).toBe('cancelled');
   });
 
+  it("a superseded export's cancelled terminal echoes the SUPERSEDED request's id (#223)", async () => {
+    const { ctx, results } = makeCtx({
+      is2D: false,
+      exportFormat3D: 'stl',
+      output: fileOutput('m.off'),
+    });
+    const svc = new ExportService(ctx);
+    const secondInner = vi.fn().mockResolvedValue({
+      outFile: new File(['second'], 'second.stl'),
+      logText: '',
+      markers: [],
+      elapsedMillis: 1,
+    });
+    mockRenderExport.mockReturnValueOnce(secondInner);
+
+    const p1 = svc.export('stl', 'req-A'); // superseded during its input read
+    const p2 = svc.export('stl', 'req-B');
+    await Promise.all([p1, p2]);
+
+    const cancelled = results.find((r) => r.status === 'cancelled');
+    const success = results.find((r) => r.status === 'success');
+    expect(cancelled?.requestId).toBe('req-A'); // the exact #223 scenario
+    expect(success?.requestId).toBe('req-B');
+  });
+
   it('treats a superseded (cancelled) export as supersession, not a user-facing error', async () => {
     const { ctx, host, getState } = makeCtx({
       is2D: false,
