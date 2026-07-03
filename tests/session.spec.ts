@@ -53,7 +53,6 @@ async function embedSession(page: Page): Promise<void> {
   );
 }
 
-
 test.describe('session distributable (#193)', () => {
   test.skip(!sessionServed, 'requires E2E_SERVER_MODE=session (dist-session served)');
 
