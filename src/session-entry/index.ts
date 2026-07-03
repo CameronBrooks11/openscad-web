@@ -27,6 +27,7 @@ import {
 import { fetchAssetBytes } from '../runtime/fetch-asset.ts';
 import { zipArchives } from '../fs/zip-archives.generated.ts';
 import { selectViewerTransport } from '../viewer-host/transports/select.ts';
+import { WebHostAdapter } from '../state/web-host-adapter.ts';
 import type { GeometryViewer } from '../viewer-host/controller.ts';
 
 /**
@@ -89,7 +90,20 @@ async function main(): Promise<void> {
   // compile — calling `init()` would compile the default state and flash unwanted
   // geometry. Construct the controller LAST; its ctor subscribes then announces
   // `ready`, so the host can send a command the instant it sees readiness.
-  const session = new OpenScadSession(fs, createInitialState(null));
+  //
+  // Host-driven export (#216) deltas vs the app: the HOST saves bytes (via
+  // getArtifact), so the in-page download side effect is a no-op — a webview
+  // can't meaningfully service an <a download> click anyway — and the 3MF
+  // multimaterial picker must never block (there is no UI here; default colors
+  // apply).
+  const state = createInitialState(null);
+  state.params.skipMultimaterialPrompt = true;
+  const host = new (class extends WebHostAdapter {
+    override download(): void {}
+    override downloadBlob(): void {}
+    override playCompletionChime(): void {}
+  })();
+  const session = new OpenScadSession(fs, state, undefined, undefined, host);
   new SessionController(sessionHostOf(session), viewer, selectViewerTransport());
 }
 

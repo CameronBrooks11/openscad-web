@@ -6,6 +6,7 @@ import type { ProjectFile, ProjectContract } from './project-contract.ts';
 import type { ProjectFileSystem } from '../fs/project-filesystem.ts';
 import type { State, StatePersister } from './app-state.ts';
 import type { HostAdapter } from './web-host-adapter.ts';
+import type { ExportFormat } from './formats.ts';
 
 /**
  * An instance-scoped OpenSCAD session: the unit of isolation (ADR 0007). It owns
@@ -61,6 +62,12 @@ export class OpenScadSession implements ProjectContract {
   }
   setEntryPoint(path: string): void {
     this.model.setEntryPoint(path);
+  }
+
+  /** Export the current model as `format` (#216); the terminal lands on the
+   *  operation stream as a `kind: 'export'` result. */
+  exportArtifact(format: ExportFormat): void {
+    this.model.exportArtifact(format);
   }
 
   /** Cancel this session's in-flight compile/export operations (#123). */

@@ -22,7 +22,9 @@ import type { ArtifactRef, OperationResult, ProjectFile } from './session-contra
  * is the session WIRE version — distinct from `L1_PROTOCOL_VERSION`, which versions
  * the nested `OperationResult` payload (ADR 0005: each binding owns its version).
  *
- * v2: added the `getArtifact` command + `artifact` reply (#197).
+ * v2: added the `getArtifact` command + `artifact` reply (#197), binary project
+ * files (#172), and the `export` command (#216) — one bump; v2 never shipped
+ * between them.
  */
 export const SESSION_PROTOCOL_VERSION = 2;
 
@@ -44,18 +46,28 @@ export const SESSION_COMMANDS = [
   'updateFile',
   'removeFile',
   'setEntryPoint',
+  'export',
   'getArtifact',
   'cancel',
   'dispose',
 ] as const;
 
+/** The export formats a host may request (#216) — the app's own format set.
+ *  3D: stl/off/glb/3mf; 2D: svg/dxf. The session exports the CURRENT model's
+ *  dimensionality; a mismatched request (e.g. `svg` for a 3D model) terminates
+ *  as an export-kind failure result, never silence. */
+export const SESSION_EXPORT_FORMATS = ['stl', 'off', 'glb', '3mf', 'svg', 'dxf'] as const;
+export type SessionExportFormat = (typeof SESSION_EXPORT_FORMATS)[number];
+
 /** Host → session. Mirrors `ProjectContract` (src/state/project-contract.ts) 1:1,
- *  plus `getArtifact` (bytes-by-id, #197) and `dispose` for worker teardown. */
+ *  plus `export` (#216), `getArtifact` (bytes-by-id, #197), and `dispose` for
+ *  worker teardown. */
 export type SessionInbound =
   | { type: 'setProject'; files: ProjectFile[]; entryPoint?: string }
   | { type: 'updateFile'; path: string; content: string }
   | { type: 'removeFile'; path: string }
   | { type: 'setEntryPoint'; path: string }
+  | { type: 'export'; format: SessionExportFormat }
   | { type: 'getArtifact'; artifactId: string; requestId: string }
   | { type: 'cancel' }
   | { type: 'dispose' };
@@ -164,6 +176,16 @@ export function validateSessionInbound(data: unknown): SessionValidation {
       if (path === undefined) return err('invalid-payload', 'path must be a string');
       if (path.length > SESSION_MAX_PATH_LENGTH) return err('too-large', 'path is too long');
       return { ok: true, message: { type: data.type, path } };
+    }
+    case 'export': {
+      // Fire-and-observe like the mutation commands: the terminal arrives on the
+      // push stream as a `kind: 'export'` OperationResult (success with an
+      // ArtifactRef to then fetch via getArtifact, or a failure).
+      const format = readString(data.format);
+      if (format === undefined || !(SESSION_EXPORT_FORMATS as readonly string[]).includes(format)) {
+        return err('invalid-payload', `format must be one of ${SESSION_EXPORT_FORMATS.join(', ')}`);
+      }
+      return { ok: true, message: { type: 'export', format: format as SessionExportFormat } };
     }
     case 'getArtifact': {
       // Unlike the push-stream commands, this is a correlated request/response:

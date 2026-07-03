@@ -49,9 +49,12 @@ class FakeBackend implements CompileBackend {
 }
 
 let urlN = 0;
+const revokedUrls: string[] = [];
 const host = {
   createObjectURL: () => `blob:fake-${urlN++}`,
-  revokeObjectURL: () => {},
+  revokeObjectURL: (url: string) => {
+    revokedUrls.push(url);
+  },
   download: () => {},
   downloadBlob: () => {},
   playCompletionChime: () => {},
@@ -112,6 +115,7 @@ describe('#123 multi-file project contract — headless end to end', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     fsStore.clear();
+    revokedUrls.length = 0;
   });
   afterEach(() => vi.useRealTimers());
 
@@ -265,6 +269,111 @@ describe('#123 multi-file project contract — headless end to end', () => {
     await settle();
     expect(model.state.params.sources.map((s) => s.path)).toEqual(['/home/main.scad']);
     expect(model.state.params.activePath).toBe('/home/main.scad');
+  });
+
+  it('exportArtifact drives a kind:export success carrying the requested format (#216)', async () => {
+    const backend = new FakeBackend();
+    const { model, ops } = makeModel(backend);
+    model.setProject([{ path: 'main.scad', content: 'cube(1);' }], 'main.scad');
+    await settle();
+    expect(ops.find((o) => o.status === 'success' && o.artifact)).toBeDefined();
+
+    model.exportArtifact('stl');
+    await settle();
+
+    const exported = ops.find((o) => o.kind === 'export');
+    expect(exported).toBeDefined();
+    expect(exported!.status).toBe('success');
+    if (exported!.status === 'success') {
+      expect(exported!.artifact?.format).toBe('stl');
+      // The export's exact bytes are retrievable by id — the getArtifact flow.
+      expect(model.getStoredArtifact(exported!.artifact!.artifactId)).toBeDefined();
+    }
+  });
+
+  it('exportArtifact does not mutate the persisted format settings, and off pass-through works (#216 review)', async () => {
+    const { model, ops } = makeModel(new FakeBackend());
+    model.setProject([{ path: 'main.scad', content: 'cube(1);' }], 'main.scad');
+    await settle();
+
+    // 'off' pass-through: the preview output IS the OFF — same artifact identity.
+    model.exportArtifact('off');
+    await settle();
+    const exported = ops.find((o) => o.kind === 'export');
+    expect(exported?.status).toBe('success');
+    if (exported?.status === 'success') {
+      expect(exported.artifact?.format).toBe('off');
+    }
+    // The persisted settings are untouched (a per-request format must not flip
+    // subsequent previews' render format — the review's pollution finding).
+    expect(model.state.params.exportFormat3D).toBe('stl');
+    expect(model.state.params.exportFormat2D).toBe('svg');
+  });
+
+  it("an export's ArtifactRef carries the CONSUMED output's revision, not the edit counter (#216 review)", async () => {
+    const { model, ops } = makeModel(new FakeBackend());
+    model.setProject([{ path: 'main.scad', content: 'cube(1);' }], 'main.scad');
+    await settle();
+    const preview = ops.find((o) => o.status === 'success' && o.artifact);
+    expect(preview).toBeDefined();
+    const previewRevision = (preview as { artifact: { sourceRevision: number } }).artifact
+      .sourceRevision;
+
+    // Edit (bumps the revision) then export IMMEDIATELY — before the new
+    // preview lands. The export converts the OLD output and must say so.
+    model.updateFile('/home/main.scad', 'cube(2);');
+    model.exportArtifact('stl');
+    await settle();
+
+    const exported = ops.find((o) => o.kind === 'export' && o.status === 'success');
+    expect(exported).toBeDefined();
+    expect((exported as { artifact: { sourceRevision: number } }).artifact.sourceRevision).toBe(
+      previewRevision,
+    );
+  });
+
+  it('a pass-through export does not let a later conversion revoke the live output URL (#216 review)', async () => {
+    const { model, ops } = makeModel(new FakeBackend());
+    model.setProject([{ path: 'main.scad', content: 'cube(1);' }], 'main.scad');
+    await settle();
+    const outputUrl = model.state.output!.outFileURL;
+
+    model.exportArtifact('off'); // pass-through: aliases the output URL
+    await settle();
+    model.exportArtifact('stl'); // conversion: must NOT revoke the aliased URL
+    await settle();
+
+    expect(ops.filter((o) => o.kind === 'export' && o.status === 'success')).toHaveLength(2);
+    expect(revokedUrls).not.toContain(outputUrl);
+  });
+
+  it('exportArtifact before any completed compile fails with no-output, not a misleading mismatch (#216 review)', async () => {
+    const { model, ops } = makeModel(new FakeBackend());
+    // No compile has run (makeModel never calls init()).
+    model.exportArtifact('svg');
+    await settle();
+    const exported = ops.find((o) => o.kind === 'export');
+    expect(exported?.status).toBe('error');
+    if (exported?.status === 'error') {
+      expect(exported.code).toBe('no-output');
+    }
+  });
+
+  it('exportArtifact terminates a dimensionality mismatch as an export failure, not silence (#216)', async () => {
+    const { model, ops } = makeModel(new FakeBackend());
+    model.setProject([{ path: 'main.scad', content: 'cube(1);' }], 'main.scad');
+    await settle();
+
+    model.exportArtifact('svg'); // 2D format, 3D model
+    await settle();
+
+    const exported = ops.find((o) => o.kind === 'export');
+    expect(exported).toBeDefined();
+    expect(exported!.status).toBe('error');
+    if (exported!.status === 'error') {
+      expect(exported!.code).toBe('export-format-mismatch');
+      expect(exported!.reason).toMatch(/3D/);
+    }
   });
 
   it('cancel() surfaces a terminal cancelled result for the in-flight compile', async () => {

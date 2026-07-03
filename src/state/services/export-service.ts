@@ -18,6 +18,7 @@ import { isExpectedJobCancellation, type ProcessStreams } from '../../runner/ope
 import { isUserFacingOperationError, normalizeOperationFailure } from '../../user-facing-errors.ts';
 import { formatBytes, formatMillis, type AbortablePromise } from '../../utils.ts';
 import { applyUserFacingError } from '../apply-user-facing-error.ts';
+import type { ExportFormat } from '../formats.ts';
 import type { ServiceContext } from './service-context.ts';
 
 /**
@@ -85,7 +86,14 @@ export class ExportService {
     }
   }
 
-  async export() {
+  /**
+   * Export the current output. With no argument (the app's export button) the
+   * target format comes from the persisted `exportFormat2D/3D` settings; a wire
+   * host passes `requested` explicitly (#216) so a per-request format never
+   * mutates persistent state (which would silently flip subsequent 2D previews'
+   * render format — and via the pass-through, could even mislabel the result).
+   */
+  async export(requested?: ExportFormat) {
     const { mutate, host } = this.ctx;
     // Claim the export token at entry — before any early return — so that EVERY
     // export (pass-through, picker, or async conversion) supersedes an in-flight
@@ -120,12 +128,14 @@ export class ExportService {
     // Snapshot is safe: export never mutates output/params/is2D, only the
     // export/exporting/error/log/view fields it writes via the mutate callback.
     const state = this.ctx.getState();
+    const targetFormat: ExportFormat =
+      requested ?? (state.is2D ? state.params.exportFormat2D : state.params.exportFormat3D);
     if (state.output) {
-      // The preview/render output is already in the target format (the SVG for a
-      // 2D model, the OFF for a 3D `off` export), so download it directly.
-      const normalPassThrough =
-        (state.is2D && state.params.exportFormat2D === 'svg') ||
-        (!state.is2D && state.params.exportFormat3D === 'off');
+      // The rendered output is ALREADY in the target format (the SVG/DXF of a 2D
+      // preview, the OFF of a 3D one), so download it directly. Keyed on the
+      // output file's ACTUAL format, not a format setting — a setting can point
+      // at a format the current output is not (review of #216, mislabeling).
+      const normalPassThrough = formatOfName(state.output.outFile.name) === targetFormat;
 
       if (normalPassThrough) {
         // Synchronous, so this export stays current through commit. Clear
@@ -153,7 +163,7 @@ export class ExportService {
         return;
       }
     }
-    if (!state.is2D && state.params.exportFormat3D == '3mf' && !state.params.extruderColors) {
+    if (!state.is2D && targetFormat == '3mf' && !state.params.extruderColors) {
       if (!state.params.skipMultimaterialPrompt) {
         // Showing the picker ends this export request; take spinner ownership.
         mutate((s) => {
@@ -178,8 +188,8 @@ export class ExportService {
         throw new Error('No output file to export');
       }
 
-      const { features, exportFormat2D, exportFormat3D } = state.params;
-      const exportFormat = state.is2D ? exportFormat2D : exportFormat3D;
+      const { features } = state.params;
+      const exportFormat = targetFormat;
       let output: RenderOutput;
       if (exportFormat === '3mf') {
         const start = performance.now();
@@ -251,7 +261,10 @@ export class ExportService {
       // One immutable artifact id, shared by state.export and the store entry, so
       // getArtifact(artifactId) returns these exact exported bytes (ADR 0008).
       const artifactId = newId();
-      const sourceRevision = this.ctx.getSourceRevision();
+      // The ref carries the GEOMETRY's provenance — the revision of the output
+      // this conversion consumed — matching the pass-through branch. Stamping the
+      // current counter would claim a just-edited revision for old geometry.
+      const sourceRevision = state.output.sourceRevision;
       const format = formatOfName(output.outFile.name);
       const artifactRef = {
         artifactId,
@@ -265,7 +278,13 @@ export class ExportService {
       this.ctx.artifacts.put(output.outFile, artifactRef);
       mutate((s) => {
         s.exporting = false;
-        if (s.export?.outFileURL?.startsWith('blob:') ?? false) {
+        // A prior pass-through export ALIASES the live output's URL
+        // (s.export = s.output); revoking it would break the next conversion's
+        // worker fetch of state.output.outFileURL (review of #216).
+        if (
+          (s.export?.outFileURL?.startsWith('blob:') ?? false) &&
+          s.export!.outFileURL !== s.output?.outFileURL
+        ) {
           host.revokeObjectURL(s.export!.outFileURL);
         }
         s.export = {

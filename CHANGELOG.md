@@ -8,6 +8,13 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ### Fixed
 
+- Export (found by #216's adversarial review; all three pre-existing in the app
+  UI too): the pass-through path now keys on the output file's ACTUAL format
+  instead of the format setting — a stale setting could label a DXF as a
+  requested SVG; a pass-through export no longer lets a later conversion revoke
+  the live output's blob URL (which broke the next conversion's worker fetch);
+  and a conversion's `ArtifactRef` now carries the consumed output's
+  `sourceRevision` rather than the current edit counter.
 - OFF import: canonical multi-line headers (`OFF` on its own line, counts on the
   next — as emitted by Meshlab and many tools) are no longer rejected with
   "invalid vertex or face counts". The same-line form (`OFF 8 6 12`, as OpenSCAD
@@ -27,6 +34,18 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ### Added
 
+- Host-driven export over the L1 wire (#216): new `export { format }` command
+  (stl/off/glb/3mf/svg/dxf) drives the standard export flow; the terminal lands
+  on the push stream as a `kind: 'export'` result whose `ArtifactRef` is then
+  fetched via `getArtifact` (#197) — STL/3MF/GLB are now reachable from a host.
+  The format is per-request (never written to the persisted export settings, so
+  it cannot flip subsequent 2D previews' render format), an export converts the
+  last completed output (its `ArtifactRef` carries that geometry's
+  `sourceRevision`), and every rejection is a terminal failure result:
+  `no-output` before a first completed compile, `export-format-mismatch` for
+  the wrong dimensionality. In the session artifact, the in-page download side
+  effect and the 3MF multimaterial picker are disabled (the host owns saving;
+  default colors apply).
 - Binary project assets in the multi-file contract (#172): `setProject` files
   are now `{path, content}` (editable text) **or** `{path, bytes}` — a binary
   asset's exact bytes as a `Uint8Array` (never base64), landing as a

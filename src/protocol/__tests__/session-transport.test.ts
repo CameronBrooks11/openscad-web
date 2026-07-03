@@ -211,6 +211,24 @@ describe('validateSessionInbound', () => {
     expect(ok({ type: 'dispose' })).toEqual({ ok: true, message: { type: 'dispose' } });
   });
 
+  it('accepts export with a known format and rejects unknown/missing ones (#216)', () => {
+    for (const format of ['stl', 'off', 'glb', '3mf', 'svg', 'dxf']) {
+      expect(ok({ type: 'export', format })).toEqual({
+        ok: true,
+        message: { type: 'export', format },
+      });
+    }
+    expect(ok({ type: 'export' })).toMatchObject({ ok: false, code: 'invalid-payload' });
+    expect(ok({ type: 'export', format: 'step' })).toMatchObject({
+      ok: false,
+      code: 'invalid-payload',
+    });
+    expect(ok({ type: 'export', format: 7 })).toMatchObject({
+      ok: false,
+      code: 'invalid-payload',
+    });
+  });
+
   it('accepts getArtifact and requires string artifactId + requestId', () => {
     expect(ok({ type: 'getArtifact', artifactId: 'a-1', requestId: 'r-1' })).toEqual({
       ok: true,
@@ -246,6 +264,7 @@ describe('validateSessionInbound', () => {
       updateFile: { path: '/a', content: 'x' },
       removeFile: { path: '/a' },
       setEntryPoint: { path: '/a' },
+      export: { format: 'stl' },
       getArtifact: { artifactId: 'a', requestId: 'r' },
       cancel: {},
       dispose: {},

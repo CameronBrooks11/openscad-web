@@ -17,6 +17,7 @@ import {
   sessionReady,
   validateSessionInbound,
 } from '../protocol/session-transport.ts';
+import type { SessionExportFormat } from '../protocol/session-transport.ts';
 import type { ArtifactRef, OperationResult, ProjectFile } from '../protocol/session-contract.ts';
 import type { Transport } from '../viewer-host/transport.ts';
 
@@ -26,6 +27,10 @@ export interface SessionHost {
   updateFile(path: string, content: string): void;
   removeFile(path: string): void;
   setEntryPoint(path: string): void;
+  /** Export the current model as `format` (#216). Fire-and-observe: the terminal
+   *  lands on the operation stream as a `kind: 'export'` result (success with an
+   *  ArtifactRef, or a failure — e.g. a dimensionality mismatch). */
+  exportArtifact(format: SessionExportFormat): void;
   cancel(): void;
   dispose(): void;
   /** Subscribe to terminal operation results (the Model's `'operation'` stream);
@@ -86,6 +91,9 @@ export class SessionController {
           break;
         case 'setEntryPoint':
           this.session.setEntryPoint(msg.path);
+          break;
+        case 'export':
+          this.session.exportArtifact(msg.format);
           break;
         case 'getArtifact':
           void this.sendArtifact(msg.requestId, msg.artifactId);

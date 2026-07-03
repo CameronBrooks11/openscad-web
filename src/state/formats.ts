@@ -13,6 +13,10 @@ export const VALID_EXPORT_FORMATS_3D = {
   '3mf': true,
 };
 
+/** Any exportable format, 2D or 3D — the host-facing export surface (#216). */
+export type ExportFormat =
+  keyof typeof VALID_EXPORT_FORMATS_2D | keyof typeof VALID_EXPORT_FORMATS_3D;
+
 export function is2DFormatExtension(ext: string) {
   return ext === 'svg' || ext === 'dxf';
 }
