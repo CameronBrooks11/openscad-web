@@ -27,6 +27,10 @@ export interface SessionHost {
   updateFile(path: string, content: string): void;
   removeFile(path: string): void;
   setEntryPoint(path: string): void;
+  /** Run a FULL render (#219) — render-quality geometry; the terminal is a
+   *  `kind: 'render'` result echoing `requestId`, and its output becomes what a
+   *  subsequent export converts. */
+  render(requestId?: string): void;
   /** Export the current model as `format` (#216). Fire-and-observe: the terminal
    *  lands on the operation stream as a `kind: 'export'` result (success with an
    *  ArtifactRef, or a failure — e.g. a dimensionality mismatch), echoing
@@ -92,6 +96,9 @@ export class SessionController {
           break;
         case 'setEntryPoint':
           this.session.setEntryPoint(msg.path);
+          break;
+        case 'render':
+          this.session.render(msg.requestId);
           break;
         case 'export':
           this.session.exportArtifact(msg.format, msg.requestId);

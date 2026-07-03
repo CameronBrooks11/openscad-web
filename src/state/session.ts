@@ -50,8 +50,14 @@ export class OpenScadSession implements ProjectContract {
     this.model.init();
   }
 
+  /** Whether the host has pushed a project yet — a wire render before that
+   *  would silently full-render the DEFAULT playground model (the session
+   *  entry never init()s precisely to avoid showing it). */
+  private hostProjectSet = false;
+
   // --- ProjectContract (#123): host-drivable project ops, delegated to Model ---
   setProject(files: ProjectFile[], entryPoint?: string): void {
+    this.hostProjectSet = true;
     this.model.setProject(files, entryPoint);
   }
   updateFile(path: string, content: string): void {
@@ -62,6 +68,26 @@ export class OpenScadSession implements ProjectContract {
   }
   setEntryPoint(path: string): void {
     this.model.setEntryPoint(path);
+  }
+
+  /** Run a FULL render of the current model (#219) — `$preview = false`,
+   *  render-quality geometry. The terminal lands on the operation stream as a
+   *  `kind: 'render'` result echoing `requestId`; its OFF commits as the
+   *  session output, so a subsequent export converts render-quality geometry
+   *  (and the embedded viewer shows it). */
+  render(requestId?: string): void {
+    if (!this.hostProjectSet) {
+      // Never render (and display!) the default playground model on a host
+      // bug — fail the request loudly instead (#219 review).
+      this.model.emitOperationFailure(
+        'render',
+        'no-project',
+        'no project has been pushed — send setProject before render',
+        requestId,
+      );
+      return;
+    }
+    void this.model.render({ isPreview: false, now: true, requestId });
   }
 
   /** Export the current model as `format` (#216); the terminal lands on the

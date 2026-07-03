@@ -346,26 +346,37 @@ export class Model extends EventTarget {
    * (exports convert the LAST completed output), `export-format-mismatch` for
    * the wrong dimensionality.
    */
+  /** Emit a synthetic terminal failure on the operation stream — for wire
+   *  commands that must never end in silence (export #216, render #219). */
+  emitOperationFailure(
+    kind: 'export' | 'render',
+    code: string,
+    reason: string,
+    requestId?: string,
+  ): void {
+    this.dispatchEvent(
+      new CustomEvent('operation', {
+        detail: operationFailure(
+          {
+            sessionId: this.sessionId,
+            operationId: newId(),
+            sourceRevision: this._sourceRevision,
+            kind,
+            elapsedMillis: 0,
+            diagnostics: [],
+            logText: '',
+            ...(requestId !== undefined ? { requestId } : {}),
+          },
+          code,
+          reason,
+        ),
+      }),
+    );
+  }
+
   exportArtifact(format: ExportFormat, requestId?: string): void {
     const fail = (code: string, reason: string) =>
-      this.dispatchEvent(
-        new CustomEvent('operation', {
-          detail: operationFailure(
-            {
-              sessionId: this.sessionId,
-              operationId: newId(),
-              sourceRevision: this._sourceRevision,
-              kind: 'export',
-              elapsedMillis: 0,
-              diagnostics: [],
-              logText: '',
-              ...(requestId !== undefined ? { requestId } : {}),
-            },
-            code,
-            reason,
-          ),
-        }),
-      );
+      this.emitOperationFailure('export', code, reason, requestId);
     if (!this.state.output) {
       fail(
         'no-output',
@@ -600,6 +611,7 @@ export class Model extends EventTarget {
     mountArchives?: boolean;
     now: boolean;
     retryInOtherDim?: boolean;
+    requestId?: string;
   }) {
     return this.compile.render(args);
   }

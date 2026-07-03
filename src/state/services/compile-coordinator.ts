@@ -304,16 +304,46 @@ export class CompileCoordinator {
     });
   }
 
+  /** The corrected `is2D` for a 2D/3D dimension-mismatch retry, or undefined
+   *  when the log shows no mismatch. Reads the JOB'S OWN log first; the shared
+   *  currentRunLogs only as a fallback — a concurrent render() resets those,
+   *  so they can misattribute lines under interleaving (#219 review). */
+  private static dimensionRetryTarget(
+    jobLogText: string | undefined,
+    sharedLogs: ['stderr' | 'stdout', string][] | undefined,
+  ): boolean | undefined {
+    const lines = jobLogText ? jobLogText.split('\n') : (sharedLogs ?? []).map(([, l]) => l);
+    let is2D: boolean | undefined;
+    let is3D: boolean | undefined;
+    for (const line of lines) {
+      if (line == 'Current top level object is not a 3D object.') {
+        is3D = false;
+      } else if (line == 'Top level object is a 3D object:') {
+        is3D = true;
+      } else if (line == 'Current top level object is not a 2D object.') {
+        is2D = false;
+      } else if (line == 'Top level object is a 2D object:') {
+        is2D = true;
+      }
+    }
+    if (is2D === false || is3D === false) return !(is2D === false);
+    return undefined;
+  }
+
   async render({
     isPreview,
     mountArchives,
     now,
     retryInOtherDim,
+    requestId,
   }: {
     isPreview: boolean;
     mountArchives?: boolean;
     now: boolean;
     retryInOtherDim?: boolean;
+    /** Correlation id echoed on this operation's terminal (#219/#223) — set by
+     *  the wire's `render` command; absent for app/auto-triggered renders. */
+    requestId?: string;
   }) {
     mountArchives ??= true;
     retryInOtherDim ??= true;
@@ -338,6 +368,8 @@ export class CompileCoordinator {
       elapsedMillis: 0,
       diagnostics: [],
       logText: '',
+      // Echo the initiating command's correlation id on the terminal (#219).
+      ...(requestId !== undefined ? { requestId } : {}),
       ...over,
     });
     const setRendering = (s: State, value: boolean) => {
@@ -412,6 +444,25 @@ export class CompileCoordinator {
         this.emitResult(operationCancelled(base())); // revision stale-drop
         return;
       }
+      if (retryInOtherDim) {
+        const retry2D = CompileCoordinator.dimensionRetryTarget(
+          output.logText,
+          this.ctx.getState().currentRunLogs,
+        );
+        if (retry2D !== undefined) {
+          // A wrong-dimension "success" (the engine exits zero with an empty
+          // output and a mismatch log line). The retry produces this REQUEST's
+          // actual terminal — same requestId (#223 convention) — so this
+          // attempt emits nothing and commits nothing (no flash of empty
+          // geometry, no spurious terminal for a correlated host).
+          this.ctx.mutate((s) => {
+            setRendering(s, false);
+            s.is2D = retry2D;
+          });
+          this.render({ isPreview, now: true, retryInOtherDim: false, requestId });
+          return;
+        }
+      }
       is2D = output.outFile.name.endsWith('.svg') || output.outFile.name.endsWith('.dxf');
       // Everything from the staleness checks above to the commit below is
       // synchronous (the viewer reads the OFF File directly and uses outFileURL
@@ -477,6 +528,22 @@ export class CompileCoordinator {
         this.emitResult(operationCancelled(base())); // superseded
         return; // superseded — the newer call owns the spinner state
       }
+      if (retryInOtherDim && !isExpectedJobCancellation(err)) {
+        const retry2D = CompileCoordinator.dimensionRetryTarget(
+          isUserFacingOperationError(err) ? err.userFacingError.logText : undefined,
+          this.ctx.getState().currentRunLogs,
+        );
+        if (retry2D !== undefined) {
+          // Same as the success-path retry: the mismatch failure must not emit
+          // a spurious first terminal — one terminal per request (#219 review).
+          this.ctx.mutate((s) => {
+            setRendering(s, false);
+            s.is2D = retry2D;
+          });
+          this.render({ isPreview, now: true, retryInOtherDim: false, requestId });
+          return;
+        }
+      }
       this.ctx.mutate((s) => {
         setRendering(s, false);
         if (!isExpectedJobCancellation(err)) {
@@ -497,26 +564,6 @@ export class CompileCoordinator {
               normalizeOperationFailure(err, isPreview ? 'preview' : 'render').message,
             ),
       );
-    }
-    if (retryInOtherDim) {
-      let is2D: boolean | undefined;
-      let is3D: boolean | undefined;
-      for (const [, line] of this.ctx.getState().currentRunLogs ?? []) {
-        if (line == 'Current top level object is not a 3D object.') {
-          is3D = false;
-        } else if (line == 'Top level object is a 3D object:') {
-          is3D = true;
-        } else if (line == 'Current top level object is not a 2D object.') {
-          is2D = false;
-        } else if (line == 'Top level object is a 2D object:') {
-          is2D = true;
-        }
-      }
-      if (is2D === false || is3D === false) {
-        this.ctx.mutate((s) => (s.is2D = !(is2D === false)));
-        this.render({ isPreview, now: true, retryInOtherDim: false });
-        return;
-      }
     }
   }
 }
