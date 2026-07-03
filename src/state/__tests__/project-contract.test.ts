@@ -25,8 +25,11 @@ import { AbortablePromise } from '../../utils.ts';
 // in 'hang' mode — never resolves and rejects on kill() like the real delayable.
 class FakeBackend implements CompileBackend {
   mode: 'ok' | 'hang' = 'ok';
+  /** Every invocation received, so tests can assert what crossed to the worker. */
+  invocations: OpenSCADInvocation[] = [];
 
   spawn(invocation: OpenSCADInvocation): AbortablePromise<OpenSCADInvocationResults> {
+    this.invocations.push(invocation);
     if (this.mode === 'hang') {
       return AbortablePromise<OpenSCADInvocationResults>(
         (_res, rej) => () => rej(new Error('Cancelled')),
@@ -55,9 +58,19 @@ const host = {
   baseUrl: () => 'http://localhost/',
 } as unknown as HostAdapter;
 
+// Stateful: binary assets written by setProject (#172) are read back at compile
+// time by materializeBinarySources (ADR 0006), so the fake must round-trip them.
+const fsStore = new Map<string, Uint8Array>();
 const fakeFs = {
-  readFileSync: () => new Uint8Array(),
+  readFileSync: (path: string) => {
+    const bytes = fsStore.get(path);
+    if (!bytes) throw new Error(`ENOENT: ${path}`);
+    return bytes;
+  },
   writeFile: () => {},
+  writeBytes: (path: string, bytes: Uint8Array) => {
+    fsStore.set(path, bytes);
+  },
 } as unknown as ProjectFileSystem;
 
 function baseState(): State {
@@ -76,9 +89,9 @@ function baseState(): State {
   } as State;
 }
 
-function makeModel(backend: FakeBackend) {
+function makeModel(backend: FakeBackend, fs: ProjectFileSystem = fakeFs) {
   const model = new Model(
-    fakeFs,
+    fs,
     baseState(),
     undefined,
     undefined,
@@ -96,7 +109,10 @@ function makeModel(backend: FakeBackend) {
 const settle = () => vi.advanceTimersByTimeAsync(1200);
 
 describe('#123 multi-file project contract — headless end to end', () => {
-  beforeEach(() => vi.useFakeTimers());
+  beforeEach(() => {
+    vi.useFakeTimers();
+    fsStore.clear();
+  });
   afterEach(() => vi.useRealTimers());
 
   it('setProject → render commits a retrievable artifact and a success result', async () => {
@@ -127,6 +143,97 @@ describe('#123 multi-file project contract — headless end to end', () => {
       expect(stored).toBeDefined();
       expect(stored!.bytes).toBe(model.state.output!.outFile);
     }
+  });
+
+  it('setProject with a binary asset lands a local source and ships its exact bytes to the worker (#172)', async () => {
+    const backend = new FakeBackend();
+    const { model, ops } = makeModel(backend);
+    const stlBytes = Uint8Array.from([0x53, 0x54, 0x4c, 0x00, 0xff, 0x01]);
+
+    model.setProject(
+      [
+        { path: 'main.scad', content: 'import("part.stl");' },
+        { path: 'assets/part.stl', bytes: stlBytes },
+      ],
+      'main.scad',
+    );
+    await settle();
+
+    // The binary landed as a content-less `local` source; the text stayed editable.
+    expect(model.state.params.sources).toEqual(
+      expect.arrayContaining([
+        { kind: 'local', path: '/home/assets/part.stl' },
+        { kind: 'text', path: '/home/main.scad', content: 'import("part.stl");' },
+      ]),
+    );
+    expect(model.state.params.activePath).toBe('/home/main.scad');
+
+    // The compile succeeded, and the worker request carried the asset's EXACT
+    // bytes (materialized off the FS — ADR 0006), not a stringified corruption.
+    expect(ops.find((o) => o.status === 'success' && o.artifact)).toBeDefined();
+    const wire = backend.invocations
+      .flatMap((i) => i.inputs ?? [])
+      .find((s) => s.path === '/home/assets/part.stl');
+    expect(wire).toBeDefined();
+    expect(wire!.content).toEqual(stlBytes);
+  });
+
+  it('a binary entryPoint is allowed — the engine renders it via its import wrapper (#121)', async () => {
+    const { model, ops } = makeModel(new FakeBackend());
+    model.setProject(
+      [
+        { path: 'main.scad', content: 'cube(1);' },
+        { path: 'part.stl', bytes: Uint8Array.from([1, 2, 3]) },
+      ],
+      'part.stl',
+    );
+    await settle();
+    expect(model.state.params.activePath).toBe('/home/part.stl');
+    expect(ops.find((o) => o.status === 'success' && o.artifact)).toBeDefined();
+  });
+
+  it('an all-binary project with no entryPoint selects and renders the binary (the implicit door)', async () => {
+    const { model, ops } = makeModel(new FakeBackend());
+    model.setProject([{ path: 'part.stl', bytes: Uint8Array.from([1, 2, 3]) }]);
+    await settle();
+    expect(model.state.params.activePath).toBe('/home/part.stl');
+    expect(model.state.params.sources).toEqual([{ kind: 'local', path: '/home/part.stl' }]);
+    expect(ops.find((o) => o.status === 'success' && o.artifact)).toBeDefined();
+  });
+
+  it('bytes at a text-suffix path decode to an ordinary text source; invalid UTF-8 rejects atomically', async () => {
+    const { model, ops } = makeModel(new FakeBackend());
+    model.setProject([{ path: 'main.scad', bytes: new TextEncoder().encode('cube(2);') }]);
+    await settle();
+    // Valid UTF-8 at .scad → a text source, exactly as if pushed as content.
+    expect(model.state.params.sources).toEqual([
+      { kind: 'text', path: '/home/main.scad', content: 'cube(2);' },
+    ]);
+    expect(ops.find((o) => o.status === 'success' && o.artifact)).toBeDefined();
+
+    // Invalid UTF-8 at a text path rejects the whole push (no silent mojibake).
+    const before = model.state.params.sources;
+    model.setProject([{ path: 'other.scad', bytes: Uint8Array.from([0xff, 0xfe, 0x00, 0xff]) }]);
+    await settle();
+    expect(model.state.params.sources).toBe(before);
+    expect(model.state.errorDetails).toMatch(/not valid UTF-8/);
+  });
+
+  it('a truly-binary push on a filesystem without writeBytes rejects loudly up front', async () => {
+    const noBytesFs = {
+      readFileSync: () => new Uint8Array(),
+      writeFile: () => {},
+    } as unknown as ProjectFileSystem;
+    const { model, ops } = makeModel(new FakeBackend(), noBytesFs);
+    const before = model.state.params.sources;
+    model.setProject([
+      { path: 'main.scad', content: 'import("p.stl");' },
+      { path: 'p.stl', bytes: Uint8Array.from([1]) },
+    ]);
+    await settle();
+    expect(model.state.params.sources).toBe(before);
+    expect(model.state.errorDetails).toMatch(/cannot store binary assets/);
+    expect(ops).toEqual([]);
   });
 
   it('updateFile → setEntryPoint → removeFile drive deterministic recompiles', async () => {

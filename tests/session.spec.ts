@@ -53,13 +53,6 @@ async function embedSession(page: Page): Promise<void> {
   );
 }
 
-async function postToSession(page: Page, message: object): Promise<void> {
-  await page.evaluate((msg) => {
-    const frame = document.getElementById('session-frame') as HTMLIFrameElement;
-    frame.contentWindow!.postMessage(msg, window.location.origin);
-  }, message);
-}
-
 test.describe('session distributable (#193)', () => {
   test.skip(!sessionServed, 'requires E2E_SERVER_MODE=session (dist-session served)');
 
@@ -72,12 +65,26 @@ test.describe('session distributable (#193)', () => {
     const manifest = await page.request.get(new URL('session-manifest.json', baseUrl).toString());
     const { protocolVersion } = (await manifest.json()) as { protocolVersion: number };
 
-    await postToSession(page, {
-      protocolVersion,
-      type: 'setProject',
-      files: [{ path: 'main.scad', content: 'cube([10, 10, 10]);' }],
-      entryPoint: 'main.scad',
-    });
+    // The project includes a (unreferenced) binary asset (#172), so the push
+    // exercises the bytes branch — wire validation, BrowserFS writeBytes, and
+    // the local-source bookkeeping — against the real artifact. The Uint8Array
+    // must be constructed IN PAGE: Playwright's evaluate-arg serialization would
+    // mangle a Node-side one before it ever reached postMessage.
+    await page.evaluate((v) => {
+      const frame = document.getElementById('session-frame') as HTMLIFrameElement;
+      frame.contentWindow!.postMessage(
+        {
+          protocolVersion: v,
+          type: 'setProject',
+          files: [
+            { path: 'main.scad', content: 'cube([10, 10, 10]);' },
+            { path: 'assets/blob.bin', bytes: new Uint8Array([0xde, 0xad, 0xbe, 0xef]) },
+          ],
+          entryPoint: 'main.scad',
+        },
+        window.location.origin,
+      );
+    }, protocolVersion);
 
     // A genuine WASM compile fans out to a success operation-result carrying an
     // OFF artifact (the render bridge also sets it on the embedded viewer, but the

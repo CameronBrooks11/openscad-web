@@ -8,10 +8,11 @@
 //
 // Render is internal to the session webview (it embeds the viewer, #179), so this
 // protocol carries NO geometry/artifact bytes for display. Bytes cross the wire in
-// exactly one place: the `getArtifact` → `artifact` round-trip (#197), which lets a
-// host fetch a produced artifact's exact bytes BY ID to export/save it (STL/3MF/…).
-// Bytes travel as a `Uint8Array` via structured clone — never base64 (VS Code
-// webview `postMessage` has revived typed arrays since ~1.57).
+// exactly two places: inbound, a project file's binary-asset `bytes` (#172), and
+// outbound, the `getArtifact` → `artifact` round-trip (#197) fetching a produced
+// artifact's exact bytes BY ID to save it. Bytes always travel as a `Uint8Array`
+// via structured clone — never base64 (VS Code webview `postMessage` has revived
+// typed arrays since ~1.57).
 
 import { isRecord, stampOutbound, type ProtocolErrorCode } from './envelope.ts';
 import type { ArtifactRef, OperationResult, ProjectFile } from './session-contract.ts';
@@ -70,7 +71,13 @@ function err(code: ProtocolErrorCode, reason: string): SessionValidation {
   return { ok: false, code, reason };
 }
 
-/** Validate a `ProjectFile[]` payload: shape + the DoS caps. */
+/**
+ * Validate a `ProjectFile[]` payload: shape + the DoS caps. Each file is text
+ * (`content`, editable) OR a binary asset (`bytes` as a `Uint8Array` via
+ * structured clone, #172) — exactly one of the two. The size budget mixes
+ * UTF-16 code units (text) and bytes (binary); it is a pre-filter, not the real
+ * enforcer (`ProjectStore` re-validates paths; the engine owns the FS budget).
+ */
 function readProjectFiles(value: unknown): SessionValidation | { files: ProjectFile[] } {
   if (!Array.isArray(value)) return err('invalid-payload', 'files must be an array');
   if (value.length > SESSION_MAX_FILES) return err('too-large', 'too many files');
@@ -79,11 +86,30 @@ function readProjectFiles(value: unknown): SessionValidation | { files: ProjectF
   for (const entry of value) {
     if (!isRecord(entry)) return err('invalid-payload', 'each file must be an object');
     const path = readString(entry.path);
-    const content = readString(entry.content);
-    if (path === undefined || content === undefined) {
-      return err('invalid-payload', 'file path and content must be strings');
-    }
+    if (path === undefined) return err('invalid-payload', 'file path must be a string');
     if (path.length > SESSION_MAX_PATH_LENGTH) return err('too-large', 'a file path is too long');
+    const hasContent = entry.content !== undefined;
+    const hasBytes = entry.bytes !== undefined;
+    if (hasContent === hasBytes) {
+      return err('invalid-payload', 'each file must have exactly one of content or bytes');
+    }
+    if (hasBytes) {
+      const bytes = entry.bytes; // read once — validate and forward one value
+      if (!(bytes instanceof Uint8Array)) {
+        return err('invalid-payload', 'file bytes must be a Uint8Array');
+      }
+      if (bytes.byteLength > SESSION_MAX_FILE_LENGTH) {
+        return err('too-large', 'a file is too large');
+      }
+      total += bytes.byteLength + path.length;
+      if (total > SESSION_MAX_TOTAL_LENGTH) {
+        return err('too-large', 'project exceeds the size limit');
+      }
+      files.push({ path, bytes });
+      continue;
+    }
+    const content = readString(entry.content);
+    if (content === undefined) return err('invalid-payload', 'file content must be a string');
     if (content.length > SESSION_MAX_FILE_LENGTH) return err('too-large', 'a file is too large');
     total += content.length + path.length;
     if (total > SESSION_MAX_TOTAL_LENGTH) return err('too-large', 'project exceeds the size limit');

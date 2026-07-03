@@ -5,7 +5,7 @@ export type { ProjectFile };
 /**
  * The host-drivable project + lifecycle operations a session exposes (#123, Gate
  * B). Typed methods over the same `params.sources` / `activePath` state the
- * editor uses — text files first (#121). Each mutation funnels through one
+ * editor uses — editable text and binary assets (#121/#172). Each mutation funnels through one
  * `mutate` then drives a recompile; terminal results are observed via the Model's
  * `'operation'` event (correlated on `operationId`), not return values, matching
  * the fire-and-recompile shape of every compile-triggering method.

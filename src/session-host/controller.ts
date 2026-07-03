@@ -98,10 +98,11 @@ export class SessionController {
           break;
       }
     } catch (e) {
-      // ProjectStore throws synchronously on an unsafe / binary-overwrite path
-      // (ProjectPathError); surface it as a protocol error rather than letting it
-      // escape the transport's message pump. Skip if a `dispose` command's teardown
-      // threw — the transport is already gone.
+      // Defensive: `Model` catches contract errors internally (ProjectPathError →
+      // state.error, invisible on the wire — a known gap), so this only fires for
+      // a genuinely escaping throw; surface it rather than letting it kill the
+      // transport's message pump. Skip if a `dispose` command's teardown threw —
+      // the transport is already gone.
       if (this.disposed) return;
       this.transport.send(sessionError('invalid-payload', String((e as Error)?.message ?? e)));
     }

@@ -349,7 +349,8 @@ export class Model extends EventTarget {
   // state the editor uses. Each funnels through one `mutate` (one revision bump,
   // one 'state' event) then drives `processSource`, so the existing supersession
   // + revision-stale-drop machinery keeps a superseded in-flight compile from
-  // clobbering the result. Text files only for now (binary is deferred — #121).
+  // clobbering the result. Files are editable text or binary assets (#172);
+  // `updateFile` stays text-only — a binary change re-pushes via `setProject`.
 
   /** Replace the whole project with `files`, selecting `entryPoint` (or the
    *  main.scad→first-.scad→first rule) as the active file. */

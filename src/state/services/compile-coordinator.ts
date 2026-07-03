@@ -120,7 +120,8 @@ export class CompileCoordinator {
           throw new UserFacingOperationError({
             message:
               `Asset not available: ${source.path}. It is referenced by the model but ` +
-              `its bytes are not in this session (a shared link does not carry binary assets).`,
+              `its bytes are not in this session (for example, a shared link does not ` +
+              `carry binary assets).`,
           });
         }
       }),

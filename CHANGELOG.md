@@ -27,6 +27,17 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ### Added
 
+- Binary project assets in the multi-file contract (#172): `setProject` files
+  are now `{path, content}` (editable text) **or** `{path, bytes}` — a binary
+  asset's exact bytes as a `Uint8Array` (never base64), landing as a
+  content-less `local` source whose bytes live on the session FS and are
+  materialized into the compile request when referenced (ADR 0006). A project
+  that `import()`s an `.stl`/`surface()`s a `.dat` can now be pushed whole over
+  the wire — a binary entry point renders too, via the engine's own `import()`
+  wrapper (#121). `bytes` at a text-suffix path must be valid UTF-8 and become
+  an ordinary text source (hosts may read everything as buffers; invalid bytes
+  at a text path reject atomically instead of silently corrupting).
+  `updateFile` stays text-only (re-push binary changes via `setProject`).
 - L1 session protocol **v2**: `getArtifact { artifactId, requestId }` →
   `artifact { requestId, available, artifact?, bytes? }` (#197). A host can now
   fetch a produced artifact's exact bytes by its immutable id (ADR 0008) to save

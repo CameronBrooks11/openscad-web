@@ -312,8 +312,13 @@ The handshake is the same shape as §4: wait for `ready` (its `capabilities` are
 inbound command names) and assert `protocolVersion === SESSION_PROTOCOL_VERSION`
 before sending. Then **drive a project** rather than push geometry:
 
-- **Host → session:** `setProject { files:[{path,content}], entryPoint? }`,
-  `updateFile { path, content }`, `removeFile { path }`, `setEntryPoint { path }`,
+- **Host → session:** `setProject { files, entryPoint? }` where each file is
+  `{path, content}` (editable text) **or** `{path, bytes}` (a binary asset's
+  exact bytes as a `Uint8Array` — #172; e.g. an `.stl` referenced via
+  `import()`; a binary entry point renders via the engine's `import()` wrapper;
+  `bytes` at a text-suffix path must be valid UTF-8 and are treated as text),
+  `updateFile { path, content }` (text-only — re-push binary
+  changes via `setProject`), `removeFile { path }`, `setEntryPoint { path }`,
   `getArtifact { artifactId, requestId }`, `cancel`, `dispose`.
 - **Session → host:** `ready`, `operation-result { result }` (a **push stream** —
   one edit fans out to multiple terminal results; correlate by the nested

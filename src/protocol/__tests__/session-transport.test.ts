@@ -63,6 +63,76 @@ describe('validateSessionInbound', () => {
     expect(ok({ type: 'setProject', files: [] })).toMatchObject({ ok: true });
   });
 
+  it('accepts binary project files (bytes as Uint8Array) and enforces one-of content|bytes (#172)', () => {
+    const bytes = Uint8Array.from([1, 2, 3]);
+    expect(
+      ok({
+        type: 'setProject',
+        files: [
+          { path: '/home/main.scad', content: 'import("part.stl");' },
+          { path: '/home/part.stl', bytes },
+        ],
+      }),
+    ).toEqual({
+      ok: true,
+      message: {
+        type: 'setProject',
+        files: [
+          { path: '/home/main.scad', content: 'import("part.stl");' },
+          { path: '/home/part.stl', bytes },
+        ],
+      },
+    });
+    // exactly one of content | bytes
+    expect(ok({ type: 'setProject', files: [{ path: '/a', content: 'x', bytes }] })).toMatchObject({
+      ok: false,
+      code: 'invalid-payload',
+    });
+    expect(ok({ type: 'setProject', files: [{ path: '/a' }] })).toMatchObject({
+      ok: false,
+      code: 'invalid-payload',
+    });
+    // bytes must be a genuine Uint8Array, not an array/ArrayBuffer/base64 string
+    expect(ok({ type: 'setProject', files: [{ path: '/a', bytes: [1, 2, 3] }] })).toMatchObject({
+      ok: false,
+      code: 'invalid-payload',
+    });
+    expect(
+      ok({ type: 'setProject', files: [{ path: '/a', bytes: new ArrayBuffer(3) }] }),
+    ).toMatchObject({ ok: false, code: 'invalid-payload' });
+  });
+
+  it('enforces the byte caps on binary files (per-file and total)', () => {
+    const tooLarge = { ok: false, code: 'too-large' };
+    const maxBytes = new Uint8Array(SESSION_MAX_FILE_LENGTH);
+    expect(
+      ok({
+        type: 'setProject',
+        files: [{ path: '/a', bytes: new Uint8Array(SESSION_MAX_FILE_LENGTH + 1) }],
+      }),
+    ).toMatchObject(tooLarge);
+    // two max-size binaries exceed the total budget
+    expect(
+      ok({
+        type: 'setProject',
+        files: [
+          { path: '/a', bytes: maxBytes },
+          { path: '/b', bytes: maxBytes },
+        ],
+      }),
+    ).toMatchObject(tooLarge);
+    // mixed text + binary share one budget
+    expect(
+      ok({
+        type: 'setProject',
+        files: [
+          { path: '/a', content: 'x'.repeat(SESSION_MAX_FILE_LENGTH) },
+          { path: '/b', bytes: maxBytes },
+        ],
+      }),
+    ).toMatchObject(tooLarge);
+  });
+
   it('rejects malformed setProject payloads', () => {
     expect(ok({ type: 'setProject', files: 'nope' })).toMatchObject({
       ok: false,
