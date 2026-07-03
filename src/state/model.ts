@@ -338,17 +338,16 @@ export class Model extends EventTarget {
 
   /**
    * Export the current model as `format` (#216, the wire-drivable variant of
-   * `export()`): select the format, then run the standard export flow. A
-   * dimensionality mismatch (e.g. `svg` for a 3D model) terminates as an
-   * export-kind FAILURE on the operation stream rather than silently exporting
-   * the other dimensionality's configured format — a wire host observes results,
-   * not state, so silence would strand it. Pre-compile (`is2D` unknown) the
-   * model is treated as 3D, matching the export flow's own routing.
+   * `export()`). The format travels as an explicit argument — NEVER via the
+   * persisted `exportFormat2D/3D` settings, which would silently flip subsequent
+   * 2D previews' render format. Every rejection terminates as an export-kind
+   * FAILURE on the operation stream — a wire host observes results, not state,
+   * so silence would strand it: `no-output` before any completed compile
+   * (exports convert the LAST completed output), `export-format-mismatch` for
+   * the wrong dimensionality.
    */
   exportArtifact(format: ExportFormat): void {
-    const want2D = is2DFormatExtension(format);
-    const is2D = !!this.state.is2D;
-    if (want2D !== is2D) {
+    const fail = (code: string, reason: string) =>
       this.dispatchEvent(
         new CustomEvent('operation', {
           detail: operationFailure(
@@ -361,18 +360,28 @@ export class Model extends EventTarget {
               diagnostics: [],
               logText: '',
             },
-            'export-format-mismatch',
-            `cannot export ${format}: the current model is ${is2D ? '2D' : '3D'}`,
+            code,
+            reason,
           ),
         }),
       );
+    if (!this.state.output) {
+      fail(
+        'no-output',
+        'nothing to export yet: exports convert the last completed output — wait for a success result first',
+      );
       return;
     }
-    this.mutate((s) => {
-      if (want2D) s.params.exportFormat2D = format as keyof typeof VALID_EXPORT_FORMATS_2D;
-      else s.params.exportFormat3D = format as keyof typeof VALID_EXPORT_FORMATS_3D;
-    });
-    void this.exportService.export();
+    const want2D = is2DFormatExtension(format);
+    const is2D = !!this.state.is2D;
+    if (want2D !== is2D) {
+      fail(
+        'export-format-mismatch',
+        `cannot export ${format}: the current model is ${is2D ? '2D' : '3D'}`,
+      );
+      return;
+    }
+    void this.exportService.export(format);
   }
 
   /** Creates a new empty .scad file in /home/ and activates it. */

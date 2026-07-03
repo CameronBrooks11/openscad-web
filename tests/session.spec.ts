@@ -61,6 +61,13 @@ async function embedSession(page: Page): Promise<void> {
   );
 }
 
+async function postToSession(page: Page, message: object): Promise<void> {
+  await page.evaluate((msg) => {
+    const frame = document.getElementById('session-frame') as HTMLIFrameElement;
+    frame.contentWindow!.postMessage(msg, window.location.origin);
+  }, message);
+}
+
 test.describe('session distributable (#193)', () => {
   test.skip(!sessionServed, 'requires E2E_SERVER_MODE=session (dist-session served)');
 

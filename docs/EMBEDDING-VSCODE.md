@@ -339,11 +339,23 @@ after the result you want), or its blob read failed.
 **Exporting STL/3MF/GLB** (#216): send `export { format }` — the terminal arrives
 on the push stream as a `kind: 'export'` result (fire-and-observe, like the
 mutation commands). On success it carries the converted artifact's `ArtifactRef`;
-fetch the bytes with `getArtifact` and save them. The session exports the current
-model's dimensionality — a mismatched request (e.g. `svg` for a 3D model)
-terminates as an export-kind **failure** result (`export-format-mismatch`), never
-silence. The in-page download side effect and the 3MF multimaterial picker are
-disabled in the session artifact (the host owns saving; default colors apply).
+fetch the bytes with `getArtifact` and save them. Semantics a host should know:
+
+- An export converts the **last completed output**; its
+  `ArtifactRef.sourceRevision` is that geometry's revision (compare it against
+  your latest push to detect "exported before the new preview landed"). Before
+  any completed compile, `export` fails with `no-output` — wait for a success
+  result first.
+- A dimensionality mismatch (e.g. `svg` for a 3D model) terminates as an
+  export-kind **failure** (`export-format-mismatch`), never silence. The
+  request's format is per-request only — it does not alter the session's
+  preview settings.
+- Exports derive from **preview-quality** geometry (`$preview = true`): a model
+  that gates detail on `$preview` exports its preview variant. A wire command
+  for full-render exports is a tracked follow-up in epic #179.
+- The in-page download side effect and the 3MF multimaterial picker are
+  disabled in the session artifact (the host owns saving; default colors
+  apply).
 
 One transport note: typed arrays only survive VS Code's webview `postMessage`
 when the consuming extension declares `engines.vscode >= 1.57` (VS Code gates
