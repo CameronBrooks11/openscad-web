@@ -6,6 +6,15 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-07-03
+
+The live-session release: the compile-capable `dist-session` distributable is
+now fully host-drivable over the Layer-1 wire (protocol **v2**) — push a
+multi-file project (text + binary assets), observe the result stream, trigger
+exports, and fetch artifact bytes by id. This is the upstream half of the VS
+Code extension's live `.scad` preview + export (epic #179; consumer epic
+openscad-web-vscode#8).
+
 ### Fixed
 
 - Export (found by #216's adversarial review; all three pre-existing in the app
