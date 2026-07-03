@@ -67,7 +67,7 @@ export type SessionInbound =
   | { type: 'updateFile'; path: string; content: string }
   | { type: 'removeFile'; path: string }
   | { type: 'setEntryPoint'; path: string }
-  | { type: 'export'; format: SessionExportFormat }
+  | { type: 'export'; format: SessionExportFormat; requestId?: string }
   | { type: 'getArtifact'; artifactId: string; requestId: string }
   | { type: 'cancel' }
   | { type: 'dispose' };
@@ -180,12 +180,28 @@ export function validateSessionInbound(data: unknown): SessionValidation {
     case 'export': {
       // Fire-and-observe like the mutation commands: the terminal arrives on the
       // push stream as a `kind: 'export'` OperationResult (success with an
-      // ArtifactRef to then fetch via getArtifact, or a failure).
+      // ArtifactRef to then fetch via getArtifact, or a failure). The optional
+      // `requestId` is echoed on that terminal (#223) so a host can correlate a
+      // specific export with its result under supersession — recommended.
       const format = readString(data.format);
       if (format === undefined || !(SESSION_EXPORT_FORMATS as readonly string[]).includes(format)) {
         return err('invalid-payload', `format must be one of ${SESSION_EXPORT_FORMATS.join(', ')}`);
       }
-      return { ok: true, message: { type: 'export', format: format as SessionExportFormat } };
+      const requestId = data.requestId === undefined ? undefined : readString(data.requestId);
+      if (data.requestId !== undefined && requestId === undefined) {
+        return err('invalid-payload', 'requestId must be a string');
+      }
+      if (requestId !== undefined && requestId.length > SESSION_MAX_ID_LENGTH) {
+        return err('too-large', 'an id is too long');
+      }
+      return {
+        ok: true,
+        message: {
+          type: 'export',
+          format: format as SessionExportFormat,
+          ...(requestId !== undefined ? { requestId } : {}),
+        },
+      };
     }
     case 'getArtifact': {
       // Unlike the push-stream commands, this is a correlated request/response:

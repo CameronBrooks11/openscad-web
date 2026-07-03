@@ -100,7 +100,7 @@ export class ExportService {
    * mutates persistent state (which would silently flip subsequent 2D previews'
    * render format — and via the pass-through, could even mislabel the result).
    */
-  async export(requested?: ExportFormat) {
+  async export(requested?: ExportFormat, requestId?: string) {
     const { mutate, host } = this.ctx;
     // Claim the export token at entry — before any early return — so that EVERY
     // export (pass-through, picker, or async conversion) supersedes an in-flight
@@ -123,6 +123,9 @@ export class ExportService {
       elapsedMillis: 0,
       diagnostics: [],
       logText: '',
+      // Echo the initiating command's correlation id on EVERY terminal of this
+      // op — success, failure, cancelled, pass-through, picker (#223).
+      ...(requestId !== undefined ? { requestId } : {}),
       ...over,
     });
     // Cancel any in-flight conversion render so a superseding export — including

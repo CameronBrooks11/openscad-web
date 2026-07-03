@@ -23,6 +23,7 @@ declare global {
       result?: {
         status?: string;
         kind?: string;
+        requestId?: string;
         artifact?: { format?: string; artifactId?: string };
       };
       requestId?: string;
@@ -126,7 +127,12 @@ test.describe('session distributable (#193)', () => {
     // Export round-trip (#216 + #197): trigger a real STL export over the wire,
     // then fetch the produced artifact's exact bytes by id. This is the flow a
     // VS Code host uses to save STL/3MF to disk.
-    await postToSession(page, { protocolVersion, type: 'export', format: 'stl' });
+    await postToSession(page, {
+      protocolVersion,
+      type: 'export',
+      format: 'stl',
+      requestId: 'e2e-export-1',
+    });
     await page.waitForFunction(
       () =>
         window.__sessionMessages?.some(
@@ -134,6 +140,7 @@ test.describe('session distributable (#193)', () => {
             m?.type === 'operation-result' &&
             m?.result?.kind === 'export' &&
             m?.result?.status === 'success' &&
+            m?.result?.requestId === 'e2e-export-1' &&
             m?.result?.artifact?.format === 'stl',
         ),
       null,

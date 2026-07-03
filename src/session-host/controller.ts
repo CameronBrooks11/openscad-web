@@ -29,8 +29,9 @@ export interface SessionHost {
   setEntryPoint(path: string): void;
   /** Export the current model as `format` (#216). Fire-and-observe: the terminal
    *  lands on the operation stream as a `kind: 'export'` result (success with an
-   *  ArtifactRef, or a failure — e.g. a dimensionality mismatch). */
-  exportArtifact(format: SessionExportFormat): void;
+   *  ArtifactRef, or a failure — e.g. a dimensionality mismatch), echoing
+   *  `requestId` when the command carried one (#223). */
+  exportArtifact(format: SessionExportFormat, requestId?: string): void;
   cancel(): void;
   dispose(): void;
   /** Subscribe to terminal operation results (the Model's `'operation'` stream);
@@ -93,7 +94,7 @@ export class SessionController {
           this.session.setEntryPoint(msg.path);
           break;
         case 'export':
-          this.session.exportArtifact(msg.format);
+          this.session.exportArtifact(msg.format, msg.requestId);
           break;
         case 'getArtifact':
           void this.sendArtifact(msg.requestId, msg.artifactId);

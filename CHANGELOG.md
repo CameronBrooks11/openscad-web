@@ -6,6 +6,16 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-07-03
+
+### Added
+
+- Export correlation (#223): `export { format, requestId? }` — the optional id
+  is echoed on every terminal of that export operation (success, failure,
+  cancelled; the `OperationResult` base gains an optional `requestId`).
+  Additive to protocol v2; hosts should always send one, since a superseded
+  export's late terminal is otherwise indistinguishable from the current one's.
+
 ## [0.3.1] - 2026-07-03
 
 ### Fixed
