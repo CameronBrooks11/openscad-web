@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CompileCoordinator } from '../compile-coordinator.ts';
+import { UserFacingOperationError } from '../../../user-facing-errors.ts';
 import type { ServiceContext } from '../service-context.ts';
 import { ArtifactStore } from '../../artifact-store.ts';
 import type { OperationResult } from '../../../runner/compile-contract.ts';
@@ -286,24 +287,61 @@ describe('CompileCoordinator terminal OperationResult (ADR 0008 slice 4)', () =>
     expect(results[0].operationId).not.toBe(results[1].operationId);
   });
 
-  it('the 2D/3D dimension retry is a distinct second operation (two results, two ids)', async () => {
+  it('the 2D/3D dimension retry emits ONE terminal — the retry owns the request (#219)', async () => {
     const { ctx, results } = makeContext(1);
-    // The first render logs a dimension mismatch via the streams callback, which
-    // triggers exactly one retry (a recursive render with its own operationId).
+    // The first render logs a dimension mismatch via the streams callback; the
+    // wrong-dimension attempt must emit and commit NOTHING (a correlated host
+    // would otherwise see a spurious first terminal for its requestId).
     renderImpl.mockImplementationOnce((renderArgs: { streamsCallback: (p: unknown) => void }) => {
       renderArgs.streamsCallback({ stderr: 'Current top level object is not a 3D object.' });
       return Promise.resolve(renderOutput(1));
     });
     renderImpl.mockResolvedValueOnce(renderOutput(1));
 
-    await new CompileCoordinator(ctx).render({ isPreview: false, now: true });
+    await new CompileCoordinator(ctx).render({ isPreview: false, now: true, requestId: 'rq-dim' });
     // The retry is dispatched without await (fire-and-return), so let its own
     // async commit settle before asserting.
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(results).toHaveLength(2);
-    expect(results.every((r) => r.status === 'success')).toBe(true);
-    expect(results[0].operationId).not.toBe(results[1].operationId);
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('success');
+    expect(results[0].requestId).toBe('rq-dim');
+  });
+
+  it('a mismatch FAILURE also retries without a spurious terminal, reading the job-local log (#219)', async () => {
+    const { ctx, results } = makeContext(1);
+    renderImpl.mockRejectedValueOnce(
+      new UserFacingOperationError({
+        message: 'render failed',
+        logText: 'Current top level object is not a 3D object.',
+      }),
+    );
+    renderImpl.mockResolvedValueOnce(renderOutput(1));
+
+    await new CompileCoordinator(ctx).render({ isPreview: false, now: true, requestId: 'rq-f' });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('success');
+    expect(results[0].requestId).toBe('rq-f');
+  });
+
+  it('a superseded render terminates as cancelled carrying its requestId (#219/#223)', async () => {
+    const { ctx, results } = makeContext(1);
+    let resolveFirst: (v: unknown) => void = () => {};
+    renderImpl.mockReturnValueOnce(new Promise((r) => (resolveFirst = r)));
+    renderImpl.mockResolvedValueOnce(renderOutput(1));
+    const coord = new CompileCoordinator(ctx);
+
+    const first = coord.render({ isPreview: false, now: true, requestId: 'rq-old' });
+    const second = coord.render({ isPreview: false, now: true, requestId: 'rq-new' });
+    resolveFirst(renderOutput(1));
+    await Promise.all([first, second]);
+
+    const cancelled = results.find((r) => r.status === 'cancelled');
+    const success = results.find((r) => r.status === 'success');
+    expect(cancelled?.requestId).toBe('rq-old');
+    expect(success?.requestId).toBe('rq-new');
   });
 
   it('checkSyntax emits one success result with no artifact', async () => {

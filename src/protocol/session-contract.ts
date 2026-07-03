@@ -77,10 +77,10 @@ interface OperationResultBase {
   logText: string;
   /**
    * Echo of the initiating command's `requestId`, on every terminal of the
-   * operation it started (#223). Today only `export { requestId? }` threads
-   * one through; absent for operations the session started itself (auto
-   * previews/syntax checks) or when the command carried none. Additive —
-   * optional, so the L1 payload version is unchanged.
+   * operation it started (#223). The `export` (#216) and `render` (#219)
+   * commands thread one through; absent for operations the session started
+   * itself (auto previews/syntax checks) or when the command carried none.
+   * Additive — optional, so the L1 payload version is unchanged.
    */
   requestId?: string;
 }

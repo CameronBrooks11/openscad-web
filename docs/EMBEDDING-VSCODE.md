@@ -319,7 +319,9 @@ before sending. Then **drive a project** rather than push geometry:
   `bytes` at a text-suffix path must be valid UTF-8 and are treated as text),
   `updateFile { path, content }` (text-only — re-push binary
   changes via `setProject`), `removeFile { path }`, `setEntryPoint { path }`,
-  `render { requestId? }` (a FULL `$preview = false` render — #219),
+  `render { requestId? }` (a FULL `$preview = false` render — #219; before any
+  `setProject` it fails with a `no-project` result rather than rendering the
+  default model),
   `export { format, requestId? }` (`stl`/`off`/`glb`/`3mf`/`svg`/`dxf` — #216/#223),
   `getArtifact { artifactId, requestId }`, `cancel`, `dispose`.
 - **Session → host:** `ready`, `operation-result { result }` (a **push stream** —
