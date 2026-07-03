@@ -376,6 +376,16 @@ when the consuming extension declares `engines.vscode >= 1.57` (VS Code gates
 buffer serialization per extension); older declarations silently mangle the
 bytes.
 
+**Version pairing:** additive protocol-v2 features (`requestId` echoes, the
+`project-ack`, targeted cancel) degrade SILENTLY against an older session
+bundle — a `requestId`'d `setProject` never acks (indistinguishable from a slow
+session) and a targeted `cancel` becomes cancel-everything. Always pair the
+vendored bundle with the manifest it shipped with (the extension's atomic
+re-vendor does this); never mix a new host with a cached older bundle. Also
+note the rejected-push detection needs a PRIOR ack as baseline: a rejected
+FIRST push acks the boot revision and is detectable only by the absence of any
+results at a new revision.
+
 > Compiling arbitrary `.scad` runs the full OpenSCAD engine on host-supplied input.
 > Push only files the user opened/trusts; the protocol caps file count/size, but
 > the compiler itself is the trust boundary.
