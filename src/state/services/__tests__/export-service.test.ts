@@ -335,6 +335,35 @@ describe('ExportService', () => {
     expect(success?.requestId).toBe('req-B');
   });
 
+  it('targeted cancel only affects the export carrying that requestId (#226)', async () => {
+    const { ctx, host, getState, results } = makeCtx({
+      is2D: false,
+      exportFormat3D: 'stl',
+      output: fileOutput('m.off'),
+    });
+    const svc = new ExportService(ctx);
+    const inner = vi.fn().mockResolvedValue({
+      outFile: new File(['ok'], 'a.stl'),
+      logText: '',
+      markers: [],
+      elapsedMillis: 1,
+    });
+    mockRenderExport.mockReturnValueOnce(inner);
+
+    const p = svc.export('stl', 'rq-exp'); // suspended at the input read
+    svc.cancel('rq-other'); // wrong id → export must proceed
+    await p;
+    expect(results.at(-1)?.status).toBe('success');
+    expect(host.download).toHaveBeenCalledTimes(1);
+
+    // Matching id cancels pre-spawn, exactly like an untargeted cancel.
+    const p2 = svc.export('stl', 'rq-exp2');
+    svc.cancel('rq-exp2');
+    await p2;
+    expect(results.at(-1)?.status).toBe('cancelled');
+    expect(getState().exporting).toBe(false);
+  });
+
   it('treats a superseded (cancelled) export as supersession, not a user-facing error', async () => {
     const { ctx, host, getState } = makeCtx({
       is2D: false,

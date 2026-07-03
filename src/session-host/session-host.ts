@@ -14,7 +14,7 @@ export function sessionHostOf(session: OpenScadSession): SessionHost {
     setEntryPoint: (path) => session.setEntryPoint(path),
     render: (requestId) => session.render(requestId),
     exportArtifact: (format, requestId) => session.exportArtifact(format, requestId),
-    cancel: () => session.cancel(),
+    cancel: (requestId) => session.cancel(requestId),
     dispose: () => session.dispose(),
     onOperation: (handler) => {
       const listener = (e: Event) => handler((e as CustomEvent<OperationResult>).detail);

@@ -96,9 +96,10 @@ export class OpenScadSession implements ProjectContract {
     this.model.exportArtifact(format, requestId);
   }
 
-  /** Cancel this session's in-flight compile/export operations (#123). */
-  cancel(): void {
-    this.model.cancel();
+  /** Cancel in-flight operations (#123): all of them, or — with `requestId`
+   *  (#226) — only the operation started by the command carrying that id. */
+  cancel(requestId?: string): void {
+    this.model.cancel(requestId);
   }
 
   /** Tear the session down: stop persistence timers and terminate the worker.

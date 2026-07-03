@@ -68,12 +68,17 @@ export class ExportService {
     });
   }
 
-  /** Cancel an in-flight format-conversion render (best-effort, #123). The killed
-   *  job rejects with an expected cancellation, so the existing catch emits one
-   *  terminal `cancelled` result and clears the exporting spinner. The mark also
-   *  covers the pre-spawn window (reading the conversion input is async now):
-   *  an export cancelled before its job exists checks the mark after the read. */
-  cancel(): void {
+  /** Cancel an in-flight export (best-effort, #123). The killed job rejects
+   *  with an expected cancellation, so the existing catch emits one terminal
+   *  `cancelled` result and clears the exporting spinner. The mark also covers
+   *  the pre-spawn window (reading the conversion input is async): an export
+   *  cancelled before its job exists checks the mark after the read.
+   *
+   *  With `requestId` (#226) only the export started by the command carrying
+   *  that id is cancelled — a mismatching id no-ops (that export is already
+   *  superseded or was never ours to kill). */
+  cancel(requestId?: string): void {
+    if (requestId !== undefined && requestId !== this._latestRequestId) return;
     this._cancelledToken = this._exportSeq;
     this._activeRender?.kill();
   }
@@ -81,6 +86,9 @@ export class ExportService {
   /** The export token cancel() was called against (-1 = none) — lets an export
    *  that has not yet spawned its job observe the cancellation. */
   private _cancelledToken = -1;
+  /** The correlation id of the LATEST export invocation (undefined when it
+   *  carried none) — the target a `cancel { requestId }` must match (#226). */
+  private _latestRequestId: string | undefined;
 
   /** Route a terminal result to the optional sink, guarding the commit path: a
    *  throwing sink must never corrupt committed state or double-emit (ADR 0008).
@@ -108,6 +116,7 @@ export class ExportService {
     // `exporting` spinner so a superseded export can neither commit a stale
     // result nor leave the spinner stuck.
     const token = ++this._exportSeq;
+    this._latestRequestId = requestId;
     const isCurrent = () => this._exportSeq === token;
     const operationId = newId(); // one per export() invocation (ADR 0008)
     // The status-independent fields for this export's single terminal result. The

@@ -514,9 +514,9 @@ export class Model extends EventTarget {
   /** Cancel in-flight compile and export operations on this session (#123).
    *  Best-effort: each cancelled job surfaces one terminal `cancelled`
    *  OperationResult (via the 'operation' event) and clears its spinner. */
-  cancel(): void {
-    this.compile.cancel();
-    this.exportService.cancel();
+  cancel(requestId?: string): void {
+    this.compile.cancel(requestId);
+    this.exportService.cancel(requestId);
   }
 
   /** Extracts a ZIP archive into /home/ and activates the entry .scad. */

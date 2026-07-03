@@ -209,6 +209,19 @@ describe('validateSessionInbound', () => {
   it('accepts cancel and dispose', () => {
     expect(ok({ type: 'cancel' })).toEqual({ ok: true, message: { type: 'cancel' } });
     expect(ok({ type: 'dispose' })).toEqual({ ok: true, message: { type: 'dispose' } });
+    // Targeted cancel (#226): optional requestId, validated when present.
+    expect(ok({ type: 'cancel', requestId: 'r-1' })).toEqual({
+      ok: true,
+      message: { type: 'cancel', requestId: 'r-1' },
+    });
+    expect(ok({ type: 'cancel', requestId: 7 })).toMatchObject({
+      ok: false,
+      code: 'invalid-payload',
+    });
+    expect(ok({ type: 'cancel', requestId: 'x'.repeat(SESSION_MAX_ID_LENGTH + 1) })).toMatchObject({
+      ok: false,
+      code: 'too-large',
+    });
   });
 
   it('accepts render with an optional requestId (#219)', () => {

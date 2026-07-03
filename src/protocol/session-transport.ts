@@ -71,7 +71,7 @@ export type SessionInbound =
   | { type: 'render'; requestId?: string }
   | { type: 'export'; format: SessionExportFormat; requestId?: string }
   | { type: 'getArtifact'; artifactId: string; requestId: string }
-  | { type: 'cancel' }
+  | { type: 'cancel'; requestId?: string }
   | { type: 'dispose' };
 
 export type SessionValidation =
@@ -236,8 +236,22 @@ export function validateSessionInbound(data: unknown): SessionValidation {
       }
       return { ok: true, message: { type: 'getArtifact', artifactId, requestId } };
     }
-    case 'cancel':
-      return { ok: true, message: { type: 'cancel' } };
+    case 'cancel': {
+      // Optional target (#226): cancel ONLY the operation started by the
+      // command that carried this id (render #219 / export #216); without it,
+      // everything in flight is cancelled (the pre-#226 behavior).
+      const requestId = data.requestId === undefined ? undefined : readString(data.requestId);
+      if (data.requestId !== undefined && requestId === undefined) {
+        return err('invalid-payload', 'requestId must be a string');
+      }
+      if (requestId !== undefined && requestId.length > SESSION_MAX_ID_LENGTH) {
+        return err('too-large', 'an id is too long');
+      }
+      return {
+        ok: true,
+        message: { type: 'cancel', ...(requestId !== undefined ? { requestId } : {}) },
+      };
+    }
     case 'dispose':
       return { ok: true, message: { type: 'dispose' } };
     default:

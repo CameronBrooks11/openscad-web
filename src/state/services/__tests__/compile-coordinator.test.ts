@@ -344,6 +344,62 @@ describe('CompileCoordinator terminal OperationResult (ADR 0008 slice 4)', () =>
     expect(success?.requestId).toBe('rq-new');
   });
 
+  it('targeted cancel kills only the render carrying that requestId (#226)', async () => {
+    const { ctx, results } = makeContext(1);
+    let rejectFn: (e: unknown) => void = () => {};
+    const hang = new Promise((_res, rej) => (rejectFn = rej)) as Promise<unknown> & {
+      kill: () => void;
+    };
+    hang.kill = vi.fn(() => rejectFn(new Error('Cancelled')));
+    renderImpl.mockReturnValueOnce(hang);
+    const coord = new CompileCoordinator(ctx);
+
+    const p = coord.render({ isPreview: false, now: true, requestId: 'rq-target' });
+    await new Promise((r) => setTimeout(r, 0)); // let it reach the spawn
+    coord.cancel('rq-other'); // wrong id → must NOT kill
+    expect(hang.kill).not.toHaveBeenCalled();
+    coord.cancel('rq-target'); // right id → kills
+    expect(hang.kill).toHaveBeenCalledTimes(1);
+    await p;
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('cancelled');
+    expect(results[0].requestId).toBe('rq-target');
+  });
+
+  it('a targeted cancel during source materialization cancels pre-spawn (#226)', async () => {
+    const { ctx, results } = makeContext(1);
+    renderImpl.mockResolvedValueOnce(renderOutput(1)); // must never be consumed
+    const coord = new CompileCoordinator(ctx);
+
+    const p = coord.render({ isPreview: false, now: true, requestId: 'rq-early' });
+    coord.cancel('rq-early'); // lands before the job exists
+    await p;
+
+    expect(renderImpl).not.toHaveBeenCalled();
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe('cancelled');
+    expect(results[0].requestId).toBe('rq-early');
+  });
+
+  it('targeted cancel spares a render that carries NO requestId (auto previews survive, #226)', async () => {
+    const { ctx, results } = makeContext(1);
+    let resolveFn: (v: unknown) => void = () => {};
+    const hang = new Promise((res) => (resolveFn = res)) as Promise<unknown> & {
+      kill: () => void;
+    };
+    hang.kill = vi.fn();
+    renderImpl.mockReturnValueOnce(hang);
+    const coord = new CompileCoordinator(ctx);
+
+    const p = coord.render({ isPreview: true, now: true }); // an auto preview
+    coord.cancel('rq-whatever'); // targeted → must not touch it
+    expect(hang.kill).not.toHaveBeenCalled();
+    resolveFn(renderOutput(1));
+    await p;
+    expect(results[0].status).toBe('success');
+  });
+
   it('checkSyntax emits one success result with no artifact', async () => {
     const { ctx, results } = makeContext(1);
     checkSyntaxImpl.mockResolvedValue({ revision: 1, markers: [], logText: '' });
