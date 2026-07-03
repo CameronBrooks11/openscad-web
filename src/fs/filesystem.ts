@@ -4,6 +4,7 @@ import { getBrowserFS } from '../runtime/browserfs-runtime.ts';
 import { resolveRuntimeAssetUrl } from '../runtime/asset-urls.ts';
 import { fetchAssetBytes } from '../runtime/fetch-asset.ts';
 import { zipArchives, ZipArchive } from './zip-archives.generated.ts';
+import type { WorkerLibrary } from '../runner/worker-protocol.ts';
 import { isProbablyTextPath } from '../state/project-source.ts';
 
 // Re-export for consumers that need the type
@@ -141,6 +142,33 @@ export async function createEditorFS({
 // Demand-loaded library mounting
 // ---------------------------------------------------------------------------
 
+/** mkdir -p via the Node-compat sync API (BrowserFS InMemory supports sync). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mkdirpSync(fs: any, dir: string): void {
+  const parts = dir.split('/').filter(Boolean);
+  let cur = '';
+  for (const part of parts) {
+    cur += `/${part}`;
+    try {
+      fs.mkdirSync(cur);
+    } catch {
+      /* exists */
+    }
+  }
+}
+
+/** Recursive delete that tolerates an absent path (a removed runtime library
+ *  may never have been written in THIS worker's lifetime). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function removeTreeIfPresentSync(fs: any, path: string): void {
+  try {
+    fs.lstatSync(path);
+  } catch {
+    return; // absent
+  }
+  removeTreeSync(fs, path);
+}
+
 /** Parses `use <...>` and `include <...>` directives; returns the top-level library names. */
 const LIBRARY_DIRECTIVE_RE = /(?:use|include)\s*<([^>]+)>/g;
 
@@ -163,15 +191,79 @@ export function extractLibraryNames(source: string): string[] {
 export class LibraryMounter {
   private readonly mounted = new Set<string>();
   private readonly mounting = new Map<string, Promise<void>>();
+  /** Runtime user libraries (ADR 0010): names applied via applyRuntimeLibraries.
+   *  A runtime name SHADOWS the bundled archive of the same name entirely. */
+  private readonly runtime = new Set<string>();
+  /** Bundled library names referenced by the runtime libraries' own text files
+   *  (`use <BOSL2/…>` inside a user lib) — joined into every demand scan. */
+  private runtimeDeps = new Set<string>();
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   constructor(private readonly rootMFS: any) {}
 
+  /** The currently applied runtime library names (for per-job symlinking). */
+  runtimeNames(): ReadonlySet<string> {
+    return this.runtime;
+  }
+
+  /**
+   * Replace the FULL runtime user-library set (ADR 0010): delete every
+   * previously runtime-owned `/libraries/<name>` subtree, unmount any bundled
+   * ZipFS a new name shadows (restoring demand-mount eligibility when the
+   * shadow is later removed), then write the new files into the /libraries
+   * partition. Runs at job boundaries only (the worker guarantees that), so
+   * the multi-step replace is never observed torn. Returns the names that
+   * shadow a bundled archive with a CUSTOM symlink map — those libraries'
+   * include style changes under the shadow (runtime libs always get the
+   * default `/<name>` symlink) and the host should surface it.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  applyRuntimeLibraries(fs: any, libraries: WorkerLibrary[]): { customSymlinkShadows: string[] } {
+    for (const name of this.runtime) {
+      removeTreeIfPresentSync(fs, `/libraries/${name}`);
+    }
+    this.runtime.clear();
+    this.runtimeDeps = new Set<string>();
+    const customSymlinkShadows: string[] = [];
+    for (const lib of libraries) {
+      const bundled = zipArchives.find((a) => a.name === lib.name);
+      if (bundled && this.mounted.has(lib.name)) {
+        // The bundled archive is ALREADY mounted at this path — the shadow
+        // requires unmounting it, or the ZipFS keeps owning the subtree and
+        // the runtime files are unreachable.
+        try {
+          this.rootMFS.umount(bundled.mountPath);
+        } catch (e) {
+          console.error(`umount(${bundled.mountPath}) failed:`, e);
+        }
+        this.mounted.delete(lib.name);
+      }
+      if (bundled?.symlinks) customSymlinkShadows.push(lib.name);
+      for (const file of lib.files) {
+        const full = `/libraries/${lib.name}/${file.path}`;
+        mkdirpSync(fs, full.slice(0, full.lastIndexOf('/')));
+        if (file.bytes !== undefined) {
+          fs.writeBytes(full, file.bytes);
+        } else {
+          fs.writeFileSync(full, file.content ?? '');
+        }
+        if (typeof file.content === 'string') {
+          for (const dep of extractLibraryNames(file.content)) this.runtimeDeps.add(dep);
+        }
+      }
+      this.runtime.add(lib.name);
+    }
+    return { customSymlinkShadows };
+  }
+
   /**
    * Fetches and mounts a single library ZIP into the /libraries partition.
    * No-op if already mounted (session cache); concurrent calls share one mount.
+   * A runtime user library SHADOWS the bundled archive of the same name — the
+   * bundled zip is never fetched while the shadow is in place (ADR 0010).
    */
   private async fetchAndMount(name: string): Promise<void> {
+    if (this.runtime.has(name)) return;
     if (this.mounted.has(name)) return;
     const inFlight = this.mounting.get(name);
     if (inFlight) return inFlight;
@@ -211,9 +303,21 @@ export class LibraryMounter {
    * resolved set of mounted library names.
    */
   async mountDemandLibraries(sourceTexts: string[], extraNames: string[] = []): Promise<string[]> {
-    const needed = [...new Set([...sourceTexts.flatMap(extractLibraryNames), ...extraNames])];
+    // Every runtime library is included UNCONDITIONALLY (ADR 0010): symlinks
+    // are per-job and cheap, and sibling-dependency payloads (project uses A,
+    // A uses B) only work if unreferenced runtime names still resolve. The
+    // runtime libraries' own directive deps join the scan so a user lib that
+    // includes a BUNDLED library still demand-mounts it.
+    const needed = [
+      ...new Set([
+        ...sourceTexts.flatMap(extractLibraryNames),
+        ...extraNames,
+        ...this.runtime,
+        ...this.runtimeDeps,
+      ]),
+    ];
     await Promise.all(needed.map((n) => this.fetchAndMount(n)));
-    return needed.filter((n) => this.mounted.has(n));
+    return needed.filter((n) => this.mounted.has(n) || this.runtime.has(n));
   }
 
   /**
@@ -236,18 +340,30 @@ export async function symlinkLibraries(
   fs: any,
   prefix = '/libraries',
   cwd = '/',
-): Promise<void> {
+  runtimeNames: ReadonlySet<string> = new Set(),
+): Promise<string[]> {
+  const failures: string[] = [];
   const createSymlink = async (target: string, source: string) => {
     try {
       await fs.symlink(target, source);
     } catch (e) {
+      // Collected AND logged: for a runtime library the user explicitly
+      // pushed, a silently failed symlink is a silently dead library.
       console.error(`symlink(${target}, ${source}) failed: `, e);
+      failures.push(`symlink ${source} -> ${target} failed`);
     }
   };
 
   await Promise.all(
     archiveNames.map((n) =>
       (async () => {
+        // Runtime user libraries ALWAYS get the default `/<name>` directory
+        // symlink (ADR 0010) — a shadowed bundled archive's custom symlink map
+        // is never applied to runtime files.
+        if (runtimeNames.has(n)) {
+          await createSymlink(`${prefix}/${n}`, `${cwd === '/' ? '' : cwd}/${n}`);
+          return;
+        }
         const archive = zipArchives.find((a) => a.name === n);
         if (!archive) throw new Error(`Archive named ${n} not found in registry`);
         const { symlinks } = archive;
@@ -263,6 +379,7 @@ export async function symlinkLibraries(
       })(),
     ),
   );
+  return failures;
 }
 
 // ---------------------------------------------------------------------------

@@ -42,7 +42,21 @@ export type ConfigureRequest = {
   assetUrls?: Record<string, string>;
 };
 
-export type WorkerRequest = CompileRequest | CancelRequest | ConfigureRequest;
+/** One runtime user-library file (ADR 0010): a path RELATIVE to the library
+ *  root, as text or bytes. Validation happens host-side before this crosses. */
+export type WorkerLibraryFile = { path: string; content?: string; bytes?: Uint8Array };
+/** One runtime user library, keyed by its `use <Name/…>` token. */
+export type WorkerLibrary = { name: string; files: WorkerLibraryFile[] };
+
+/**
+ * Replace the FULL runtime user-library set (ADR 0010 / #195). Applied at the
+ * next job boundary (never mid-job); the host retains the set and re-sends it
+ * after `configure` whenever the worker is (re)created, so recycle is
+ * transparent.
+ */
+export type SetLibrariesRequest = { type: 'setLibraries'; libraries: WorkerLibrary[] };
+
+export type WorkerRequest = CompileRequest | CancelRequest | ConfigureRequest | SetLibrariesRequest;
 
 // Worker response types (worker → host)
 export type CompileStarted = { type: 'started'; id: string };
