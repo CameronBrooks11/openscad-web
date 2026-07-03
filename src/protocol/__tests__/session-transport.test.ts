@@ -29,6 +29,12 @@ describe('validateSessionInbound', () => {
       ok: false,
       code: 'unsupported-version',
     });
+    // A v1 host against the v2 session skews loudly (the extension re-vendors
+    // atomically, so this is the designed failure mode, not a compat path).
+    expect(validateSessionInbound({ protocolVersion: 1, type: 'cancel' })).toMatchObject({
+      ok: false,
+      code: 'unsupported-version',
+    });
     expect(ok({ type: 7 })).toMatchObject({ ok: false, code: 'malformed' });
     expect(ok({ type: 'nope' })).toMatchObject({ ok: false, code: 'unknown-type' });
   });

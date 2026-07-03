@@ -323,12 +323,22 @@ before sending. Then **drive a project** rather than push geometry:
 
 Geometry is **not** sent over the wire: the session renders it **in-process** into
 its embedded viewer. The `operation-result` carries an `artifact` _reference_
-(id + format), not bytes. To **export/save** a produced artifact (STL/3MF/OFF) to
-disk, send `getArtifact` with the reference's `artifactId` and a host-chosen
-`requestId` (protocol v2, #197): the reply echoes the `requestId` and carries the
-exact bytes as a **`Uint8Array`** via structured clone (never base64), or
-`available: false` if the id is unknown or was evicted from the small per-session
-LRU — so fetch promptly after the result you want to save.
+(id + format), not bytes. To **save a produced artifact** to disk, send
+`getArtifact` with the reference's `artifactId` and a host-chosen `requestId`
+(protocol v2, #197): the reply echoes the `requestId` and carries the exact bytes
+as a **`Uint8Array`** via structured clone (never base64), or `available: false`
+if the id is unknown, was evicted from the small per-session LRU (fetch promptly
+after the result you want), or its blob read failed.
+
+Two scoping notes:
+
+- `getArtifact` fetches bytes of artifacts the session **already produced** — OFF
+  for 3D compiles, SVG/DXF for 2D. There is **no wire command yet that triggers an
+  export operation** (STL/3MF/GLB conversion), so those formats are not reachable
+  over L1 until the export-trigger follow-up lands (tracked in epic #179).
+- Typed arrays only survive VS Code's webview `postMessage` when the consuming
+  extension declares `engines.vscode >= 1.57` (VS Code gates buffer serialization
+  per extension); older declarations silently mangle the bytes.
 
 > Compiling arbitrary `.scad` runs the full OpenSCAD engine on host-supplied input.
 > Push only files the user opened/trusts; the protocol caps file count/size, but

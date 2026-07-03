@@ -3,7 +3,7 @@
 // <osc-geometry-viewer> in ONE webview and binds them to the Layer-1 session
 // transport via the SessionController (#192). Geometry renders IN-PROCESS — the
 // controller sets the viewer's `offText` locally; nothing but the L1 protocol
-// crosses the wire (bytes only later, for export — #197).
+// crosses the wire (bytes only via the `getArtifact` reply, #197).
 //
 // Deliberately omits the app shell: no Monaco/editor, no service worker, no state
 // persistence. The host (a VS Code webview) owns the project lifecycle and drives

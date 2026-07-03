@@ -108,8 +108,9 @@ export class SessionController {
   };
 
   /** Answer `getArtifact` with the bytes, or `available: false` for an unknown/
-   *  evicted id OR a failed read — either way the host gets a terminal reply for
-   *  its `requestId` instead of a hang. */
+   *  evicted id OR a failed read — a live session always sends a terminal reply
+   *  for the `requestId`. (After dispose no reply is sent: the host initiated
+   *  teardown and the transport may already be gone.) */
   private async sendArtifact(requestId: string, artifactId: string): Promise<void> {
     let resolved: { artifact: ArtifactRef; bytes: Uint8Array } | undefined;
     try {

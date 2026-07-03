@@ -308,14 +308,15 @@ describe('SessionController', () => {
   it('getArtifact: no reply is sent after dispose', async () => {
     const { session, transport, controller } = setup();
     session.artifacts.set('a1', 'OFF 1');
-    session.useDeferredReads = false;
     transport.receive({
       protocolVersion: V,
       type: 'getArtifact',
       artifactId: 'a1',
       requestId: 'r1',
     });
-    controller.dispose(); // dispose before the async read resolves
+    // The async fake suspends at its `await`; disposing here lands inside the
+    // read window, before sendArtifact's continuation runs.
+    controller.dispose();
     const before = transport.sent.length;
     await flush();
     expect(transport.sent.length).toBe(before); // nothing sent post-dispose

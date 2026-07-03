@@ -180,24 +180,40 @@ export function sessionOperationResult(result: OperationResult) {
   return stampOutbound(SESSION_PROTOCOL_VERSION, 'operation-result', { result });
 }
 
+/** The correlated reply to `getArtifact` — exported so a host's vendored `.d.ts`
+ *  carries the exact reply shape instead of a hand-maintained mirror. */
+export type SessionArtifactReply =
+  | {
+      protocolVersion: number;
+      type: 'artifact';
+      requestId: string;
+      available: true;
+      artifact: ArtifactRef;
+      bytes: Uint8Array;
+    }
+  | { protocolVersion: number; type: 'artifact'; requestId: string; available: false };
+
 /**
  * Reply to `getArtifact` (#197): the artifact's immutable identity + its EXACT
- * bytes, or `available: false` when the id is unknown / evicted from the
- * per-session store (ADR 0008) / unreadable. Echoes the request's `requestId`.
- * The bytes ride structured clone as a `Uint8Array` — the one place bytes cross
- * this wire (display renders in-process and never does).
+ * bytes, or `available: false` when the id is unknown, evicted from the
+ * per-session store (ADR 0008), or its blob read failed. Echoes the request's
+ * `requestId`. The bytes ride structured clone as a `Uint8Array` — the one place
+ * bytes cross this wire (display renders in-process and never does).
  */
 export function sessionArtifact(
   requestId: string,
   resolved: { artifact: ArtifactRef; bytes: Uint8Array } | undefined,
-) {
-  return stampOutbound(
-    SESSION_PROTOCOL_VERSION,
-    'artifact',
-    resolved
-      ? { requestId, available: true, artifact: resolved.artifact, bytes: resolved.bytes }
-      : { requestId, available: false },
-  );
+): SessionArtifactReply {
+  return resolved
+    ? {
+        protocolVersion: SESSION_PROTOCOL_VERSION,
+        type: 'artifact',
+        requestId,
+        available: true,
+        artifact: resolved.artifact,
+        bytes: resolved.bytes,
+      }
+    : { protocolVersion: SESSION_PROTOCOL_VERSION, type: 'artifact', requestId, available: false };
 }
 
 /** A protocol-level rejection of an inbound message (validation failure). */
