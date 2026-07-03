@@ -6,6 +6,20 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-07-03
+
+### Fixed
+
+- Export conversion (STL/DXF/…) failed inside a VS Code webview: the worker
+  received the rendered output as a blob URL, whose origin can never match the
+  webview's asset-base origin under the external-source policy (blob URLs mint
+  under the webview's own opaque origin). The conversion input now ships as
+  plain content, which works on every host. Found by the extension's EDH
+  export test the moment v0.3.0 was vendored. Side effects: the accidental
+  2 MiB cap on conversion inputs (the URL fetch path's external-source limit)
+  is gone — conversions of large outputs now work — and `cancel()` during the
+  input read now cancels the export instead of silently no-op'ing.
+
 ## [0.3.0] - 2026-07-03
 
 The live-session release: the compile-capable `dist-session` distributable is
