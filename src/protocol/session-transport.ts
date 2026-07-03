@@ -94,17 +94,18 @@ function readProjectFiles(value: unknown): SessionValidation | { files: ProjectF
       return err('invalid-payload', 'each file must have exactly one of content or bytes');
     }
     if (hasBytes) {
-      if (!(entry.bytes instanceof Uint8Array)) {
+      const bytes = entry.bytes; // read once — validate and forward one value
+      if (!(bytes instanceof Uint8Array)) {
         return err('invalid-payload', 'file bytes must be a Uint8Array');
       }
-      if (entry.bytes.byteLength > SESSION_MAX_FILE_LENGTH) {
+      if (bytes.byteLength > SESSION_MAX_FILE_LENGTH) {
         return err('too-large', 'a file is too large');
       }
-      total += entry.bytes.byteLength + path.length;
+      total += bytes.byteLength + path.length;
       if (total > SESSION_MAX_TOTAL_LENGTH) {
         return err('too-large', 'project exceeds the size limit');
       }
-      files.push({ path, bytes: entry.bytes });
+      files.push({ path, bytes });
       continue;
     }
     const content = readString(entry.content);

@@ -157,18 +157,40 @@ export class ProjectStore {
   /**
    * Replace the whole project with `files` — editable text and/or binary assets
    * (#172) — selecting `entryPoint` as the active file (or the
-   * {@link selectEntryPath} rule when it is absent). All paths are validated and
-   * canonicalized up front, so a single unsafe path rejects the whole call
-   * before any file is written (atomic, like ZIP import); a requested entry
-   * that names a binary asset rejects too (a binary can't compile), while an
-   * absent/unknown one falls back to the rule as before. Binary
-   * files land as content-less `local` sources whose bytes live on the FS and
-   * are materialized into the compile request when referenced (ADR 0006). An
+   * {@link selectEntryPath} rule when it is absent/unknown). All paths are
+   * validated and canonicalized — and every `bytes` file classified — up front,
+   * so a single bad file rejects the whole call before anything is written
+   * (atomic, like ZIP import). Classification: `bytes` at a text-suffix path
+   * (`.scad`/`.svg`/…) must be valid UTF-8 and becomes an ordinary text source
+   * (hosts may read everything as buffers; invalid bytes at a text path reject
+   * rather than silently mojibake); other `bytes` land as content-less `local`
+   * sources whose bytes live on the FS and are materialized into the compile
+   * request when referenced (ADR 0006). A binary entry point is allowed — the
+   * engine renders non-`.scad` actives via its `import()` wrapper (#121). An
    * empty file list yields one fresh empty file so the "there is always an
    * active file" invariant holds.
    */
   setProject(files: ProjectFile[], entryPoint?: string): ProjectSnapshot {
-    const canon = files.map((f) => ({ ...f, path: canonicalProjectHomePath(f.path) }));
+    const utf8 = new TextDecoder('utf-8', { fatal: true });
+    const canon = files.map((f) => {
+      const path = canonicalProjectHomePath(f.path);
+      if (f.bytes === undefined) return { path, content: f.content };
+      if (isProbablyTextPath(path)) {
+        try {
+          return { path, content: utf8.decode(f.bytes) };
+        } catch {
+          throw new ProjectPathError(
+            `${path} has a text extension but its bytes are not valid UTF-8.`,
+          );
+        }
+      }
+      return { path, bytes: f.bytes };
+    });
+    if (canon.some((f) => f.bytes !== undefined) && !this.fs.writeBytes) {
+      // Fail loud and atomically: a silent no-op here would surface much later
+      // as a confusing compile-time "asset not available".
+      throw new ProjectPathError('This host filesystem cannot store binary assets.');
+    }
     const seen = new Set<string>();
     for (const f of canon) {
       if (seen.has(f.path)) throw new ProjectPathError(`Duplicate path in project: ${f.path}`);
@@ -177,20 +199,14 @@ export class ProjectStore {
     // Canonicalize the entry point up front too, so an unsafe entryPoint rejects
     // the whole call BEFORE any file is written (truly atomic, like ZIP import).
     const requested = entryPoint !== undefined ? canonicalProjectHomePath(entryPoint) : undefined;
-    if (
-      requested !== undefined &&
-      canon.some((f) => f.path === requested && f.bytes !== undefined)
-    ) {
-      throw new ProjectPathError(`entryPoint ${requested} is a binary asset and cannot compile.`);
-    }
     if (canon.length === 0) return this.newFile([]);
     const sources: SerializableSource[] = canon.map((f) => {
       if (f.bytes !== undefined) {
         this.writeBinaryFile(f.path, f.bytes);
         return { kind: 'local', path: f.path };
       }
-      this.writeTextFile(f.path, f.content);
-      return { kind: 'text', path: f.path, content: f.content };
+      this.writeTextFile(f.path, f.content!);
+      return { kind: 'text', path: f.path, content: f.content! };
     });
     const activePath =
       requested && sources.some((s) => s.path === requested)

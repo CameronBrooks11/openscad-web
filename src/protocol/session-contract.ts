@@ -39,7 +39,9 @@ export interface Diagnostic {
  * binary asset's exact bytes (e.g. an `.stl`/`.png` referenced via `import()` /
  * `surface()`). Bytes ride structured clone as a `Uint8Array` — never base64 —
  * and land as a content-less `local` source whose bytes live on the session FS
- * (ADR 0006). Exactly one of `content`/`bytes` per file.
+ * (ADR 0006). Exactly one of `content`/`bytes` per file. `bytes` at a
+ * text-suffix path must be valid UTF-8 and are treated as `content` (so a host
+ * may read every workspace file as a buffer and push uniformly).
  */
 export type ProjectFile =
   | { path: string; content: string; bytes?: never }

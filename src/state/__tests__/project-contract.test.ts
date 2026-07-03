@@ -89,9 +89,9 @@ function baseState(): State {
   } as State;
 }
 
-function makeModel(backend: FakeBackend) {
+function makeModel(backend: FakeBackend, fs: ProjectFileSystem = fakeFs) {
   const model = new Model(
-    fakeFs,
+    fs,
     baseState(),
     undefined,
     undefined,
@@ -178,10 +178,8 @@ describe('#123 multi-file project contract — headless end to end', () => {
     expect(wire!.content).toEqual(stlBytes);
   });
 
-  it('setProject rejects a binary entryPoint atomically (a binary cannot compile)', async () => {
+  it('a binary entryPoint is allowed — the engine renders it via its import wrapper (#121)', async () => {
     const { model, ops } = makeModel(new FakeBackend());
-    const before = model.state.params.sources;
-
     model.setProject(
       [
         { path: 'main.scad', content: 'cube(1);' },
@@ -190,14 +188,51 @@ describe('#123 multi-file project contract — headless end to end', () => {
       'part.stl',
     );
     await settle();
+    expect(model.state.params.activePath).toBe('/home/part.stl');
+    expect(ops.find((o) => o.status === 'success' && o.artifact)).toBeDefined();
+  });
 
-    // The whole call rejected before any mutation: sources unchanged, the error
-    // surfaced as a user-facing model error (the generic load message, with the
-    // specific reason in details — the standing mapping for 'model' ops), and
-    // no compile was driven.
+  it('an all-binary project with no entryPoint selects and renders the binary (the implicit door)', async () => {
+    const { model, ops } = makeModel(new FakeBackend());
+    model.setProject([{ path: 'part.stl', bytes: Uint8Array.from([1, 2, 3]) }]);
+    await settle();
+    expect(model.state.params.activePath).toBe('/home/part.stl');
+    expect(model.state.params.sources).toEqual([{ kind: 'local', path: '/home/part.stl' }]);
+    expect(ops.find((o) => o.status === 'success' && o.artifact)).toBeDefined();
+  });
+
+  it('bytes at a text-suffix path decode to an ordinary text source; invalid UTF-8 rejects atomically', async () => {
+    const { model, ops } = makeModel(new FakeBackend());
+    model.setProject([{ path: 'main.scad', bytes: new TextEncoder().encode('cube(2);') }]);
+    await settle();
+    // Valid UTF-8 at .scad → a text source, exactly as if pushed as content.
+    expect(model.state.params.sources).toEqual([
+      { kind: 'text', path: '/home/main.scad', content: 'cube(2);' },
+    ]);
+    expect(ops.find((o) => o.status === 'success' && o.artifact)).toBeDefined();
+
+    // Invalid UTF-8 at a text path rejects the whole push (no silent mojibake).
+    const before = model.state.params.sources;
+    model.setProject([{ path: 'other.scad', bytes: Uint8Array.from([0xff, 0xfe, 0x00, 0xff]) }]);
+    await settle();
     expect(model.state.params.sources).toBe(before);
-    expect(model.state.error).toBeDefined();
-    expect(model.state.errorDetails).toMatch(/binary asset/);
+    expect(model.state.errorDetails).toMatch(/not valid UTF-8/);
+  });
+
+  it('a truly-binary push on a filesystem without writeBytes rejects loudly up front', async () => {
+    const noBytesFs = {
+      readFileSync: () => new Uint8Array(),
+      writeFile: () => {},
+    } as unknown as ProjectFileSystem;
+    const { model, ops } = makeModel(new FakeBackend(), noBytesFs);
+    const before = model.state.params.sources;
+    model.setProject([
+      { path: 'main.scad', content: 'import("p.stl");' },
+      { path: 'p.stl', bytes: Uint8Array.from([1]) },
+    ]);
+    await settle();
+    expect(model.state.params.sources).toBe(before);
+    expect(model.state.errorDetails).toMatch(/cannot store binary assets/);
     expect(ops).toEqual([]);
   });
 
