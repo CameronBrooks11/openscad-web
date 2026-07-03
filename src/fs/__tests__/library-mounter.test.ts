@@ -267,3 +267,78 @@ describe('symlinkLibraries with runtime names (ADR 0010)', () => {
     expect(failures[0]).toMatch(/MyLib/);
   });
 });
+
+describe('applyRuntimeLibraries failure containment (#195 Phase A review)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('one failing library is skipped + cleaned up; the others still apply', () => {
+    const m = new LibraryMounter(fakeRoot());
+    const fs = fakeFs();
+    const goodBefore = { name: 'Good', files: [{ path: 'g.scad', content: '//' }] };
+    const bad = {
+      name: 'Bad',
+      files: [
+        { path: 'ok.scad', content: '//' },
+        { path: 'boom.scad', content: 'x' },
+      ],
+    };
+    const origWrite = fs.writeFileSync;
+    fs.writeFileSync = (p: string, c: string) => {
+      if (p.endsWith('boom.scad')) throw new Error('ENOTDIR');
+      origWrite(p, c);
+    };
+
+    const { failures } = m.applyRuntimeLibraries(fs, [goodBefore, bad]);
+
+    expect(failures).toEqual([{ name: 'Bad', reason: 'ENOTDIR' }]);
+    // The failing library's PARTIAL files were removed; it is not registered.
+    expect(fs.files.has('/libraries/Bad/ok.scad')).toBe(false);
+    expect([...m.runtimeNames()]).toEqual(['Good']);
+    expect(fs.files.has('/libraries/Good/g.scad')).toBe(true);
+  });
+
+  it('a failed umount aborts THAT library without touching the mount bookkeeping', async () => {
+    const root = {
+      mount: vi.fn(),
+      umount: vi.fn(() => {
+        throw new Error('umount failed');
+      }),
+    };
+    const m = new LibraryMounter(root);
+    await m.mountDemandLibraries(['use <demo/x.scad>']); // bundled demo mounted
+    const { failures } = m.applyRuntimeLibraries(fakeFs(), [{ name: 'demo', files: [] }]);
+    expect(failures[0]).toMatchObject({ name: 'demo' });
+    // Bookkeeping intact: demo still counts as mounted (the ZipFS still owns
+    // the path), and it is NOT registered as a runtime library.
+    expect([...m.runtimeNames()]).toEqual([]);
+    const mounted = await m.mountDemandLibraries(['use <demo/x.scad>']);
+    expect(mounted).toEqual(['demo']); // still served by the bundled mount
+    expect(root.mount).toHaveBeenCalledTimes(1); // no re-mount attempted
+  });
+
+  it('text-suffix BYTES files feed the dep scan (ADR 0010 §5)', async () => {
+    const root = fakeRoot();
+    const m = new LibraryMounter(root);
+    const scad = 'use <demo/std.scad>';
+    m.applyRuntimeLibraries(fakeFs(), [
+      {
+        name: 'MyLib',
+        files: [{ path: 'util.scad', bytes: Uint8Array.from(scad, (c) => c.charCodeAt(0)) }],
+      },
+    ]);
+    const mounted = await m.mountDemandLibraries([]);
+    expect(mounted).toEqual(expect.arrayContaining(['MyLib', 'demo']));
+  });
+
+  it('runtimeDeps reset between applies (a replaced lib stops demanding its old deps)', async () => {
+    const root = fakeRoot();
+    const m = new LibraryMounter(root);
+    m.applyRuntimeLibraries(fakeFs(), [
+      { name: 'A', files: [{ path: 'a.scad', content: 'use <demo/x.scad>' }] },
+    ]);
+    m.applyRuntimeLibraries(fakeFs(), [{ name: 'A', files: [{ path: 'a.scad', content: '//' }] }]);
+    const mounted = await m.mountDemandLibraries([]);
+    expect(mounted).toEqual(['A']); // demo no longer demanded
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+});

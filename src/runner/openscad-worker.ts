@@ -175,16 +175,25 @@ async function runCompile(msg: CompileRequest): Promise<void> {
       // Job boundary: apply the latest runtime library set BEFORE the demand
       // scan, so this job sees a complete, consistent set (ADR 0010).
       if (pendingLibraries !== undefined) {
-        const { customSymlinkShadows } = editorFs.libraries.applyRuntimeLibraries(
-          editorFs.fs,
-          pendingLibraries,
-        );
+        // ONE attempt per set: clear the pending slot before applying, or a
+        // deterministic apply failure would re-run (and re-fail) at every
+        // future job boundary — permanently poisoning the engine.
+        const toApply = pendingLibraries;
         pendingLibraries = undefined;
+        const { customSymlinkShadows, failures } = editorFs.libraries.applyRuntimeLibraries(
+          editorFs.fs,
+          toApply,
+        );
         for (const name of customSymlinkShadows) {
           mergedOutputs.push({
             stderr:
               `[openscad-web] runtime library '${name}' shadows a bundled library that ` +
               `used custom root symlinks; the runtime copy resolves as '${name}/...' only.`,
+          });
+        }
+        for (const failure of failures) {
+          mergedOutputs.push({
+            stderr: `[openscad-web] runtime library '${failure.name}' failed to apply and was skipped: ${failure.reason}`,
           });
         }
       }

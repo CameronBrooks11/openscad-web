@@ -135,12 +135,27 @@ export async function createEditorFS({
   fs.writeBytes = (path: string, content: Uint8Array): void => {
     fs.writeFile(path, BfsBuffer.from(content));
   };
+  // Error-VISIBLE variant for callers that must observe write failures (the
+  // async form swallows them via BrowserFS's default no-op callback).
+  fs.writeBytesSync = (path: string, content: Uint8Array): void => {
+    fs.writeFileSync(path, BfsBuffer.from(content));
+  };
   return { fs, libraries: new LibraryMounter(rootMFS) };
 }
 
 // ---------------------------------------------------------------------------
 // Demand-loaded library mounting
 // ---------------------------------------------------------------------------
+
+/** Best-effort UTF-8 decode for directive scanning; undefined when invalid
+ *  (Phase B's wire validation already rejects invalid text-suffix bytes). */
+function safeDecodeUtf8(bytes: Uint8Array): string | undefined {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return undefined;
+  }
+}
 
 /** mkdir -p via the Node-compat sync API (BrowserFS InMemory supports sync). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -218,42 +233,65 @@ export class LibraryMounter {
    * default `/<name>` symlink) and the host should surface it.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  applyRuntimeLibraries(fs: any, libraries: WorkerLibrary[]): { customSymlinkShadows: string[] } {
+  applyRuntimeLibraries(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    fs: any,
+    libraries: WorkerLibrary[],
+  ): { customSymlinkShadows: string[]; failures: { name: string; reason: string }[] } {
     for (const name of this.runtime) {
       removeTreeIfPresentSync(fs, `/libraries/${name}`);
     }
     this.runtime.clear();
     this.runtimeDeps = new Set<string>();
     const customSymlinkShadows: string[] = [];
+    const failures: { name: string; reason: string }[] = [];
     for (const lib of libraries) {
-      const bundled = zipArchives.find((a) => a.name === lib.name);
-      if (bundled && this.mounted.has(lib.name)) {
-        // The bundled archive is ALREADY mounted at this path — the shadow
-        // requires unmounting it, or the ZipFS keeps owning the subtree and
-        // the runtime files are unreachable.
-        try {
+      // Exception-contained PER LIBRARY: one bad library (e.g. an FS-level
+      // path collision the wire validation cannot fully preclude) must fail
+      // alone — its partial subtree is removed, the failure is reported, and
+      // the other libraries still apply. A throw escaping here used to poison
+      // every subsequent compile (the worker retried the same set forever).
+      try {
+        const bundled = zipArchives.find((a) => a.name === lib.name);
+        if (bundled && this.mounted.has(lib.name)) {
+          // The bundled archive is ALREADY mounted at this path — the shadow
+          // requires unmounting it, or the read-only ZipFS keeps owning the
+          // subtree and every write below fails. An umount failure aborts
+          // THIS library (writing into the ZipFS would be worse).
           this.rootMFS.umount(bundled.mountPath);
-        } catch (e) {
-          console.error(`umount(${bundled.mountPath}) failed:`, e);
+          this.mounted.delete(lib.name);
         }
-        this.mounted.delete(lib.name);
+        if (bundled?.symlinks) customSymlinkShadows.push(lib.name);
+        for (const file of lib.files) {
+          const full = `/libraries/${lib.name}/${file.path}`;
+          mkdirpSync(fs, full.slice(0, full.lastIndexOf('/')));
+          if (file.bytes !== undefined) {
+            // Prefer the sync write (error-visible); the async writeBytes
+            // swallows failures via BrowserFS's default no-op callback.
+            if (fs.writeBytesSync) fs.writeBytesSync(full, file.bytes);
+            else fs.writeBytes(full, file.bytes);
+          } else {
+            fs.writeFileSync(full, file.content ?? '');
+          }
+          // Directive scan: text CONTENT, or bytes at a text-suffix path
+          // (ADR 0010 §5 — a .scad pushed as UTF-8 bytes still declares deps).
+          const text =
+            typeof file.content === 'string'
+              ? file.content
+              : file.bytes !== undefined && isProbablyTextPath(file.path)
+                ? safeDecodeUtf8(file.bytes)
+                : undefined;
+          if (text !== undefined) {
+            for (const dep of extractLibraryNames(text)) this.runtimeDeps.add(dep);
+          }
+        }
+        this.runtime.add(lib.name);
+      } catch (e) {
+        removeTreeIfPresentSync(fs, `/libraries/${lib.name}`);
+        failures.push({ name: lib.name, reason: e instanceof Error ? e.message : String(e) });
       }
-      if (bundled?.symlinks) customSymlinkShadows.push(lib.name);
-      for (const file of lib.files) {
-        const full = `/libraries/${lib.name}/${file.path}`;
-        mkdirpSync(fs, full.slice(0, full.lastIndexOf('/')));
-        if (file.bytes !== undefined) {
-          fs.writeBytes(full, file.bytes);
-        } else {
-          fs.writeFileSync(full, file.content ?? '');
-        }
-        if (typeof file.content === 'string') {
-          for (const dep of extractLibraryNames(file.content)) this.runtimeDeps.add(dep);
-        }
-      }
-      this.runtime.add(lib.name);
     }
-    return { customSymlinkShadows };
+    return { customSymlinkShadows, failures };
   }
 
   /**
