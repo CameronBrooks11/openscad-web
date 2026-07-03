@@ -69,9 +69,7 @@ test.describe('session distributable (#193)', () => {
     // Pin the wire version from the served manifest — the same way a real host
     // obtains it (EMBEDDING-VSCODE.md §6) — so this test tracks protocol bumps
     // instead of hardcoding one.
-    const manifest = await page.request.get(
-      new URL('session-manifest.json', baseUrl).toString(),
-    );
+    const manifest = await page.request.get(new URL('session-manifest.json', baseUrl).toString());
     const { protocolVersion } = (await manifest.json()) as { protocolVersion: number };
 
     await postToSession(page, {
