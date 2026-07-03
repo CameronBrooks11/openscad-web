@@ -31,8 +31,8 @@ class FakeSession implements SessionHost {
   setEntryPoint(path: string) {
     this.calls.push(`setEntryPoint:${path}`);
   }
-  exportArtifact(format: string) {
-    this.calls.push(`export:${format}`);
+  exportArtifact(format: string, requestId?: string) {
+    this.calls.push(`export:${format}:${requestId ?? ''}`);
   }
   cancel() {
     this.calls.push('cancel');
@@ -155,14 +155,14 @@ describe('SessionController', () => {
     transport.receive({ protocolVersion: V, type: 'updateFile', path: '/a', content: 'y' });
     transport.receive({ protocolVersion: V, type: 'removeFile', path: '/a' });
     transport.receive({ protocolVersion: V, type: 'setEntryPoint', path: '/a' });
-    transport.receive({ protocolVersion: V, type: 'export', format: 'stl' });
+    transport.receive({ protocolVersion: V, type: 'export', format: 'stl', requestId: 'r1' });
     transport.receive({ protocolVersion: V, type: 'cancel' });
     expect(session.calls).toEqual([
       'setProject:1:',
       'updateFile:/a',
       'removeFile:/a',
       'setEntryPoint:/a',
-      'export:stl',
+      'export:stl:r1',
       'cancel',
     ]);
   });

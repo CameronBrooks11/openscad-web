@@ -319,7 +319,7 @@ before sending. Then **drive a project** rather than push geometry:
   `bytes` at a text-suffix path must be valid UTF-8 and are treated as text),
   `updateFile { path, content }` (text-only — re-push binary
   changes via `setProject`), `removeFile { path }`, `setEntryPoint { path }`,
-  `export { format }` (`stl`/`off`/`glb`/`3mf`/`svg`/`dxf` — #216),
+  `export { format, requestId? }` (`stl`/`off`/`glb`/`3mf`/`svg`/`dxf` — #216/#223),
   `getArtifact { artifactId, requestId }`, `cancel`, `dispose`.
 - **Session → host:** `ready`, `operation-result { result }` (a **push stream** —
   one edit fans out to multiple terminal results; correlate by the nested
@@ -336,9 +336,11 @@ as a **`Uint8Array`** via structured clone (never base64), or `available: false`
 if the id is unknown, was evicted from the small per-session LRU (fetch promptly
 after the result you want), or its blob read failed.
 
-**Exporting STL/3MF/GLB** (#216): send `export { format }` — the terminal arrives
-on the push stream as a `kind: 'export'` result (fire-and-observe, like the
-mutation commands). On success it carries the converted artifact's `ArtifactRef`;
+**Exporting STL/3MF/GLB** (#216): send `export { format, requestId? }` — the
+terminal arrives on the push stream as a `kind: 'export'` result
+(fire-and-observe, like the mutation commands) **echoing your `requestId`**
+(#223). Always send one and correlate by it: without it, a superseded export's
+late terminal is indistinguishable from the current one's. On success it carries the converted artifact's `ArtifactRef`;
 fetch the bytes with `getArtifact` and save them. Semantics a host should know:
 
 - An export converts the **last completed output**; its

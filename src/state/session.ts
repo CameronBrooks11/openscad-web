@@ -66,8 +66,8 @@ export class OpenScadSession implements ProjectContract {
 
   /** Export the current model as `format` (#216); the terminal lands on the
    *  operation stream as a `kind: 'export'` result. */
-  exportArtifact(format: ExportFormat): void {
-    this.model.exportArtifact(format);
+  exportArtifact(format: ExportFormat, requestId?: string): void {
+    this.model.exportArtifact(format, requestId);
   }
 
   /** Cancel this session's in-flight compile/export operations (#123). */

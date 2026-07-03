@@ -346,7 +346,7 @@ export class Model extends EventTarget {
    * (exports convert the LAST completed output), `export-format-mismatch` for
    * the wrong dimensionality.
    */
-  exportArtifact(format: ExportFormat): void {
+  exportArtifact(format: ExportFormat, requestId?: string): void {
     const fail = (code: string, reason: string) =>
       this.dispatchEvent(
         new CustomEvent('operation', {
@@ -359,6 +359,7 @@ export class Model extends EventTarget {
               elapsedMillis: 0,
               diagnostics: [],
               logText: '',
+              ...(requestId !== undefined ? { requestId } : {}),
             },
             code,
             reason,
@@ -381,7 +382,7 @@ export class Model extends EventTarget {
       );
       return;
     }
-    void this.exportService.export(format);
+    void this.exportService.export(format, requestId);
   }
 
   /** Creates a new empty .scad file in /home/ and activates it. */

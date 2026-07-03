@@ -227,6 +227,18 @@ describe('validateSessionInbound', () => {
       ok: false,
       code: 'invalid-payload',
     });
+    // Optional correlation id (#223): forwarded when present, validated when given.
+    expect(ok({ type: 'export', format: 'stl', requestId: 'r-9' })).toEqual({
+      ok: true,
+      message: { type: 'export', format: 'stl', requestId: 'r-9' },
+    });
+    expect(ok({ type: 'export', format: 'stl', requestId: 7 })).toMatchObject({
+      ok: false,
+      code: 'invalid-payload',
+    });
+    expect(
+      ok({ type: 'export', format: 'stl', requestId: 'x'.repeat(SESSION_MAX_ID_LENGTH + 1) }),
+    ).toMatchObject({ ok: false, code: 'too-large' });
   });
 
   it('accepts getArtifact and requires string artifactId + requestId', () => {

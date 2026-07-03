@@ -75,6 +75,14 @@ interface OperationResultBase {
   /** Host-neutral markers (ADR 0001). */
   diagnostics: Diagnostic[];
   logText: string;
+  /**
+   * Echo of the initiating command's `requestId`, on every terminal of the
+   * operation it started (#223). Today only `export { requestId? }` threads
+   * one through; absent for operations the session started itself (auto
+   * previews/syntax checks) or when the command carried none. Additive —
+   * optional, so the L1 payload version is unchanged.
+   */
+  requestId?: string;
 }
 
 export interface OperationSuccess extends OperationResultBase {

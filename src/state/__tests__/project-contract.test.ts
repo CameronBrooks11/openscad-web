@@ -278,11 +278,15 @@ describe('#123 multi-file project contract — headless end to end', () => {
     await settle();
     expect(ops.find((o) => o.status === 'success' && o.artifact)).toBeDefined();
 
-    model.exportArtifact('stl');
+    model.exportArtifact('stl', 'req-42');
     await settle();
 
     const exported = ops.find((o) => o.kind === 'export');
     expect(exported).toBeDefined();
+    // The initiating command's correlation id is echoed on the terminal (#223);
+    // session-initiated results (the preview) carry none.
+    expect(exported!.requestId).toBe('req-42');
+    expect(ops.find((o) => o.kind === 'preview')?.requestId).toBeUndefined();
     expect(exported!.status).toBe('success');
     if (exported!.status === 'success') {
       expect(exported!.artifact?.format).toBe('stl');
@@ -364,11 +368,12 @@ describe('#123 multi-file project contract — headless end to end', () => {
     model.setProject([{ path: 'main.scad', content: 'cube(1);' }], 'main.scad');
     await settle();
 
-    model.exportArtifact('svg'); // 2D format, 3D model
+    model.exportArtifact('svg', 'req-7'); // 2D format, 3D model
     await settle();
 
     const exported = ops.find((o) => o.kind === 'export');
     expect(exported).toBeDefined();
+    expect(exported!.requestId).toBe('req-7'); // synthetic failures echo it too (#223)
     expect(exported!.status).toBe('error');
     if (exported!.status === 'error') {
       expect(exported!.code).toBe('export-format-mismatch');
