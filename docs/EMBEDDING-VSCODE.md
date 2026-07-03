@@ -312,7 +312,7 @@ The handshake is the same shape as §4: wait for `ready` (its `capabilities` are
 inbound command names) and assert `protocolVersion === SESSION_PROTOCOL_VERSION`
 before sending. Then **drive a project** rather than push geometry:
 
-- **Host → session:** `setProject { files, entryPoint? }` where each file is
+- **Host → session:** `setProject { files, entryPoint?, requestId? }` where each file is
   `{path, content}` (editable text) **or** `{path, bytes}` (a binary asset's
   exact bytes as a `Uint8Array` — #172; e.g. an `.stl` referenced via
   `import()`; a binary entry point renders via the engine's `import()` wrapper;
@@ -331,7 +331,10 @@ before sending. Then **drive a project** rather than push geometry:
   one edit fans out to multiple terminal results; correlate by the nested
   `result.operationId` / `kind` / `sourceRevision`, **not** 1:1 with commands),
   `artifact { requestId, available, artifact?, bytes? }` (the correlated reply to
-  `getArtifact`), and `error { code, reason }`.
+  `getArtifact`), `project-ack { requestId, sourceRevision }` (the reply to a
+  `setProject` that carried a `requestId` — #227: the engine's ASSIGNED revision
+  for that push; accept exactly the results carrying it, and detect a rejected
+  push by an unchanged revision), and `error { code, reason }`.
 
 Geometry is **not** sent over the wire: the session renders it **in-process** into
 its embedded viewer. The `operation-result` carries an `artifact` _reference_
@@ -372,6 +375,16 @@ One transport note: typed arrays only survive VS Code's webview `postMessage`
 when the consuming extension declares `engines.vscode >= 1.57` (VS Code gates
 buffer serialization per extension); older declarations silently mangle the
 bytes.
+
+**Version pairing:** additive protocol-v2 features (`requestId` echoes, the
+`project-ack`, targeted cancel) degrade SILENTLY against an older session
+bundle — a `requestId`'d `setProject` never acks (indistinguishable from a slow
+session) and a targeted `cancel` becomes cancel-everything. Always pair the
+vendored bundle with the manifest it shipped with (the extension's atomic
+re-vendor does this); never mix a new host with a cached older bundle. Also
+note the rejected-push detection needs a PRIOR ack as baseline: a rejected
+FIRST push acks the boot revision and is detectable only by the absence of any
+results at a new revision.
 
 > Compiling arbitrary `.scad` runs the full OpenSCAD engine on host-supplied input.
 > Push only files the user opened/trusts; the protocol caps file count/size, but

@@ -367,6 +367,13 @@ export class CompileCoordinator {
     retryInOtherDim ??= true;
     // A render and a preview own separate UI flags; track the latest of each so a
     // superseded call cannot turn off the spinner a newer call is still driving.
+    // A mark equal to THIS render's id at entry is necessarily stale (wire
+    // dispatch is synchronous, so a cancel for this command can only be
+    // processed after entry): clear it, or a reused id would self-cancel
+    // pre-spawn (#226 review — every targeted cancel used to poison its id).
+    if (requestId !== undefined && this._cancelledRenderRequestId === requestId) {
+      this._cancelledRenderRequestId = undefined;
+    }
     const token = isPreview ? ++this._previewSeq : ++this._renderSeq;
     const isCurrent = () => (isPreview ? this._previewSeq : this._renderSeq) === token;
     // One operation id per scheduler invocation (ADR 0008). The dimension retry

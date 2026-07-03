@@ -10,6 +10,7 @@ import {
   sessionArtifact,
   sessionError,
   sessionOperationResult,
+  sessionProjectAck,
   sessionReady,
   validateSessionInbound,
 } from '../session-transport.ts';
@@ -61,6 +62,18 @@ describe('validateSessionInbound', () => {
     });
     // entryPoint omitted is fine.
     expect(ok({ type: 'setProject', files: [] })).toMatchObject({ ok: true });
+    // Optional correlation id (#227): forwarded when present, validated when given.
+    expect(ok({ type: 'setProject', files: [], requestId: 'p-1' })).toEqual({
+      ok: true,
+      message: { type: 'setProject', files: [], requestId: 'p-1' },
+    });
+    expect(ok({ type: 'setProject', files: [], requestId: 9 })).toMatchObject({
+      ok: false,
+      code: 'invalid-payload',
+    });
+    expect(
+      ok({ type: 'setProject', files: [], requestId: 'x'.repeat(SESSION_MAX_ID_LENGTH + 1) }),
+    ).toMatchObject({ ok: false, code: 'too-large' });
   });
 
   it('accepts binary project files (bytes as Uint8Array) and enforces one-of content|bytes (#172)', () => {
@@ -372,6 +385,15 @@ describe('outbound builders', () => {
       type: 'artifact',
       requestId: 'r-2',
       available: false,
+    });
+  });
+
+  it('sessionProjectAck echoes the id with the assigned revision (#227)', () => {
+    expect(sessionProjectAck('p-1', 7)).toEqual({
+      protocolVersion: v,
+      type: 'project-ack',
+      requestId: 'p-1',
+      sourceRevision: 7,
     });
   });
 

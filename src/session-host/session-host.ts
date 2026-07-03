@@ -21,6 +21,7 @@ export function sessionHostOf(session: OpenScadSession): SessionHost {
       session.model.addEventListener('operation', listener);
       return () => session.model.removeEventListener('operation', listener);
     },
+    currentSourceRevision: () => session.model.getSourceRevision(),
     readArtifactText: async (artifactId) => {
       const stored = session.artifacts.get(artifactId);
       return stored ? stored.bytes.text() : undefined;

@@ -27,6 +27,7 @@ declare global {
         artifact?: { format?: string; artifactId?: string };
       };
       requestId?: string;
+      sourceRevision?: number;
       available?: boolean;
       artifact?: { format?: string };
       bytes?: Uint8Array;
@@ -97,10 +98,24 @@ test.describe('session distributable (#193)', () => {
             { path: 'assets/blob.bin', bytes: new Uint8Array([0xde, 0xad, 0xbe, 0xef]) },
           ],
           entryPoint: 'main.scad',
+          requestId: 'e2e-push-1',
         },
         window.location.origin,
       );
     }, protocolVersion);
+
+    // The push is acked with its assigned revision (#227) before any results.
+    await page.waitForFunction(
+      () =>
+        window.__sessionMessages?.some(
+          (m) =>
+            m?.type === 'project-ack' &&
+            m?.requestId === 'e2e-push-1' &&
+            typeof m?.sourceRevision === 'number',
+        ),
+      null,
+      { timeout: 30_000 },
+    );
 
     // A genuine WASM compile fans out to a success operation-result carrying an
     // OFF artifact (the render bridge also sets it on the embedded viewer, but the

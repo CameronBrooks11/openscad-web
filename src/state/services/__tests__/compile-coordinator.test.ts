@@ -400,6 +400,41 @@ describe('CompileCoordinator terminal OperationResult (ADR 0008 slice 4)', () =>
     expect(results[0].status).toBe('success');
   });
 
+  it('a killed render does not poison its id — a later render reusing it runs (#226 review)', async () => {
+    const { ctx, results } = makeContext(1);
+    let rejectFn: (e: unknown) => void = () => {};
+    const hang = new Promise((_res, rej) => (rejectFn = rej)) as Promise<unknown> & {
+      kill: () => void;
+    };
+    hang.kill = vi.fn(() => rejectFn(new Error('Cancelled')));
+    renderImpl.mockReturnValueOnce(hang);
+    renderImpl.mockResolvedValueOnce(renderOutput(1));
+    const coord = new CompileCoordinator(ctx);
+
+    const p1 = coord.render({ isPreview: false, now: true, requestId: 'rq-reuse' });
+    await new Promise((r) => setTimeout(r, 0));
+    coord.cancel('rq-reuse'); // kills post-spawn; the mark must not linger
+    await p1;
+
+    const p2 = coord.render({ isPreview: false, now: true, requestId: 'rq-reuse' });
+    await p2;
+    expect(renderImpl).toHaveBeenCalledTimes(2); // the reuse actually spawned
+    expect(results.map((r) => r.status)).toEqual(['cancelled', 'success']);
+  });
+
+  it('a targeted cancel AFTER an op finished does not cancel a future op with the same id (#226 review)', async () => {
+    const { ctx, results } = makeContext(1);
+    renderImpl.mockResolvedValueOnce(renderOutput(1));
+    renderImpl.mockResolvedValueOnce(renderOutput(1));
+    const coord = new CompileCoordinator(ctx);
+
+    await coord.render({ isPreview: false, now: true, requestId: 'rq-late' });
+    coord.cancel('rq-late'); // late no-op — nothing in flight
+    await coord.render({ isPreview: false, now: true, requestId: 'rq-late' });
+
+    expect(results.map((r) => r.status)).toEqual(['success', 'success']);
+  });
+
   it('checkSyntax emits one success result with no artifact', async () => {
     const { ctx, results } = makeContext(1);
     checkSyntaxImpl.mockResolvedValue({ revision: 1, markers: [], logText: '' });

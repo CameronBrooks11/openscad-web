@@ -364,6 +364,30 @@ describe('ExportService', () => {
     expect(getState().exporting).toBe(false);
   });
 
+  it('a targeted cancel for a SUPERSEDED export id no-ops (the newer export survives, #226)', async () => {
+    const { ctx, host, results } = makeCtx({
+      is2D: false,
+      exportFormat3D: 'stl',
+      output: fileOutput('m.off'),
+    });
+    const svc = new ExportService(ctx);
+    const secondInner = vi.fn().mockResolvedValue({
+      outFile: new File(['second'], 'second.stl'),
+      logText: '',
+      markers: [],
+      elapsedMillis: 1,
+    });
+    mockRenderExport.mockReturnValueOnce(secondInner);
+
+    const p1 = svc.export('stl', 'rq-old'); // superseded during its input read
+    const p2 = svc.export('stl', 'rq-new');
+    svc.cancel('rq-old'); // targets the superseded one → must not touch rq-new
+    await Promise.all([p1, p2]);
+
+    expect(host.download.mock.calls.map((c) => c[1])).toEqual(['second.stl']);
+    expect(results.find((r) => r.requestId === 'rq-new')?.status).toBe('success');
+  });
+
   it('treats a superseded (cancelled) export as supersession, not a user-facing error', async () => {
     const { ctx, host, getState } = makeCtx({
       is2D: false,
