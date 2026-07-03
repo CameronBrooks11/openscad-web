@@ -295,6 +295,31 @@ describe('#123 multi-file project contract — headless end to end', () => {
     }
   });
 
+  it('a full render terminates as kind:render echoing its requestId; export then converts it (#219)', async () => {
+    const { model, ops } = makeModel(new FakeBackend());
+    model.setProject([{ path: 'main.scad', content: 'cube(1);' }], 'main.scad');
+    await settle();
+
+    void model.render({ isPreview: false, now: true, requestId: 'rq-render' });
+    await settle();
+
+    const render = ops.find((o) => o.kind === 'render');
+    expect(render).toBeDefined();
+    expect(render!.status).toBe('success');
+    expect(render!.requestId).toBe('rq-render');
+    if (render!.status === 'success') {
+      expect(render!.artifact?.format).toBe('off');
+    }
+
+    // The render committed as the session output, so an export now converts
+    // render-quality geometry — the #219 flow: render -> export -> getArtifact.
+    model.exportArtifact('stl', 'rq-exp');
+    await settle();
+    const exported = ops.find((o) => o.kind === 'export');
+    expect(exported?.status).toBe('success');
+    expect(exported?.requestId).toBe('rq-exp');
+  });
+
   it('exportArtifact does not mutate the persisted format settings, and off pass-through works (#216 review)', async () => {
     const { model, ops } = makeModel(new FakeBackend());
     model.setProject([{ path: 'main.scad', content: 'cube(1);' }], 'main.scad');

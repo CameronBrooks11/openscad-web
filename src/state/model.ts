@@ -600,6 +600,7 @@ export class Model extends EventTarget {
     mountArchives?: boolean;
     now: boolean;
     retryInOtherDim?: boolean;
+    requestId?: string;
   }) {
     return this.compile.render(args);
   }

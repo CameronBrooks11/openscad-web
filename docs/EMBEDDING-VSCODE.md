@@ -319,6 +319,7 @@ before sending. Then **drive a project** rather than push geometry:
   `bytes` at a text-suffix path must be valid UTF-8 and are treated as text),
   `updateFile { path, content }` (text-only — re-push binary
   changes via `setProject`), `removeFile { path }`, `setEntryPoint { path }`,
+  `render { requestId? }` (a FULL `$preview = false` render — #219),
   `export { format, requestId? }` (`stl`/`off`/`glb`/`3mf`/`svg`/`dxf` — #216/#223),
   `getArtifact { artifactId, requestId }`, `cancel`, `dispose`.
 - **Session → host:** `ready`, `operation-result { result }` (a **push stream** —
@@ -352,9 +353,12 @@ fetch the bytes with `getArtifact` and save them. Semantics a host should know:
   export-kind **failure** (`export-format-mismatch`), never silence. The
   request's format is per-request only — it does not alter the session's
   preview settings.
-- Exports derive from **preview-quality** geometry (`$preview = true`): a model
-  that gates detail on `$preview` exports its preview variant. A wire command
-  for full-render exports is a tracked follow-up in epic #179.
+- By default exports derive from the last completed output — usually a
+  **preview** (`$preview = true`). For render-quality exports, send
+  `render { requestId? }` first (#219): its `kind: 'render'` terminal commits
+  render-quality geometry as the output (the embedded viewer shows it too),
+  and the following `export` converts THAT. Full renders can take much longer
+  than previews — budget the timeout accordingly.
 - The in-page download side effect and the 3MF multimaterial picker are
   disabled in the session artifact (the host owns saving; default colors
   apply).

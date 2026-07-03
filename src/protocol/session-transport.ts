@@ -46,6 +46,7 @@ export const SESSION_COMMANDS = [
   'updateFile',
   'removeFile',
   'setEntryPoint',
+  'render',
   'export',
   'getArtifact',
   'cancel',
@@ -67,6 +68,7 @@ export type SessionInbound =
   | { type: 'updateFile'; path: string; content: string }
   | { type: 'removeFile'; path: string }
   | { type: 'setEntryPoint'; path: string }
+  | { type: 'render'; requestId?: string }
   | { type: 'export'; format: SessionExportFormat; requestId?: string }
   | { type: 'getArtifact'; artifactId: string; requestId: string }
   | { type: 'cancel' }
@@ -176,6 +178,23 @@ export function validateSessionInbound(data: unknown): SessionValidation {
       if (path === undefined) return err('invalid-payload', 'path must be a string');
       if (path.length > SESSION_MAX_PATH_LENGTH) return err('too-large', 'path is too long');
       return { ok: true, message: { type: data.type, path } };
+    }
+    case 'render': {
+      // Full render (#219): $preview = false, render-quality geometry. The
+      // terminal is the existing kind:'render' result (echoing requestId); its
+      // OFF commits as the output, so a following `export` converts
+      // render-quality geometry.
+      const requestId = data.requestId === undefined ? undefined : readString(data.requestId);
+      if (data.requestId !== undefined && requestId === undefined) {
+        return err('invalid-payload', 'requestId must be a string');
+      }
+      if (requestId !== undefined && requestId.length > SESSION_MAX_ID_LENGTH) {
+        return err('too-large', 'an id is too long');
+      }
+      return {
+        ok: true,
+        message: { type: 'render', ...(requestId !== undefined ? { requestId } : {}) },
+      };
     }
     case 'export': {
       // Fire-and-observe like the mutation commands: the terminal arrives on the

@@ -64,6 +64,15 @@ export class OpenScadSession implements ProjectContract {
     this.model.setEntryPoint(path);
   }
 
+  /** Run a FULL render of the current model (#219) — `$preview = false`,
+   *  render-quality geometry. The terminal lands on the operation stream as a
+   *  `kind: 'render'` result echoing `requestId`; its OFF commits as the
+   *  session output, so a subsequent export converts render-quality geometry
+   *  (and the embedded viewer shows it). */
+  render(requestId?: string): void {
+    void this.model.render({ isPreview: false, now: true, requestId });
+  }
+
   /** Export the current model as `format` (#216); the terminal lands on the
    *  operation stream as a `kind: 'export'` result. */
   exportArtifact(format: ExportFormat, requestId?: string): void {

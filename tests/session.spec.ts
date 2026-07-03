@@ -124,6 +124,23 @@ test.describe('session distributable (#193)', () => {
     );
     expect(hadError).toBeFalsy();
 
+    // Full render (#219): trigger a render-quality compile over the wire and
+    // await its kind:'render' terminal (echoing our requestId). Its output is
+    // what the export below converts — render-quality, not preview-quality.
+    await postToSession(page, { protocolVersion, type: 'render', requestId: 'e2e-render-1' });
+    await page.waitForFunction(
+      () =>
+        window.__sessionMessages?.some(
+          (m) =>
+            m?.type === 'operation-result' &&
+            m?.result?.kind === 'render' &&
+            m?.result?.status === 'success' &&
+            m?.result?.requestId === 'e2e-render-1',
+        ),
+      null,
+      { timeout: 60_000 },
+    );
+
     // Export round-trip (#216 + #197): trigger a real STL export over the wire,
     // then fetch the produced artifact's exact bytes by id. This is the flow a
     // VS Code host uses to save STL/3MF to disk.

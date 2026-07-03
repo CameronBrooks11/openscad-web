@@ -6,6 +6,17 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-07-03
+
+### Added
+
+- Full render over the L1 wire (#219): new `render { requestId? }` command
+  drives the app's `$preview = false` render path; the terminal is the
+  existing `kind: 'render'` result (echoing `requestId`, #223 convention), its
+  render-quality OFF commits as the session output — so a following `export`
+  converts render-quality geometry and the embedded viewer displays it.
+  Additive to protocol v2.
+
 ## [0.3.2] - 2026-07-03
 
 ### Added

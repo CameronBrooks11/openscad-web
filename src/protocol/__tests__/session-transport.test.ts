@@ -211,6 +211,22 @@ describe('validateSessionInbound', () => {
     expect(ok({ type: 'dispose' })).toEqual({ ok: true, message: { type: 'dispose' } });
   });
 
+  it('accepts render with an optional requestId (#219)', () => {
+    expect(ok({ type: 'render' })).toEqual({ ok: true, message: { type: 'render' } });
+    expect(ok({ type: 'render', requestId: 'r-1' })).toEqual({
+      ok: true,
+      message: { type: 'render', requestId: 'r-1' },
+    });
+    expect(ok({ type: 'render', requestId: 7 })).toMatchObject({
+      ok: false,
+      code: 'invalid-payload',
+    });
+    expect(ok({ type: 'render', requestId: 'x'.repeat(SESSION_MAX_ID_LENGTH + 1) })).toMatchObject({
+      ok: false,
+      code: 'too-large',
+    });
+  });
+
   it('accepts export with a known format and rejects unknown/missing ones (#216)', () => {
     for (const format of ['stl', 'off', 'glb', '3mf', 'svg', 'dxf']) {
       expect(ok({ type: 'export', format })).toEqual({
@@ -276,6 +292,7 @@ describe('validateSessionInbound', () => {
       updateFile: { path: '/a', content: 'x' },
       removeFile: { path: '/a' },
       setEntryPoint: { path: '/a' },
+      render: {},
       export: { format: 'stl' },
       getArtifact: { artifactId: 'a', requestId: 'r' },
       cancel: {},

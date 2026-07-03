@@ -309,11 +309,15 @@ export class CompileCoordinator {
     mountArchives,
     now,
     retryInOtherDim,
+    requestId,
   }: {
     isPreview: boolean;
     mountArchives?: boolean;
     now: boolean;
     retryInOtherDim?: boolean;
+    /** Correlation id echoed on this operation's terminal (#219/#223) — set by
+     *  the wire's `render` command; absent for app/auto-triggered renders. */
+    requestId?: string;
   }) {
     mountArchives ??= true;
     retryInOtherDim ??= true;
@@ -338,6 +342,8 @@ export class CompileCoordinator {
       elapsedMillis: 0,
       diagnostics: [],
       logText: '',
+      // Echo the initiating command's correlation id on the terminal (#219).
+      ...(requestId !== undefined ? { requestId } : {}),
       ...over,
     });
     const setRendering = (s: State, value: boolean) => {
@@ -514,7 +520,8 @@ export class CompileCoordinator {
       }
       if (is2D === false || is3D === false) {
         this.ctx.mutate((s) => (s.is2D = !(is2D === false)));
-        this.render({ isPreview, now: true, retryInOtherDim: false });
+        // The retry produces the ACTUAL terminal for the request — keep its id.
+        this.render({ isPreview, now: true, retryInOtherDim: false, requestId });
         return;
       }
     }
