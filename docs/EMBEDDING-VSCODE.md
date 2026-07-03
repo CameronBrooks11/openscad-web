@@ -314,16 +314,31 @@ before sending. Then **drive a project** rather than push geometry:
 
 - **Host → session:** `setProject { files:[{path,content}], entryPoint? }`,
   `updateFile { path, content }`, `removeFile { path }`, `setEntryPoint { path }`,
-  `cancel`, `dispose`.
+  `getArtifact { artifactId, requestId }`, `cancel`, `dispose`.
 - **Session → host:** `ready`, `operation-result { result }` (a **push stream** —
   one edit fans out to multiple terminal results; correlate by the nested
   `result.operationId` / `kind` / `sourceRevision`, **not** 1:1 with commands),
-  and `error { code, reason }`.
+  `artifact { requestId, available, artifact?, bytes? }` (the correlated reply to
+  `getArtifact`), and `error { code, reason }`.
 
 Geometry is **not** sent over the wire: the session renders it **in-process** into
 its embedded viewer. The `operation-result` carries an `artifact` _reference_
-(id + format), not bytes; retrieving exported bytes (STL/3MF) to save to disk is a
-later, separate message (tracked by the export issue in the epic).
+(id + format), not bytes. To **save a produced artifact** to disk, send
+`getArtifact` with the reference's `artifactId` and a host-chosen `requestId`
+(protocol v2, #197): the reply echoes the `requestId` and carries the exact bytes
+as a **`Uint8Array`** via structured clone (never base64), or `available: false`
+if the id is unknown, was evicted from the small per-session LRU (fetch promptly
+after the result you want), or its blob read failed.
+
+Two scoping notes:
+
+- `getArtifact` fetches bytes of artifacts the session **already produced** — OFF
+  for 3D compiles, SVG/DXF for 2D. There is **no wire command yet that triggers an
+  export operation** (STL/3MF/GLB conversion), so those formats are not reachable
+  over L1 until the export-trigger follow-up lands (tracked in epic #179).
+- Typed arrays only survive VS Code's webview `postMessage` when the consuming
+  extension declares `engines.vscode >= 1.57` (VS Code gates buffer serialization
+  per extension); older declarations silently mangle the bytes.
 
 > Compiling arbitrary `.scad` runs the full OpenSCAD engine on host-supplied input.
 > Push only files the user opened/trusts; the protocol caps file count/size, but

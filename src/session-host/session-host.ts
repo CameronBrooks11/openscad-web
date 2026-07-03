@@ -23,5 +23,10 @@ export function sessionHostOf(session: OpenScadSession): SessionHost {
       const stored = session.artifacts.get(artifactId);
       return stored ? stored.bytes.text() : undefined;
     },
+    getArtifact: async (artifactId) => {
+      const stored = session.artifacts.get(artifactId);
+      if (!stored) return undefined;
+      return { artifact: stored.ref, bytes: new Uint8Array(await stored.bytes.arrayBuffer()) };
+    },
   };
 }

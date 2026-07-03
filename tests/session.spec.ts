@@ -66,8 +66,14 @@ test.describe('session distributable (#193)', () => {
   test('boots real WASM and renders a pushed project to an OFF artifact', async ({ page }) => {
     await embedSession(page);
 
+    // Pin the wire version from the served manifest — the same way a real host
+    // obtains it (EMBEDDING-VSCODE.md §6) — so this test tracks protocol bumps
+    // instead of hardcoding one.
+    const manifest = await page.request.get(new URL('session-manifest.json', baseUrl).toString());
+    const { protocolVersion } = (await manifest.json()) as { protocolVersion: number };
+
     await postToSession(page, {
-      protocolVersion: 1,
+      protocolVersion,
       type: 'setProject',
       files: [{ path: 'main.scad', content: 'cube([10, 10, 10]);' }],
       entryPoint: 'main.scad',

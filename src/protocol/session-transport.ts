@@ -7,18 +7,23 @@
 // in-process `ProjectContract` + the Model's `'operation'` event.
 //
 // Render is internal to the session webview (it embeds the viewer, #179), so this
-// protocol carries NO geometry/artifact bytes for display. Fetching an artifact's
-// bytes to export/save is a separate, later message (#197).
+// protocol carries NO geometry/artifact bytes for display. Bytes cross the wire in
+// exactly one place: the `getArtifact` → `artifact` round-trip (#197), which lets a
+// host fetch a produced artifact's exact bytes BY ID to export/save it (STL/3MF/…).
+// Bytes travel as a `Uint8Array` via structured clone — never base64 (VS Code
+// webview `postMessage` has revived typed arrays since ~1.57).
 
 import { isRecord, stampOutbound, type ProtocolErrorCode } from './envelope.ts';
-import type { OperationResult, ProjectFile } from './session-contract.ts';
+import type { ArtifactRef, OperationResult, ProjectFile } from './session-contract.ts';
 
 /**
  * Bump on any breaking change to the session INBOUND/OUTBOUND message shapes. This
  * is the session WIRE version — distinct from `L1_PROTOCOL_VERSION`, which versions
  * the nested `OperationResult` payload (ADR 0005: each binding owns its version).
+ *
+ * v2: added the `getArtifact` command + `artifact` reply (#197).
  */
-export const SESSION_PROTOCOL_VERSION = 1;
+export const SESSION_PROTOCOL_VERSION = 2;
 
 // DoS pre-filter caps (the host channel is trusted, but a runaway extension must
 // not OOM the worker). These mirror the engine's own caps in src/fs/project-path.ts
@@ -29,6 +34,8 @@ export const SESSION_MAX_FILE_LENGTH = 32 * 1024 * 1024;
 export const SESSION_MAX_FILES = 2048;
 export const SESSION_MAX_TOTAL_LENGTH = 64 * 1024 * 1024;
 export const SESSION_MAX_PATH_LENGTH = 4096;
+/** Cap for opaque ids (`artifactId` is a v4 UUID, `requestId` host-chosen). */
+export const SESSION_MAX_ID_LENGTH = 256;
 
 /** The inbound command types, advertised in `ready` so a host can feature-detect. */
 export const SESSION_COMMANDS = [
@@ -36,17 +43,19 @@ export const SESSION_COMMANDS = [
   'updateFile',
   'removeFile',
   'setEntryPoint',
+  'getArtifact',
   'cancel',
   'dispose',
 ] as const;
 
 /** Host → session. Mirrors `ProjectContract` (src/state/project-contract.ts) 1:1,
- *  plus `dispose` for worker teardown. */
+ *  plus `getArtifact` (bytes-by-id, #197) and `dispose` for worker teardown. */
 export type SessionInbound =
   | { type: 'setProject'; files: ProjectFile[]; entryPoint?: string }
   | { type: 'updateFile'; path: string; content: string }
   | { type: 'removeFile'; path: string }
   | { type: 'setEntryPoint'; path: string }
+  | { type: 'getArtifact'; artifactId: string; requestId: string }
   | { type: 'cancel' }
   | { type: 'dispose' };
 
@@ -130,6 +139,20 @@ export function validateSessionInbound(data: unknown): SessionValidation {
       if (path.length > SESSION_MAX_PATH_LENGTH) return err('too-large', 'path is too long');
       return { ok: true, message: { type: data.type, path } };
     }
+    case 'getArtifact': {
+      // Unlike the push-stream commands, this is a correlated request/response:
+      // the reply echoes `requestId`, so it is REQUIRED (a host with concurrent
+      // fetches could not otherwise route the replies).
+      const artifactId = readString(data.artifactId);
+      const requestId = readString(data.requestId);
+      if (artifactId === undefined || requestId === undefined) {
+        return err('invalid-payload', 'artifactId and requestId must be strings');
+      }
+      if (artifactId.length > SESSION_MAX_ID_LENGTH || requestId.length > SESSION_MAX_ID_LENGTH) {
+        return err('too-large', 'an id is too long');
+      }
+      return { ok: true, message: { type: 'getArtifact', artifactId, requestId } };
+    }
     case 'cancel':
       return { ok: true, message: { type: 'cancel' } };
     case 'dispose':
@@ -155,6 +178,42 @@ export function sessionReady(capabilities: readonly string[]) {
  */
 export function sessionOperationResult(result: OperationResult) {
   return stampOutbound(SESSION_PROTOCOL_VERSION, 'operation-result', { result });
+}
+
+/** The correlated reply to `getArtifact` — exported so a host's vendored `.d.ts`
+ *  carries the exact reply shape instead of a hand-maintained mirror. */
+export type SessionArtifactReply =
+  | {
+      protocolVersion: number;
+      type: 'artifact';
+      requestId: string;
+      available: true;
+      artifact: ArtifactRef;
+      bytes: Uint8Array;
+    }
+  | { protocolVersion: number; type: 'artifact'; requestId: string; available: false };
+
+/**
+ * Reply to `getArtifact` (#197): the artifact's immutable identity + its EXACT
+ * bytes, or `available: false` when the id is unknown, evicted from the
+ * per-session store (ADR 0008), or its blob read failed. Echoes the request's
+ * `requestId`. The bytes ride structured clone as a `Uint8Array` — the one place
+ * bytes cross this wire (display renders in-process and never does).
+ */
+export function sessionArtifact(
+  requestId: string,
+  resolved: { artifact: ArtifactRef; bytes: Uint8Array } | undefined,
+): SessionArtifactReply {
+  return resolved
+    ? {
+        protocolVersion: SESSION_PROTOCOL_VERSION,
+        type: 'artifact',
+        requestId,
+        available: true,
+        artifact: resolved.artifact,
+        bytes: resolved.bytes,
+      }
+    : { protocolVersion: SESSION_PROTOCOL_VERSION, type: 'artifact', requestId, available: false };
 }
 
 /** A protocol-level rejection of an inbound message (validation failure). */

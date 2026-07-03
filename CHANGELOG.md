@@ -27,6 +27,15 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ### Added
 
+- L1 session protocol **v2**: `getArtifact { artifactId, requestId }` →
+  `artifact { requestId, available, artifact?, bytes? }` (#197). A host can now
+  fetch a produced artifact's exact bytes by its immutable id (ADR 0008) to save
+  it to disk — the one place bytes cross the session wire (display still renders
+  in-process). Bytes travel as a `Uint8Array` via structured clone, never
+  base64; an unknown/evicted id or a failed blob read replies `available: false`
+  instead of hanging the request. Reachable formats today are what the session
+  produces (OFF for 3D, SVG/DXF for 2D) — an export-trigger command for
+  STL/3MF/GLB is a follow-up in epic #179.
 - L1 `SessionController` (`src/session-host/`, #192): the compile counterpart of
   `ViewerController` — binds a compiling `OpenScadSession` to a `Transport`,
   validates inbound session commands and drives the session's `ProjectContract`,
