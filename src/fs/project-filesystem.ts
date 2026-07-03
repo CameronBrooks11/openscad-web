@@ -18,6 +18,8 @@ export interface ProjectFileSystem {
    * as zeros). See ADR 0006.
    */
   writeBytes?(path: string, content: Uint8Array): void;
+  /** Error-visible sync byte write (the async form swallows failures). */
+  writeBytesSync?(path: string, content: Uint8Array): void;
   /**
    * Create a single directory. Optional because most consumers never need it;
    * the real BrowserFS-backed `FS` provides it. Callers create parents in order

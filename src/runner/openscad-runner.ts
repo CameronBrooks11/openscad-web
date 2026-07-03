@@ -14,6 +14,8 @@ import {
   CompileStdout,
   CompileStderr,
   MergedOutput,
+  type SetLibrariesRequest,
+  type WorkerLibrary,
 } from './worker-protocol.ts';
 
 export type MergedOutputs = MergedOutput[];
@@ -119,6 +121,10 @@ export interface CompileBackend {
   ): AbortablePromise<OpenSCADInvocationResults>;
   cancel(id: string, reason?: string): void;
   dispose(): void;
+  /** Replace the runtime user-library set (ADR 0010 / #195). The backend
+   *  retains it and replays it to the worker across recycles; applied at the
+   *  worker's next job boundary. Optional so fake/test backends keep working. */
+  setLibraries?(libraries: WorkerLibrary[]): void;
 }
 
 /**
@@ -166,6 +172,18 @@ export class WasmWorkerBackend implements CompileBackend {
     this.recycleWorker('Worker recycled after timeout');
   }
 
+  /** The retained runtime user-library set (ADR 0010), replayed to every
+   *  worker (re)creation — worker recycle wipes worker state, so the backend
+   *  is the durable owner. */
+  private librarySet: WorkerLibrary[] | undefined;
+
+  /** Replace the runtime user-library set; reaches the current worker now (if
+   *  any) and every future worker via the getWorker replay. */
+  setLibraries(libraries: WorkerLibrary[]): void {
+    this.librarySet = libraries;
+    this.worker?.postMessage({ type: 'setLibraries', libraries } satisfies SetLibrariesRequest);
+  }
+
   private getWorker(): Worker {
     if (!this.worker) {
       const generation = this.generation; // snapshot: pins this worker's identity
@@ -173,8 +191,15 @@ export class WasmWorkerBackend implements CompileBackend {
       this.worker.onmessage = (e: MessageEvent<WorkerResponse>) =>
         this.handleWorkerMessage(e, generation);
       this.worker.onerror = (e: ErrorEvent) => this.handleWorkerError(e);
-      // Inject the host-resolved asset base + wasm URL before any compile (#196).
+      // Inject the host-resolved asset base + wasm URL before any compile (#196),
+      // then replay the retained library set (recycle-transparent, ADR 0010).
       this.worker.postMessage(workerConfigPayload());
+      if (this.librarySet !== undefined) {
+        this.worker.postMessage({
+          type: 'setLibraries',
+          libraries: this.librarySet,
+        } satisfies SetLibrariesRequest);
+      }
     }
     return this.worker;
   }

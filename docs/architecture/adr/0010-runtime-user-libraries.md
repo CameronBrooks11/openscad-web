@@ -157,8 +157,12 @@ itself lives OUTSIDE `params`/the durable slice, see §7) and then drives
 - **Paths**: relative, normalized, no traversal/absolute/control characters
   (the `normalizeProjectPath` posture); bytes at text-suffix paths must be
   valid UTF-8 (#172 semantics).
-- **Duplicates**: duplicate names in one payload, or duplicate paths within
-  one library, reject atomically. Case-variant names/paths are permitted (the
+- **Duplicates and prefix conflicts**: duplicate names in one payload,
+  duplicate paths within one library, and a path that is a DIRECTORY PREFIX of
+  another (`a` next to `a/b.scad` — one must be a file and a directory at
+  once) all reject atomically. The apply layer additionally contains per-library
+  failures (a failing library is cleaned up and reported; the others still
+  apply) as defense in depth. Case-variant names/paths are permitted (the
   VFS is case-sensitive) — a documented divergence from native Windows
   OpenSCAD, where wrong-case directives resolve.
 - **Budgets**: a **separate pool** from the project push, with the same

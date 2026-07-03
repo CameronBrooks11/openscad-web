@@ -22,6 +22,7 @@ import {
   CompileStdout,
   CompileStderr,
   MergedOutput,
+  WorkerLibrary,
   WorkerRequest,
 } from './worker-protocol.ts';
 import { fetchSource } from '../utils.ts';
@@ -69,7 +70,11 @@ let editorFs: EditorFs | null = null;
  *   - /fonts      → BrowserFS /fonts     (ZipFS from fonts.zip, pre-loaded at init)
  * Then creates WASM FS symlinks so OpenSCAD can resolve `use <LibName/...>` from CWD.
  */
-async function ensureArchivesMounted(rt: OpenSCADRuntime, libraryNames: string[]): Promise<void> {
+async function ensureArchivesMounted(
+  rt: OpenSCADRuntime,
+  libraryNames: string[],
+  runtimeNames: ReadonlySet<string> = new Set(),
+): Promise<string[]> {
   const browserFS = await ensureWorkerBrowserFSLoaded();
   const BFS = new browserFS.EmscriptenFS(
     rt.FS,
@@ -90,8 +95,9 @@ async function ensureArchivesMounted(rt: OpenSCADRuntime, libraryNames: string[]
 
   // Create WASM FS symlinks so `use <MCAD/shapes.scad>` resolves from CWD /
   if (libraryNames.length > 0) {
-    await symlinkLibraries(libraryNames, rt.FS, '/libraries', '/');
+    return symlinkLibraries(libraryNames, rt.FS, '/libraries', '/', runtimeNames);
   }
+  return [];
 }
 
 // Compile jobs are serialized: the worker runs exactly one at a time. The async
@@ -101,8 +107,17 @@ async function ensureArchivesMounted(rt: OpenSCADRuntime, libraryNames: string[]
 // synchronous callMain cannot be interrupted (the host discards its result by id).
 const compileQueue = createSerialQueue<CompileRequest>((request) => runCompile(request));
 
+// The latest runtime user-library set, applied at the NEXT job boundary (ADR
+// 0010): applying mid-job would hand that job a torn, half-replaced set. The
+// host retains + re-sends the set after configure on every worker creation.
+let pendingLibraries: WorkerLibrary[] | undefined;
+
 self.addEventListener('message', (e: MessageEvent<WorkerRequest>) => {
   const msg = e.data;
+  if (msg.type === 'setLibraries') {
+    pendingLibraries = msg.libraries;
+    return;
+  }
   if (msg.type === 'configure') {
     appBaseUrl = msg.assetBase;
     wasmUrl = msg.wasmUrl;
@@ -157,6 +172,31 @@ async function runCompile(msg: CompileRequest): Promise<void> {
         .filter((p) => p.startsWith('/libraries/'))
         .map((p) => p.split('/')[2])
         .filter(Boolean);
+      // Job boundary: apply the latest runtime library set BEFORE the demand
+      // scan, so this job sees a complete, consistent set (ADR 0010).
+      if (pendingLibraries !== undefined) {
+        // ONE attempt per set: clear the pending slot before applying, or a
+        // deterministic apply failure would re-run (and re-fail) at every
+        // future job boundary — permanently poisoning the engine.
+        const toApply = pendingLibraries;
+        pendingLibraries = undefined;
+        const { customSymlinkShadows, failures } = editorFs.libraries.applyRuntimeLibraries(
+          editorFs.fs,
+          toApply,
+        );
+        for (const name of customSymlinkShadows) {
+          mergedOutputs.push({
+            stderr:
+              `[openscad-web] runtime library '${name}' shadows a bundled library that ` +
+              `used custom root symlinks; the runtime copy resolves as '${name}/...' only.`,
+          });
+        }
+        for (const failure of failures) {
+          mergedOutputs.push({
+            stderr: `[openscad-web] runtime library '${failure.name}' failed to apply and was skipped: ${failure.reason}`,
+          });
+        }
+      }
       const libraryMountStart = performance.now();
       libraryNames = await editorFs.libraries.mountDemandLibraries(sourceTexts, extraNames);
       perf.workerLibraryMountMillis = performance.now() - libraryMountStart;
@@ -170,7 +210,14 @@ async function runCompile(msg: CompileRequest): Promise<void> {
     measurePerf('osc:wasm-init', 'osc:wasm-init-start', 'osc:wasm-init-end');
 
     if (mountArchives) {
-      await ensureArchivesMounted(rt, libraryNames);
+      const linkFailures = await ensureArchivesMounted(
+        rt,
+        libraryNames,
+        editorFs!.libraries.runtimeNames(),
+      );
+      for (const failure of linkFailures) {
+        mergedOutputs.push({ stderr: `[openscad-web] ${failure}` });
+      }
     }
 
     // Fonts resolved from cwd/fonts (via /fonts mount point)

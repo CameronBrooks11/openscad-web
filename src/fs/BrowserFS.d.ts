@@ -9,6 +9,10 @@ declare interface FS {
    * convert through BrowserFS's own `Buffer` first. See ADR 0006.
    */
   writeBytes(path: string, content: Uint8Array): void;
+  /** Error-VISIBLE sync byte write (writeBytes swallows failures through
+   *  BrowserFS's default no-op callback). Installed by createEditorFS. */
+  writeBytesSync(path: string, content: Uint8Array): void;
+  writeFileSync(path: string, content: any): void;
   readdir(path: string, cb: (err: any, files: string[]) => void): void;
   readdirSync(path: string): string[];
   symlink(target: string, source: string): void;
