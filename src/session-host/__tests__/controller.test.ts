@@ -50,6 +50,25 @@ class FakeSession implements SessionHost {
       return new Promise<string | undefined>((res) => this.readDeferreds.set(id, res));
     return this.artifacts.get(id);
   }
+  async getArtifact(id: string) {
+    if (this.throwOnRead) throw new Error('blob read failed');
+    const text = this.artifacts.get(id);
+    if (text === undefined) return undefined;
+    return {
+      artifact: {
+        artifactId: id,
+        operationId: 'op',
+        sourceRevision: 1,
+        format: 'off',
+        mediaType: 'text/plain',
+        size: text.length,
+        name: 'out.off',
+      },
+      // Not TextEncoder: jsdom's returns a foreign-realm Uint8Array that fails
+      // the test's instanceof check (the controller passes bytes through as-is).
+      bytes: Uint8Array.from(text, (c) => c.charCodeAt(0)),
+    };
+  }
   /** Resolve a pending deferred read (for out-of-order completion tests). */
   resolveRead(id: string, text: string | undefined) {
     const res = this.readDeferreds.get(id);
@@ -115,6 +134,7 @@ describe('SessionController', () => {
         'updateFile',
         'removeFile',
         'setEntryPoint',
+        'getArtifact',
         'cancel',
         'dispose',
       ],
@@ -230,6 +250,75 @@ describe('SessionController', () => {
     session.emit(result({ kind: 'render', sourceRevision: 3, artifactId: 'a1' }));
     await flush();
     expect(viewer.offText).toBeNull();
+  });
+
+  it('getArtifact: replies with the ref + exact bytes, correlated by requestId', async () => {
+    const { session, transport } = setup();
+    session.artifacts.set('a1', 'OFF 1');
+    transport.receive({
+      protocolVersion: V,
+      type: 'getArtifact',
+      artifactId: 'a1',
+      requestId: 'r7',
+    });
+    await flush();
+    expect(transport.sent.at(-1)).toMatchObject({
+      protocolVersion: V,
+      type: 'artifact',
+      requestId: 'r7',
+      available: true,
+      artifact: { artifactId: 'a1', format: 'off' },
+    });
+    const reply = transport.sent.at(-1) as { bytes: Uint8Array };
+    expect(reply.bytes).toBeInstanceOf(Uint8Array);
+    expect(new TextDecoder().decode(reply.bytes)).toBe('OFF 1');
+  });
+
+  it('getArtifact: an unknown id and a failed read both reply available:false', async () => {
+    const { session, transport } = setup();
+    transport.receive({
+      protocolVersion: V,
+      type: 'getArtifact',
+      artifactId: 'nope',
+      requestId: 'r1',
+    });
+    await flush();
+    expect(transport.sent.at(-1)).toMatchObject({
+      type: 'artifact',
+      requestId: 'r1',
+      available: false,
+    });
+
+    session.artifacts.set('a1', 'OFF 1');
+    session.throwOnRead = true;
+    transport.receive({
+      protocolVersion: V,
+      type: 'getArtifact',
+      artifactId: 'a1',
+      requestId: 'r2',
+    });
+    await flush();
+    expect(transport.sent.at(-1)).toMatchObject({
+      type: 'artifact',
+      requestId: 'r2',
+      available: false,
+    });
+  });
+
+  it('getArtifact: no reply is sent after dispose', async () => {
+    const { session, transport, controller } = setup();
+    session.artifacts.set('a1', 'OFF 1');
+    session.useDeferredReads = false;
+    transport.receive({
+      protocolVersion: V,
+      type: 'getArtifact',
+      artifactId: 'a1',
+      requestId: 'r1',
+    });
+    controller.dispose(); // dispose before the async read resolves
+    const before = transport.sent.length;
+    await flush();
+    expect(transport.sent.length).toBe(before); // nothing sent post-dispose
   });
 
   it('dispose: tears down the session, transport, and operation subscription; idempotent', () => {

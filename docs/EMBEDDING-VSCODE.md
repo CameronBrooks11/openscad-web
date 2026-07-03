@@ -314,16 +314,21 @@ before sending. Then **drive a project** rather than push geometry:
 
 - **Host → session:** `setProject { files:[{path,content}], entryPoint? }`,
   `updateFile { path, content }`, `removeFile { path }`, `setEntryPoint { path }`,
-  `cancel`, `dispose`.
+  `getArtifact { artifactId, requestId }`, `cancel`, `dispose`.
 - **Session → host:** `ready`, `operation-result { result }` (a **push stream** —
   one edit fans out to multiple terminal results; correlate by the nested
   `result.operationId` / `kind` / `sourceRevision`, **not** 1:1 with commands),
-  and `error { code, reason }`.
+  `artifact { requestId, available, artifact?, bytes? }` (the correlated reply to
+  `getArtifact`), and `error { code, reason }`.
 
 Geometry is **not** sent over the wire: the session renders it **in-process** into
 its embedded viewer. The `operation-result` carries an `artifact` _reference_
-(id + format), not bytes; retrieving exported bytes (STL/3MF) to save to disk is a
-later, separate message (tracked by the export issue in the epic).
+(id + format), not bytes. To **export/save** a produced artifact (STL/3MF/OFF) to
+disk, send `getArtifact` with the reference's `artifactId` and a host-chosen
+`requestId` (protocol v2, #197): the reply echoes the `requestId` and carries the
+exact bytes as a **`Uint8Array`** via structured clone (never base64), or
+`available: false` if the id is unknown or was evicted from the small per-session
+LRU — so fetch promptly after the result you want to save.
 
 > Compiling arbitrary `.scad` runs the full OpenSCAD engine on host-supplied input.
 > Push only files the user opened/trusts; the protocol caps file count/size, but

@@ -4,14 +4,16 @@ import {
   SESSION_COMMANDS,
   SESSION_MAX_FILES,
   SESSION_MAX_FILE_LENGTH,
+  SESSION_MAX_ID_LENGTH,
   SESSION_MAX_PATH_LENGTH,
   SESSION_PROTOCOL_VERSION,
+  sessionArtifact,
   sessionError,
   sessionOperationResult,
   sessionReady,
   validateSessionInbound,
 } from '../session-transport.ts';
-import type { OperationResult } from '../session-contract.ts';
+import type { ArtifactRef, OperationResult } from '../session-contract.ts';
 
 const v = SESSION_PROTOCOL_VERSION;
 const ok = (data: unknown) => validateSessionInbound({ protocolVersion: v, ...(data as object) });
@@ -133,12 +135,42 @@ describe('validateSessionInbound', () => {
     expect(ok({ type: 'dispose' })).toEqual({ ok: true, message: { type: 'dispose' } });
   });
 
+  it('accepts getArtifact and requires string artifactId + requestId', () => {
+    expect(ok({ type: 'getArtifact', artifactId: 'a-1', requestId: 'r-1' })).toEqual({
+      ok: true,
+      message: { type: 'getArtifact', artifactId: 'a-1', requestId: 'r-1' },
+    });
+    // requestId is REQUIRED — the reply is correlated, not a push.
+    expect(ok({ type: 'getArtifact', artifactId: 'a-1' })).toMatchObject({
+      ok: false,
+      code: 'invalid-payload',
+    });
+    expect(ok({ type: 'getArtifact', requestId: 'r-1' })).toMatchObject({
+      ok: false,
+      code: 'invalid-payload',
+    });
+    expect(ok({ type: 'getArtifact', artifactId: 7, requestId: 'r' })).toMatchObject({
+      ok: false,
+      code: 'invalid-payload',
+    });
+    const longId = 'x'.repeat(SESSION_MAX_ID_LENGTH + 1);
+    expect(ok({ type: 'getArtifact', artifactId: longId, requestId: 'r' })).toMatchObject({
+      ok: false,
+      code: 'too-large',
+    });
+    expect(ok({ type: 'getArtifact', artifactId: 'a', requestId: longId })).toMatchObject({
+      ok: false,
+      code: 'too-large',
+    });
+  });
+
   it('every advertised SESSION_COMMAND is a handled inbound type (capabilities ⟷ dispatch)', () => {
     const minimal: Record<(typeof SESSION_COMMANDS)[number], object> = {
       setProject: { files: [] },
       updateFile: { path: '/a', content: 'x' },
       removeFile: { path: '/a' },
       setEntryPoint: { path: '/a' },
+      getArtifact: { artifactId: 'a', requestId: 'r' },
       cancel: {},
       dispose: {},
     };
@@ -173,6 +205,36 @@ describe('outbound builders', () => {
       protocolVersion: v,
       type: 'operation-result',
       result,
+    });
+  });
+
+  it('sessionArtifact carries ref + bytes when found, available:false when not', () => {
+    const artifact: ArtifactRef = {
+      artifactId: 'a-1',
+      operationId: 'op-1',
+      sourceRevision: 3,
+      format: 'stl',
+      mediaType: 'model/stl',
+      size: 3,
+      name: 'out.stl',
+    };
+    const bytes = new Uint8Array([1, 2, 3]);
+    expect(sessionArtifact('r-1', { artifact, bytes })).toEqual({
+      protocolVersion: v,
+      type: 'artifact',
+      requestId: 'r-1',
+      available: true,
+      artifact,
+      bytes,
+    });
+    // Bytes stay a Uint8Array (structured clone), NEVER a base64 string.
+    const reply = sessionArtifact('r-1', { artifact, bytes }) as Record<string, unknown>;
+    expect(reply.bytes).toBeInstanceOf(Uint8Array);
+    expect(sessionArtifact('r-2', undefined)).toEqual({
+      protocolVersion: v,
+      type: 'artifact',
+      requestId: 'r-2',
+      available: false,
     });
   });
 

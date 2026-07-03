@@ -11,12 +11,13 @@
 
 import {
   SESSION_COMMANDS,
+  sessionArtifact,
   sessionError,
   sessionOperationResult,
   sessionReady,
   validateSessionInbound,
 } from '../protocol/session-transport.ts';
-import type { OperationResult, ProjectFile } from '../protocol/session-contract.ts';
+import type { ArtifactRef, OperationResult, ProjectFile } from '../protocol/session-contract.ts';
 import type { Transport } from '../viewer-host/transport.ts';
 
 /** The minimal session surface the controller drives (adapted from `OpenScadSession`). */
@@ -32,6 +33,11 @@ export interface SessionHost {
   onOperation(handler: (result: OperationResult) => void): () => void;
   /** The exact OFF text of a produced artifact (race-free, by id), or undefined. */
   readArtifactText(artifactId: string): Promise<string | undefined>;
+  /** A produced artifact's immutable identity + exact bytes (by id), for the
+   *  `getArtifact` export round-trip (#197); undefined if unknown/evicted. */
+  getArtifact(
+    artifactId: string,
+  ): Promise<{ artifact: ArtifactRef; bytes: Uint8Array } | undefined>;
 }
 
 /** The minimal viewer surface the render bridge sets (the embedded geometry viewer). */
@@ -81,6 +87,9 @@ export class SessionController {
         case 'setEntryPoint':
           this.session.setEntryPoint(msg.path);
           break;
+        case 'getArtifact':
+          void this.sendArtifact(msg.requestId, msg.artifactId);
+          break;
         case 'cancel':
           this.session.cancel();
           break;
@@ -97,6 +106,20 @@ export class SessionController {
       this.transport.send(sessionError('invalid-payload', String((e as Error)?.message ?? e)));
     }
   };
+
+  /** Answer `getArtifact` with the bytes, or `available: false` for an unknown/
+   *  evicted id OR a failed read — either way the host gets a terminal reply for
+   *  its `requestId` instead of a hang. */
+  private async sendArtifact(requestId: string, artifactId: string): Promise<void> {
+    let resolved: { artifact: ArtifactRef; bytes: Uint8Array } | undefined;
+    try {
+      resolved = await this.session.getArtifact(artifactId);
+    } catch {
+      resolved = undefined; // blob read failed — report unavailable, not silence.
+    }
+    if (this.disposed) return;
+    this.transport.send(sessionArtifact(requestId, resolved));
+  }
 
   private onOperation = (result: OperationResult): void => {
     if (this.disposed) return;
