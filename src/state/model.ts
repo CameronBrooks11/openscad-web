@@ -6,7 +6,12 @@ import {
   State,
   StatePersister,
 } from './app-state.ts';
-import { VALID_EXPORT_FORMATS_2D, VALID_EXPORT_FORMATS_3D } from './formats.ts';
+import {
+  is2DFormatExtension,
+  VALID_EXPORT_FORMATS_2D,
+  VALID_EXPORT_FORMATS_3D,
+  type ExportFormat,
+} from './formats.ts';
 import type { OpenScadValue } from '../openscad-value.ts';
 import { bubbleUpDeepMutations } from './deep-mutate.ts';
 import { openLocalFile, saveViaHandle } from '../fs/filesystem.ts';
@@ -16,7 +21,7 @@ import { ProjectStore, type ProjectFile } from './project-store.ts';
 import { canonicalProjectHomePath } from '../fs/project-path.ts';
 import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
 import { WasmWorkerBackend, type CompileBackend } from '../runner/openscad-runner.ts';
-import { newId } from '../runner/compile-contract.ts';
+import { newId, operationFailure } from '../runner/compile-contract.ts';
 import { ArtifactStore, type StoredArtifact } from './artifact-store.ts';
 import { applyUserFacingError } from './apply-user-facing-error.ts';
 import { CompileCoordinator } from './services/compile-coordinator.ts';
@@ -329,6 +334,45 @@ export class Model extends EventTarget {
 
   export() {
     return this.exportService.export();
+  }
+
+  /**
+   * Export the current model as `format` (#216, the wire-drivable variant of
+   * `export()`): select the format, then run the standard export flow. A
+   * dimensionality mismatch (e.g. `svg` for a 3D model) terminates as an
+   * export-kind FAILURE on the operation stream rather than silently exporting
+   * the other dimensionality's configured format — a wire host observes results,
+   * not state, so silence would strand it. Pre-compile (`is2D` unknown) the
+   * model is treated as 3D, matching the export flow's own routing.
+   */
+  exportArtifact(format: ExportFormat): void {
+    const want2D = is2DFormatExtension(format);
+    const is2D = !!this.state.is2D;
+    if (want2D !== is2D) {
+      this.dispatchEvent(
+        new CustomEvent('operation', {
+          detail: operationFailure(
+            {
+              sessionId: this.sessionId,
+              operationId: newId(),
+              sourceRevision: this._sourceRevision,
+              kind: 'export',
+              elapsedMillis: 0,
+              diagnostics: [],
+              logText: '',
+            },
+            'export-format-mismatch',
+            `cannot export ${format}: the current model is ${is2D ? '2D' : '3D'}`,
+          ),
+        }),
+      );
+      return;
+    }
+    this.mutate((s) => {
+      if (want2D) s.params.exportFormat2D = format as keyof typeof VALID_EXPORT_FORMATS_2D;
+      else s.params.exportFormat3D = format as keyof typeof VALID_EXPORT_FORMATS_3D;
+    });
+    void this.exportService.export();
   }
 
   /** Creates a new empty .scad file in /home/ and activates it. */

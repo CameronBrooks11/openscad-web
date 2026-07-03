@@ -267,6 +267,43 @@ describe('#123 multi-file project contract — headless end to end', () => {
     expect(model.state.params.activePath).toBe('/home/main.scad');
   });
 
+  it('exportArtifact drives a kind:export success carrying the requested format (#216)', async () => {
+    const backend = new FakeBackend();
+    const { model, ops } = makeModel(backend);
+    model.setProject([{ path: 'main.scad', content: 'cube(1);' }], 'main.scad');
+    await settle();
+    expect(ops.find((o) => o.status === 'success' && o.artifact)).toBeDefined();
+
+    model.exportArtifact('stl');
+    await settle();
+
+    const exported = ops.find((o) => o.kind === 'export');
+    expect(exported).toBeDefined();
+    expect(exported!.status).toBe('success');
+    if (exported!.status === 'success') {
+      expect(exported!.artifact?.format).toBe('stl');
+      // The export's exact bytes are retrievable by id — the getArtifact flow.
+      expect(model.getStoredArtifact(exported!.artifact!.artifactId)).toBeDefined();
+    }
+  });
+
+  it('exportArtifact terminates a dimensionality mismatch as an export failure, not silence (#216)', async () => {
+    const { model, ops } = makeModel(new FakeBackend());
+    model.setProject([{ path: 'main.scad', content: 'cube(1);' }], 'main.scad');
+    await settle();
+
+    model.exportArtifact('svg'); // 2D format, 3D model
+    await settle();
+
+    const exported = ops.find((o) => o.kind === 'export');
+    expect(exported).toBeDefined();
+    expect(exported!.status).toBe('error');
+    if (exported!.status === 'error') {
+      expect(exported!.code).toBe('export-format-mismatch');
+      expect(exported!.reason).toMatch(/3D/);
+    }
+  });
+
   it('cancel() surfaces a terminal cancelled result for the in-flight compile', async () => {
     const backend = new FakeBackend();
     const { model, ops } = makeModel(backend);

@@ -319,6 +319,7 @@ before sending. Then **drive a project** rather than push geometry:
   `bytes` at a text-suffix path must be valid UTF-8 and are treated as text),
   `updateFile { path, content }` (text-only — re-push binary
   changes via `setProject`), `removeFile { path }`, `setEntryPoint { path }`,
+  `export { format }` (`stl`/`off`/`glb`/`3mf`/`svg`/`dxf` — #216),
   `getArtifact { artifactId, requestId }`, `cancel`, `dispose`.
 - **Session → host:** `ready`, `operation-result { result }` (a **push stream** —
   one edit fans out to multiple terminal results; correlate by the nested
@@ -335,15 +336,19 @@ as a **`Uint8Array`** via structured clone (never base64), or `available: false`
 if the id is unknown, was evicted from the small per-session LRU (fetch promptly
 after the result you want), or its blob read failed.
 
-Two scoping notes:
+**Exporting STL/3MF/GLB** (#216): send `export { format }` — the terminal arrives
+on the push stream as a `kind: 'export'` result (fire-and-observe, like the
+mutation commands). On success it carries the converted artifact's `ArtifactRef`;
+fetch the bytes with `getArtifact` and save them. The session exports the current
+model's dimensionality — a mismatched request (e.g. `svg` for a 3D model)
+terminates as an export-kind **failure** result (`export-format-mismatch`), never
+silence. The in-page download side effect and the 3MF multimaterial picker are
+disabled in the session artifact (the host owns saving; default colors apply).
 
-- `getArtifact` fetches bytes of artifacts the session **already produced** — OFF
-  for 3D compiles, SVG/DXF for 2D. There is **no wire command yet that triggers an
-  export operation** (STL/3MF/GLB conversion), so those formats are not reachable
-  over L1 until the export-trigger follow-up lands (tracked in epic #179).
-- Typed arrays only survive VS Code's webview `postMessage` when the consuming
-  extension declares `engines.vscode >= 1.57` (VS Code gates buffer serialization
-  per extension); older declarations silently mangle the bytes.
+One transport note: typed arrays only survive VS Code's webview `postMessage`
+when the consuming extension declares `engines.vscode >= 1.57` (VS Code gates
+buffer serialization per extension); older declarations silently mangle the
+bytes.
 
 > Compiling arbitrary `.scad` runs the full OpenSCAD engine on host-supplied input.
 > Push only files the user opened/trusts; the protocol caps file count/size, but

@@ -20,7 +20,15 @@ declare global {
   interface Window {
     __sessionMessages?: {
       type?: string;
-      result?: { status?: string; artifact?: { format?: string } };
+      result?: {
+        status?: string;
+        kind?: string;
+        artifact?: { format?: string; artifactId?: string };
+      };
+      requestId?: string;
+      available?: boolean;
+      artifact?: { format?: string };
+      bytes?: Uint8Array;
     }[];
   }
 }
@@ -107,5 +115,60 @@ test.describe('session distributable (#193)', () => {
       window.__sessionMessages?.some((m) => m?.type === 'error'),
     );
     expect(hadError).toBeFalsy();
+
+    // Export round-trip (#216 + #197): trigger a real STL export over the wire,
+    // then fetch the produced artifact's exact bytes by id. This is the flow a
+    // VS Code host uses to save STL/3MF to disk.
+    await postToSession(page, { protocolVersion, type: 'export', format: 'stl' });
+    await page.waitForFunction(
+      () =>
+        window.__sessionMessages?.some(
+          (m) =>
+            m?.type === 'operation-result' &&
+            m?.result?.kind === 'export' &&
+            m?.result?.status === 'success' &&
+            m?.result?.artifact?.format === 'stl',
+        ),
+      null,
+      { timeout: 60_000 },
+    );
+    const artifactId = await page.evaluate(
+      () =>
+        window.__sessionMessages?.find(
+          (m) =>
+            m?.type === 'operation-result' &&
+            m?.result?.kind === 'export' &&
+            m?.result?.status === 'success',
+        )?.result?.artifact?.artifactId,
+    );
+    expect(artifactId).toBeTruthy();
+
+    await postToSession(page, {
+      protocolVersion,
+      type: 'getArtifact',
+      artifactId,
+      requestId: 'e2e-stl',
+    });
+    await page.waitForFunction(
+      () =>
+        window.__sessionMessages?.some(
+          (m) => m?.type === 'artifact' && m?.requestId === 'e2e-stl' && m?.available === true,
+        ),
+      null,
+      { timeout: 30_000 },
+    );
+    // The bytes arrived as a genuine byte payload with STL content ("solid ..."
+    // ASCII or the binary layout — both start beyond zero length).
+    const byteProbe = await page.evaluate(() => {
+      const reply = window.__sessionMessages?.find(
+        (m) => m?.type === 'artifact' && m?.requestId === 'e2e-stl',
+      );
+      const bytes = reply?.bytes;
+      return bytes instanceof Uint8Array
+        ? { isU8: true, length: bytes.byteLength, head: Array.from(bytes.slice(0, 5)) }
+        : { isU8: false, length: 0, head: [] as number[] };
+    });
+    expect(byteProbe.isU8).toBe(true);
+    expect(byteProbe.length).toBeGreaterThan(0);
   });
 });

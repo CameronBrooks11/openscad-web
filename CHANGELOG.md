@@ -27,6 +27,14 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ### Added
 
+- Host-driven export over the L1 wire (#216): new `export { format }` command
+  (stl/off/glb/3mf/svg/dxf) drives the standard export flow; the terminal lands
+  on the push stream as a `kind: 'export'` result whose `ArtifactRef` is then
+  fetched via `getArtifact` (#197) — STL/3MF/GLB are now reachable from a host.
+  A dimensionality mismatch terminates as an `export-format-mismatch` failure
+  result instead of silence. In the session artifact, the in-page download side
+  effect and the 3MF multimaterial picker are disabled (the host owns saving;
+  default colors apply).
 - Binary project assets in the multi-file contract (#172): `setProject` files
   are now `{path, content}` (editable text) **or** `{path, bytes}` — a binary
   asset's exact bytes as a `Uint8Array` (never base64), landing as a
