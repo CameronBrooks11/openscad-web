@@ -74,7 +74,10 @@ export class OpenScadSession implements ProjectContract {
   /** Replace the runtime user-library set (ADR 0010 / #195): declarative full
    *  set, revision-bumping (the resulting recompile correlates via the ack). */
   setLibraries(libraries: WorkerLibrary[]): void {
-    this.model.setLibraries(libraries);
+    // Pre-project, apply WITHOUT recompiling: nothing of the host's exists to
+    // compile yet, and compiling would render (and display!) the default
+    // playground model — the same trap the render guard closes (#219 review).
+    this.model.setLibraries(libraries, this.hostProjectSet);
   }
 
   /** Run a FULL render of the current model (#219) — `$preview = false`,

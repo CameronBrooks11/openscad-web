@@ -301,6 +301,15 @@ describe('#123 multi-file project contract — headless end to end', () => {
     ]);
   });
 
+  it('setLibraries with recompile=false applies without compiling (the pre-project guard)', async () => {
+    const backend = new FakeBackend();
+    const { model, ops } = makeModel(backend);
+    model.setLibraries([{ name: 'MyLib', files: [] }], false);
+    await settle();
+    expect(backend.libraries?.[0]?.name).toBe('MyLib');
+    expect(ops).toEqual([]); // nothing compiled — the default model stays dark
+  });
+
   it('setLibraries-then-setProject also compiles (order independence, ADR 0010)', async () => {
     const backend = new FakeBackend();
     const { model, ops } = makeModel(backend);

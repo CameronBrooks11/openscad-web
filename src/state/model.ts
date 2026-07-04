@@ -363,17 +363,21 @@ export class Model extends EventTarget {
    * the standard machinery provides the recompile, the stale-drop of results
    * compiled against the OLD set, and the ack correlation (#227 pattern).
    */
-  setLibraries(libraries: WorkerLibrary[]): void {
+  setLibraries(libraries: WorkerLibrary[], recompile = true): void {
     this.backend.setLibraries?.(libraries);
     this.mutate((s) => {
-      // Fresh identity, same content: the revision bump + recompile signal
+      // Fresh identity, same content: the revision bump (the ack needs it)
       // WITHOUT touching what the sources ARE.
       s.params.sources = [...s.params.sources];
       s.lastCheckerRun = undefined;
       s.error = undefined;
       s.errorDetails = undefined;
     });
-    this.compile.processSource();
+    // `recompile: false` is the session tier's pre-project case: compiling
+    // here would render the DEFAULT playground model (the #219 trap) — the
+    // host's eventual setProject drives the first compile with the libraries
+    // already in place, so order independence is preserved.
+    if (recompile) this.compile.processSource();
   }
 
   /** Emit a synthetic terminal failure on the operation stream — for wire

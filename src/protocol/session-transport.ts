@@ -184,7 +184,7 @@ function isSafeLibraryRelPath(path: string): boolean {
   if (path.length === 0 || path.length > SESSION_MAX_PATH_LENGTH) return false;
   if (path.startsWith('/') || path.includes('\\')) return false;
   // eslint-disable-next-line no-control-regex
-  if (/[\u0000-\u001f]/.test(path)) return false;
+  if (/[\u0000-\u001f\u007f]/.test(path)) return false;
   const segments = path.split('/');
   return segments.every((s) => s.length > 0 && s !== '.' && s !== '..');
 }
@@ -196,6 +196,7 @@ function isSafeLibraryRelPath(path: string): boolean {
  *  directory), and a SEPARATE size pool with the shared constants. */
 function readSessionLibraries(value: unknown): SessionValidation | { libraries: SessionLibrary[] } {
   if (!Array.isArray(value)) return err('invalid-payload', 'libraries must be an array');
+  if (value.length > SESSION_MAX_FILES) return err('too-large', 'too many libraries');
   const libraries: SessionLibrary[] = [];
   const names = new Set<string>();
   let total = 0;
@@ -210,8 +211,13 @@ function readSessionLibraries(value: unknown): SessionValidation | { libraries: 
     ) {
       return err('invalid-payload', 'library name must be a safe, non-reserved single segment');
     }
+    if (name.length > SESSION_MAX_PATH_LENGTH)
+      return err('too-large', 'a library name is too long');
     if (names.has(name)) return err('invalid-payload', `duplicate library name: ${name}`);
     names.add(name);
+    total += name.length;
+    if (total > SESSION_MAX_TOTAL_LENGTH)
+      return err('too-large', 'libraries exceed the size limit');
     if (!Array.isArray(entry.files)) {
       return err('invalid-payload', 'library files must be an array');
     }

@@ -316,6 +316,30 @@ describe('validateSessionInbound', () => {
     ).toMatchObject({ ok: true });
   });
 
+  it('setLibraries caps names and library COUNT (budget bypass guard)', () => {
+    expect(
+      ok({
+        type: 'setLibraries',
+        libraries: [{ name: 'x'.repeat(SESSION_MAX_PATH_LENGTH + 1), files: [] }],
+      }),
+    ).toMatchObject({ ok: false, code: 'too-large' });
+    const many = Array.from({ length: SESSION_MAX_FILES + 1 }, (_, i) => ({
+      name: `L${i}`,
+      files: [],
+    }));
+    expect(ok({ type: 'setLibraries', libraries: many })).toMatchObject({
+      ok: false,
+      code: 'too-large',
+    });
+    // DEL char in a path (normalizeProjectPath parity).
+    expect(
+      ok({
+        type: 'setLibraries',
+        libraries: [{ name: 'L', files: [{ path: 'a\u007fb.scad', content: '' }] }],
+      }),
+    ).toMatchObject({ ok: false, code: 'invalid-payload' });
+  });
+
   it('setLibraries enforces its own (separate) size pool', () => {
     const big = 'x'.repeat(SESSION_MAX_FILE_LENGTH + 1);
     expect(
