@@ -27,6 +27,11 @@ class FakeBackend implements CompileBackend {
   mode: 'ok' | 'hang' = 'ok';
   /** Every invocation received, so tests can assert what crossed to the worker. */
   invocations: OpenSCADInvocation[] = [];
+  /** The runtime library set the Model handed over (ADR 0010). */
+  libraries: { name: string }[] | undefined;
+  setLibraries(libraries: { name: string }[]) {
+    this.libraries = libraries;
+  }
 
   spawn(invocation: OpenSCADInvocation): AbortablePromise<OpenSCADInvocationResults> {
     this.invocations.push(invocation);
@@ -269,6 +274,52 @@ describe('#123 multi-file project contract — headless end to end', () => {
     await settle();
     expect(model.state.params.sources.map((s) => s.path)).toEqual(['/home/main.scad']);
     expect(model.state.params.activePath).toBe('/home/main.scad');
+  });
+
+  it('setLibraries reaches the backend, bumps the revision, and recompiles (ADR 0010)', async () => {
+    const backend = new FakeBackend();
+    const { model, ops } = makeModel(backend);
+    model.setProject([{ path: 'main.scad', content: 'use <MyLib/util.scad>\nu();' }], 'main.scad');
+    await settle();
+    const before = ops.filter((o) => o.kind === 'preview').length;
+    const revBefore = model.getSourceRevision();
+
+    model.setLibraries([
+      { name: 'MyLib', files: [{ path: 'util.scad', content: 'module u(){}' }] },
+    ]);
+    await settle();
+
+    expect(backend.libraries).toEqual([
+      { name: 'MyLib', files: [{ path: 'util.scad', content: 'module u(){}' }] },
+    ]);
+    expect(model.getSourceRevision()).toBeGreaterThan(revBefore); // ack correlation basis
+    // The declarative contract recompiled the already-pushed project.
+    expect(ops.filter((o) => o.kind === 'preview').length).toBeGreaterThan(before);
+    // Libraries are HOST state: sources content unchanged, nothing persisted.
+    expect(model.state.params.sources).toEqual([
+      { kind: 'text', path: '/home/main.scad', content: 'use <MyLib/util.scad>\nu();' },
+    ]);
+  });
+
+  it('setLibraries with recompile=false applies without compiling (the pre-project guard)', async () => {
+    const backend = new FakeBackend();
+    const { model, ops } = makeModel(backend);
+    model.setLibraries([{ name: 'MyLib', files: [] }], false);
+    await settle();
+    expect(backend.libraries?.[0]?.name).toBe('MyLib');
+    expect(ops).toEqual([]); // nothing compiled — the default model stays dark
+  });
+
+  it('setLibraries-then-setProject also compiles (order independence, ADR 0010)', async () => {
+    const backend = new FakeBackend();
+    const { model, ops } = makeModel(backend);
+    model.setLibraries([
+      { name: 'MyLib', files: [{ path: 'util.scad', content: 'module u(){}' }] },
+    ]);
+    model.setProject([{ path: 'main.scad', content: 'use <MyLib/util.scad>\nu();' }], 'main.scad');
+    await settle();
+    expect(backend.libraries?.[0]?.name).toBe('MyLib');
+    expect(ops.find((o) => o.status === 'success' && o.artifact)).toBeDefined();
   });
 
   it('exportArtifact drives a kind:export success carrying the requested format (#216)', async () => {

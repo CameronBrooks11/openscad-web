@@ -6,6 +6,7 @@ import type { ProjectFile, ProjectContract } from './project-contract.ts';
 import type { ProjectFileSystem } from '../fs/project-filesystem.ts';
 import type { State, StatePersister } from './app-state.ts';
 import type { HostAdapter } from './web-host-adapter.ts';
+import type { WorkerLibrary } from '../runner/worker-protocol.ts';
 import type { ExportFormat } from './formats.ts';
 
 /**
@@ -68,6 +69,15 @@ export class OpenScadSession implements ProjectContract {
   }
   setEntryPoint(path: string): void {
     this.model.setEntryPoint(path);
+  }
+
+  /** Replace the runtime user-library set (ADR 0010 / #195): declarative full
+   *  set, revision-bumping (the resulting recompile correlates via the ack). */
+  setLibraries(libraries: WorkerLibrary[]): void {
+    // Pre-project, apply WITHOUT recompiling: nothing of the host's exists to
+    // compile yet, and compiling would render (and display!) the default
+    // playground model — the same trap the render guard closes (#219 review).
+    this.model.setLibraries(libraries, this.hostProjectSet);
   }
 
   /** Run a FULL render of the current model (#219) — `$preview = false`,

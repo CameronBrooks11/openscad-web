@@ -12,6 +12,7 @@ export function sessionHostOf(session: OpenScadSession): SessionHost {
     updateFile: (path, content) => session.updateFile(path, content),
     removeFile: (path) => session.removeFile(path),
     setEntryPoint: (path) => session.setEntryPoint(path),
+    setLibraries: (libraries) => session.setLibraries(libraries),
     render: (requestId) => session.render(requestId),
     exportArtifact: (format, requestId) => session.exportArtifact(format, requestId),
     cancel: (requestId) => session.cancel(requestId),

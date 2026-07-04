@@ -22,6 +22,7 @@ import { canonicalProjectHomePath } from '../fs/project-path.ts';
 import { HostAdapter, WebHostAdapter } from './web-host-adapter.ts';
 import { WasmWorkerBackend, type CompileBackend } from '../runner/openscad-runner.ts';
 import { newId, operationFailure } from '../runner/compile-contract.ts';
+import type { WorkerLibrary } from '../runner/worker-protocol.ts';
 import { ArtifactStore, type StoredArtifact } from './artifact-store.ts';
 import { applyUserFacingError } from './apply-user-facing-error.ts';
 import { CompileCoordinator } from './services/compile-coordinator.ts';
@@ -352,6 +353,33 @@ export class Model extends EventTarget {
    * (exports convert the LAST completed output), `export-format-mismatch` for
    * the wrong dimensionality.
    */
+  /**
+   * Replace the runtime user-library set (ADR 0010 / #195). The set is HOST
+   * state, not project state: it lives on the backend (which retains it and
+   * replays it across worker recycles) and never enters `params` or the
+   * durable slice — a persistence refactor must not write library bytes to
+   * IndexedDB. The mutation still bumps `sourceRevision` (a fresh
+   * `params.sources` array identity — the same signal `setProject` uses) so
+   * the standard machinery provides the recompile, the stale-drop of results
+   * compiled against the OLD set, and the ack correlation (#227 pattern).
+   */
+  setLibraries(libraries: WorkerLibrary[], recompile = true): void {
+    this.backend.setLibraries?.(libraries);
+    this.mutate((s) => {
+      // Fresh identity, same content: the revision bump (the ack needs it)
+      // WITHOUT touching what the sources ARE.
+      s.params.sources = [...s.params.sources];
+      s.lastCheckerRun = undefined;
+      s.error = undefined;
+      s.errorDetails = undefined;
+    });
+    // `recompile: false` is the session tier's pre-project case: compiling
+    // here would render the DEFAULT playground model (the #219 trap) — the
+    // host's eventual setProject drives the first compile with the libraries
+    // already in place, so order independence is preserved.
+    if (recompile) this.compile.processSource();
+  }
+
   /** Emit a synthetic terminal failure on the operation stream — for wire
    *  commands that must never end in silence (export #216, render #219). */
   emitOperationFailure(

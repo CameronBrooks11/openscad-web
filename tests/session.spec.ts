@@ -24,6 +24,7 @@ declare global {
         status?: string;
         kind?: string;
         requestId?: string;
+        sourceRevision?: number;
         artifact?: { format?: string; artifactId?: string };
       };
       requestId?: string;
@@ -82,11 +83,36 @@ test.describe('session distributable (#193)', () => {
     const manifest = await page.request.get(new URL('session-manifest.json', baseUrl).toString());
     const { protocolVersion } = (await manifest.json()) as { protocolVersion: number };
 
+    // Runtime user library (ADR 0010 / #195), GENUINELY libs-first: pushed
+    // before any project, acked, and — crucially — the session must NOT
+    // compile/display the default playground model in response (the
+    // pre-project recompile guard; the #219-class trap).
+    await postToSession(page, {
+      protocolVersion,
+      type: 'setLibraries',
+      libraries: [
+        {
+          name: 'E2ELib',
+          files: [{ path: 'util.scad', content: 'module e2e_unit() cube([2, 2, 2]);' }],
+        },
+      ],
+      requestId: 'e2e-libs-1',
+    });
+    await page.waitForFunction(
+      () =>
+        window.__sessionMessages?.some(
+          (m) => m?.type === 'libraries-ack' && m?.requestId === 'e2e-libs-1',
+        ),
+      null,
+      { timeout: 30_000 },
+    );
+
     // The project includes a (unreferenced) binary asset (#172), so the push
     // exercises the bytes branch — wire validation, BrowserFS writeBytes, and
     // the local-source bookkeeping — against the real artifact. The Uint8Array
     // must be constructed IN PAGE: Playwright's evaluate-arg serialization would
-    // mangle a Node-side one before it ever reached postMessage.
+    // mangle a Node-side one before it ever reached postMessage. Its entry
+    // resolves `use <E2ELib/…>` through the runtime registry + per-job symlink.
     await page.evaluate((v) => {
       const frame = document.getElementById('session-frame') as HTMLIFrameElement;
       frame.contentWindow!.postMessage(
@@ -94,7 +120,7 @@ test.describe('session distributable (#193)', () => {
           protocolVersion: v,
           type: 'setProject',
           files: [
-            { path: 'main.scad', content: 'cube([10, 10, 10]);' },
+            { path: 'main.scad', content: 'use <E2ELib/util.scad>\ne2e_unit();' },
             { path: 'assets/blob.bin', bytes: new Uint8Array([0xde, 0xad, 0xbe, 0xef]) },
           ],
           entryPoint: 'main.scad',
@@ -116,22 +142,41 @@ test.describe('session distributable (#193)', () => {
       null,
       { timeout: 30_000 },
     );
+    const projectRevision = await page.evaluate(
+      () =>
+        window.__sessionMessages?.find(
+          (m) => m?.type === 'project-ack' && m?.requestId === 'e2e-push-1',
+        )?.sourceRevision,
+    );
 
     // A genuine WASM compile fans out to a success operation-result carrying an
-    // OFF artifact (the render bridge also sets it on the embedded viewer, but the
-    // wire result is what proves the engine actually ran). Generous timeout for
-    // cold WASM boot + first compile.
+    // OFF artifact, PINNED to the project push's acked revision — a stray
+    // default-model compile at the libraries revision must not satisfy this.
     await page.waitForFunction(
-      () =>
+      (rev) =>
         window.__sessionMessages?.some(
           (m) =>
             m?.type === 'operation-result' &&
             m?.result?.status === 'success' &&
-            m?.result?.artifact?.format === 'off',
+            m?.result?.artifact?.format === 'off' &&
+            m?.result?.sourceRevision === rev,
         ),
-      null,
+      projectRevision,
       { timeout: 60_000 },
     );
+
+    // The pre-project setLibraries did NOT compile anything: no operation
+    // result exists below the project's revision (the default playground model
+    // was never rendered — the guard the #219 review pattern requires).
+    const strayEarlyResults = await page.evaluate(
+      (rev) =>
+        window.__sessionMessages?.filter(
+          (m) =>
+            m?.type === 'operation-result' && ((m?.result?.sourceRevision ?? rev) as number) < rev,
+        ).length,
+      projectRevision,
+    );
+    expect(strayEarlyResults).toBe(0);
 
     // No protocol/compile error was reported for the valid project.
     const hadError = await page.evaluate(() =>

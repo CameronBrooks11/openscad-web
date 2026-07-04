@@ -1,6 +1,6 @@
 # ADR 0010 — Runtime user libraries over the session wire
 
-**Status:** Proposed — the design for #195 (runtime user libraries /
+**Status:** Accepted — the design for #195 (runtime user libraries /
 OPENSCADPATH beyond the bundled zips). Adversarially design-reviewed
 2026-07-03; the review's findings are folded in below.
 
@@ -122,9 +122,13 @@ itself lives OUTSIDE `params`/the durable slice, see §7) and then drives
 - **Stale-drop**: an in-flight compile against the OLD set terminates via the
   standard revision-stale-drop; its result cannot masquerade as the new set's.
 - **Ack**: the optional `requestId` is answered with the #227 ack pattern
-  (`libraries-ack { requestId, sourceRevision }`, same semantics as
-  `project-ack` including rejected-push detection by non-advancing revision).
-- Validation failures reject the whole command atomically (nothing mounted).
+  (`libraries-ack { requestId, sourceRevision }`). Unlike `setProject`, there
+  is no engine-internal rejection path — a validated set always applies — so
+  an ack always carries a freshly advanced revision; validation failures
+  reject the whole command atomically at the wire and surface as an
+  uncorrelated `error` (no ack). Hosts should treat a missing ack within a
+  short window as a rejected payload (a host bug), not poll for a
+  non-advancing revision.
 
 ### 5. Worker application: job boundaries, subtree replace, unconditional symlinks
 
