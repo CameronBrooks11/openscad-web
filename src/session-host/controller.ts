@@ -14,11 +14,12 @@ import {
   sessionArtifact,
   sessionError,
   sessionOperationResult,
+  sessionLibrariesAck,
   sessionProjectAck,
   sessionReady,
   validateSessionInbound,
 } from '../protocol/session-transport.ts';
-import type { SessionExportFormat } from '../protocol/session-transport.ts';
+import type { SessionExportFormat, SessionLibrary } from '../protocol/session-transport.ts';
 import type { ArtifactRef, OperationResult, ProjectFile } from '../protocol/session-contract.ts';
 import type { Transport } from '../viewer-host/transport.ts';
 
@@ -28,6 +29,9 @@ export interface SessionHost {
   updateFile(path: string, content: string): void;
   removeFile(path: string): void;
   setEntryPoint(path: string): void;
+  /** Replace the runtime user-library set (ADR 0010): declarative full set;
+   *  the revision-bumping mutation drives the recompile + ack correlation. */
+  setLibraries(libraries: SessionLibrary[]): void;
   /** Run a FULL render (#219) — render-quality geometry; the terminal is a
    *  `kind: 'render'` result echoing `requestId`, and its output becomes what a
    *  subsequent export converts. */
@@ -110,6 +114,16 @@ export class SessionController {
           break;
         case 'setEntryPoint':
           this.session.setEntryPoint(msg.path);
+          break;
+        case 'setLibraries':
+          this.session.setLibraries(msg.libraries);
+          // Ack with the assigned revision (ADR 0010, #227 pattern): the
+          // mutation is synchronous, so the read here is exactly this set's.
+          if (msg.requestId !== undefined) {
+            this.transport.send(
+              sessionLibrariesAck(msg.requestId, this.session.currentSourceRevision()),
+            );
+          }
           break;
         case 'render':
           this.session.render(msg.requestId);

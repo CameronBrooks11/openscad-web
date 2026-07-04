@@ -9,6 +9,7 @@ import {
   SESSION_PROTOCOL_VERSION,
   sessionArtifact,
   sessionError,
+  sessionLibrariesAck,
   sessionOperationResult,
   sessionProjectAck,
   sessionReady,
@@ -237,6 +238,94 @@ describe('validateSessionInbound', () => {
     });
   });
 
+  it('accepts setLibraries and validates names, paths, one-of, meta (ADR 0010)', () => {
+    const lib = {
+      name: 'MyLib',
+      files: [{ path: 'util.scad', content: 'module u() cube(1);' }],
+      meta: { version: '1.2.3', source: 'local', junk: 'dropped' },
+    };
+    expect(ok({ type: 'setLibraries', libraries: [lib], requestId: 'L1' })).toEqual({
+      ok: true,
+      message: {
+        type: 'setLibraries',
+        libraries: [
+          {
+            name: 'MyLib',
+            files: [{ path: 'util.scad', content: 'module u() cube(1);' }],
+            meta: { version: '1.2.3', source: 'local' }, // unknown meta keys dropped
+          },
+        ],
+        requestId: 'L1',
+      },
+    });
+    // Names: traversal, reserved, multi-segment, bad charset.
+    for (const name of ['..', '.', 'fonts', 'home', 'a/b', 'a b', '']) {
+      expect(ok({ type: 'setLibraries', libraries: [{ name, files: [] }] })).toMatchObject({
+        ok: false,
+        code: 'invalid-payload',
+      });
+    }
+    // Paths: absolute, traversal, empty segment.
+    for (const path of ['/abs.scad', '../out.scad', 'a//b.scad', 'a/./b.scad']) {
+      expect(
+        ok({ type: 'setLibraries', libraries: [{ name: 'L', files: [{ path, content: '' }] }] }),
+      ).toMatchObject({ ok: false, code: 'invalid-payload' });
+    }
+    // Duplicate names / paths and path-prefix conflicts reject atomically.
+    expect(
+      ok({
+        type: 'setLibraries',
+        libraries: [
+          { name: 'L', files: [] },
+          { name: 'L', files: [] },
+        ],
+      }),
+    ).toMatchObject({ ok: false, code: 'invalid-payload' });
+    expect(
+      ok({
+        type: 'setLibraries',
+        libraries: [
+          {
+            name: 'L',
+            files: [
+              { path: 'a', content: '' },
+              { path: 'a/b.scad', content: '' },
+            ],
+          },
+        ],
+      }),
+    ).toMatchObject({ ok: false, code: 'invalid-payload' });
+    // exactly-one-of + invalid UTF-8 at a text suffix.
+    expect(
+      ok({ type: 'setLibraries', libraries: [{ name: 'L', files: [{ path: 'x.scad' }] }] }),
+    ).toMatchObject({ ok: false, code: 'invalid-payload' });
+    expect(
+      ok({
+        type: 'setLibraries',
+        libraries: [
+          { name: 'L', files: [{ path: 'x.scad', bytes: Uint8Array.from([0xff, 0xfe]) }] },
+        ],
+      }),
+    ).toMatchObject({ ok: false, code: 'invalid-payload' });
+    // Binary assets at non-text suffixes are fine.
+    expect(
+      ok({
+        type: 'setLibraries',
+        libraries: [{ name: 'L', files: [{ path: 'part.stl', bytes: Uint8Array.from([1]) }] }],
+      }),
+    ).toMatchObject({ ok: true });
+  });
+
+  it('setLibraries enforces its own (separate) size pool', () => {
+    const big = 'x'.repeat(SESSION_MAX_FILE_LENGTH + 1);
+    expect(
+      ok({
+        type: 'setLibraries',
+        libraries: [{ name: 'L', files: [{ path: 'a.scad', content: big }] }],
+      }),
+    ).toMatchObject({ ok: false, code: 'too-large' });
+  });
+
   it('accepts render with an optional requestId (#219)', () => {
     expect(ok({ type: 'render' })).toEqual({ ok: true, message: { type: 'render' } });
     expect(ok({ type: 'render', requestId: 'r-1' })).toEqual({
@@ -318,6 +407,7 @@ describe('validateSessionInbound', () => {
       updateFile: { path: '/a', content: 'x' },
       removeFile: { path: '/a' },
       setEntryPoint: { path: '/a' },
+      setLibraries: { libraries: [] },
       render: {},
       export: { format: 'stl' },
       getArtifact: { artifactId: 'a', requestId: 'r' },
@@ -385,6 +475,15 @@ describe('outbound builders', () => {
       type: 'artifact',
       requestId: 'r-2',
       available: false,
+    });
+  });
+
+  it('sessionLibrariesAck echoes the id with the assigned revision (ADR 0010)', () => {
+    expect(sessionLibrariesAck('L1', 9)).toEqual({
+      protocolVersion: v,
+      type: 'libraries-ack',
+      requestId: 'L1',
+      sourceRevision: 9,
     });
   });
 

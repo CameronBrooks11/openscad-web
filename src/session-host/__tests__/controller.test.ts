@@ -37,6 +37,10 @@ class FakeSession implements SessionHost {
   setEntryPoint(path: string) {
     this.calls.push(`setEntryPoint:${path}`);
   }
+  setLibraries(libraries: { name: string }[]) {
+    this.revision++;
+    this.calls.push(`setLibraries:${libraries.map((l) => l.name).join(',')}`);
+  }
   render(requestId?: string) {
     this.calls.push(`render:${requestId ?? ''}`);
   }
@@ -146,6 +150,7 @@ describe('SessionController', () => {
         'updateFile',
         'removeFile',
         'setEntryPoint',
+        'setLibraries',
         'render',
         'export',
         'getArtifact',
@@ -268,6 +273,28 @@ describe('SessionController', () => {
     session.emit(result({ kind: 'render', sourceRevision: 3, artifactId: 'a1' }));
     await flush();
     expect(viewer.offText).toBeNull();
+  });
+
+  it('setLibraries dispatches and acks the assigned revision (ADR 0010)', () => {
+    const { session, transport } = setup();
+    transport.receive({
+      protocolVersion: V,
+      type: 'setLibraries',
+      libraries: [{ name: 'MyLib', files: [{ path: 'u.scad', content: '//' }] }],
+      requestId: 'L1',
+    });
+    expect(session.calls).toEqual(['setLibraries:MyLib']);
+    expect(transport.sent.at(-1)).toEqual({
+      protocolVersion: V,
+      type: 'libraries-ack',
+      requestId: 'L1',
+      sourceRevision: 1,
+    });
+    // No requestId → no ack.
+    transport.receive({ protocolVersion: V, type: 'setLibraries', libraries: [] });
+    expect(
+      transport.sent.filter((m) => (m as { type: string }).type === 'libraries-ack'),
+    ).toHaveLength(1);
   });
 
   it('setProject with a requestId is acked with the ASSIGNED revision (#227)', () => {

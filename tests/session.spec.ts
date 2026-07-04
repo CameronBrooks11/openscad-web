@@ -94,7 +94,7 @@ test.describe('session distributable (#193)', () => {
           protocolVersion: v,
           type: 'setProject',
           files: [
-            { path: 'main.scad', content: 'cube([10, 10, 10]);' },
+            { path: 'main.scad', content: 'use <E2ELib/util.scad>\ne2e_unit();' },
             { path: 'assets/blob.bin', bytes: new Uint8Array([0xde, 0xad, 0xbe, 0xef]) },
           ],
           entryPoint: 'main.scad',
@@ -103,6 +103,30 @@ test.describe('session distributable (#193)', () => {
         window.location.origin,
       );
     }, protocolVersion);
+
+    // Runtime user library (ADR 0010 / #195): push it BEFORE the project (the
+    // declarative contract works in either order; this exercises libs-first),
+    // await its ack, and the project below resolves `use <E2ELib/…>` through
+    // the runtime registry + per-job symlink — the full seam, real WASM.
+    await postToSession(page, {
+      protocolVersion,
+      type: 'setLibraries',
+      libraries: [
+        {
+          name: 'E2ELib',
+          files: [{ path: 'util.scad', content: 'module e2e_unit() cube([2, 2, 2]);' }],
+        },
+      ],
+      requestId: 'e2e-libs-1',
+    });
+    await page.waitForFunction(
+      () =>
+        window.__sessionMessages?.some(
+          (m) => m?.type === 'libraries-ack' && m?.requestId === 'e2e-libs-1',
+        ),
+      null,
+      { timeout: 30_000 },
+    );
 
     // The push is acked with its assigned revision (#227) before any results.
     await page.waitForFunction(

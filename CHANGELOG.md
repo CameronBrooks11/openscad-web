@@ -6,6 +6,26 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-04
+
+### Added
+
+- **Runtime user libraries over the L1 wire** (#195, ADR 0010): the new
+  `setLibraries { libraries, requestId? }` command pushes the declarative FULL
+  set of user libraries — `{name, files, meta?}`, where name is the
+  `use <Name/…>` token, files are individually validated relative paths
+  (content or bytes; no archives, no zip tooling anywhere), and `meta` is
+  opaque passthrough for a future library manager. A runtime name SHADOWS the
+  bundled library of the same name (whole-library; the bundled ZipFS is
+  unmounted and demand-eligibility restored on unshadow); every runtime name
+  is symlinked per job so sibling-dependency payloads work; the set is
+  retained host-side and replayed across worker recycles, applied only at job
+  boundaries with per-library failure containment. The mutation bumps the
+  source revision, so a project that failed on the missing library recompiles
+  when the set arrives, stale results drop, and `libraries-ack
+{ requestId, sourceRevision }` gives exact correlation (#227 pattern).
+  Additive to protocol v2; hosts feature-detect via `ready.capabilities`.
+
 ## [0.3.4] - 2026-07-03
 
 ### Added

@@ -319,6 +319,13 @@ before sending. Then **drive a project** rather than push geometry:
   `bytes` at a text-suffix path must be valid UTF-8 and are treated as text),
   `updateFile { path, content }` (text-only — re-push binary
   changes via `setProject`), `removeFile { path }`, `setEntryPoint { path }`,
+  `setLibraries { libraries, requestId? }` (runtime USER libraries, ADR 0010:
+  the declarative FULL set of `{name, files, meta?}` entries — name is the
+  `use <Name/…>` token, files are relative paths as content/bytes; a runtime
+  name SHADOWS the bundled library of the same name whole; answered with
+  `libraries-ack { requestId, sourceRevision }` and the already-pushed project
+  recompiles automatically; feature-detect via `ready.capabilities` — an older
+  session rejects the command as `unknown-type`),
   `render { requestId? }` (a FULL `$preview = false` render — #219; before any
   `setProject` it fails with a `no-project` result rather than rendering the
   default model),
@@ -334,7 +341,8 @@ before sending. Then **drive a project** rather than push geometry:
   `getArtifact`), `project-ack { requestId, sourceRevision }` (the reply to a
   `setProject` that carried a `requestId` — #227: the engine's ASSIGNED revision
   for that push; accept exactly the results carrying it, and detect a rejected
-  push by an unchanged revision), and `error { code, reason }`.
+  push by an unchanged revision), `libraries-ack { requestId, sourceRevision }`
+  (the same pattern for `setLibraries`), and `error { code, reason }`.
 
 Geometry is **not** sent over the wire: the session renders it **in-process** into
 its embedded viewer. The `operation-result` carries an `artifact` _reference_

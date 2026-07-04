@@ -1,6 +1,6 @@
 # ADR 0010 — Runtime user libraries over the session wire
 
-**Status:** Proposed — the design for #195 (runtime user libraries /
+**Status:** Accepted — the design for #195 (runtime user libraries /
 OPENSCADPATH beyond the bundled zips). Adversarially design-reviewed
 2026-07-03; the review's findings are folded in below.
 
