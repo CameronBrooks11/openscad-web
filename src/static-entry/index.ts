@@ -35,6 +35,15 @@ window.addEventListener('load', async () => {
   const viewer = document.createElement('osc-geometry-viewer') as GeometryViewer;
   // Display-only: no preview-thumbnail hashing (needs a GL readback we don't use).
   viewer.generateThumbnails = false;
+  // A parse/render failure of the geometry surfaces as a `viewer-error` event
+  // rather than rejecting the fetch — show it instead of a blank viewport.
+  viewer.addEventListener('viewer-error', (event) => {
+    const detail = (event as CustomEvent).detail;
+    showMessage(
+      root,
+      `Failed to render geometry: ${detail instanceof Error ? detail.message : String(detail)}`,
+    );
+  });
   root.replaceChildren(viewer);
 
   const geometryUrl = new URL(config.geometry, document.baseURI).toString();

@@ -40,6 +40,8 @@ async function main() {
 
   assertArchiveHas(entrySet, 'index.html');
   assertArchiveHas(entrySet, 'viewer.html');
+  // The `static` publish surface hard-requires static.html from the artifact.
+  assertArchiveHas(entrySet, 'static.html');
   assertArchiveHasPrefix(entryNames, 'assets/');
   assertArchiveHasPrefix(entryNames, 'libraries/');
 
