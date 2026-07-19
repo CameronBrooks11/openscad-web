@@ -309,6 +309,93 @@ targets:
     ]);
   });
 
+  it('allows sibling mounts that share a path prefix but are not nested', async () => {
+    // /model/ and /modelx/ share the "/model" prefix but neither is nested in
+    // the other. Trailing-slash normalization must keep them distinct; if the
+    // collision check dropped it, this would wrongly throw.
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'models', 'a.scad'), 'cube(1);');
+    await writeTextFile(path.join(cwd, 'models', 'b.scad'), 'cube(2);');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `targets:
+  - source: ./models/a.scad
+    mountPath: /model/
+    surface: viewer
+  - source: ./models/b.scad
+    mountPath: /modelx/
+    surface: viewer
+`,
+    );
+
+    await runDeployConfigure(
+      [
+        '--config',
+        './openscad-publish.yml',
+        '--artifact-path',
+        './openscad-web-publish.zip',
+        '--output-dir',
+        './site',
+      ],
+      { cwd },
+    );
+
+    await expect(
+      readFile(path.join(cwd, 'site', 'model', 'project', 'a.scad'), 'utf8'),
+    ).resolves.toBe('cube(1);');
+    await expect(
+      readFile(path.join(cwd, 'site', 'modelx', 'project', 'b.scad'), 'utf8'),
+    ).resolves.toBe('cube(2);');
+  });
+
+  it('re-assembles an already-published multi-target site idempotently', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'models', 'one.scad'), 'cube(1);');
+    await writeTextFile(path.join(cwd, 'models', 'two.scad'), 'cube(2);');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `targets:
+  - source: ./models/one.scad
+    mountPath: /one/
+    surface: viewer
+  - source: ./models/two.scad
+    mountPath: /two/
+    surface: viewer
+`,
+    );
+
+    const args = [
+      '--config',
+      './openscad-publish.yml',
+      '--artifact-path',
+      './openscad-web-publish.zip',
+      '--output-dir',
+      './site',
+    ];
+
+    await runDeployConfigure(args, { cwd });
+    // A stale file inside an owned mount must be cleared on the second run.
+    await writeTextFile(path.join(cwd, 'site', 'one', 'stale.txt'), 'remove me');
+
+    // Second run over the already-assembled site: each mount is detected as
+    // owned and replaced rather than rejected as unowned.
+    await runDeployConfigure(args, { cwd });
+
+    await expect(
+      readFile(path.join(cwd, 'site', 'one', 'project', 'one.scad'), 'utf8'),
+    ).resolves.toBe('cube(1);');
+    await expect(
+      readFile(path.join(cwd, 'site', 'two', 'project', 'two.scad'), 'utf8'),
+    ).resolves.toBe('cube(2);');
+    await expect(
+      readFile(path.join(cwd, 'site', 'one', 'stale.txt'), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('rejects duplicate mount paths across targets', async () => {
     const cwd = await makeTempDir();
     const artifactPath = path.join(cwd, 'openscad-web-publish.zip');

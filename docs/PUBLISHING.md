@@ -132,6 +132,21 @@ Multiple targets:
 - each assembled target currently carries its own runtime copy; de-duplicating a
   shared runtime across targets is tracked in [#240](https://github.com/CameronBrooks11/openscad-web/issues/240)
 
+### Re-runs and recovery
+
+- **Re-running is safe.** Each mount is stamped with an ownership marker; a later
+  run detects its own mounts and replaces them in place, leaving sibling and
+  unrelated content untouched. Assembly refuses to overwrite a non-empty
+  directory it does not own.
+- **A renamed or removed target orphans its old mount.** Assembly only creates
+  or replaces the mounts named in the current config; it does not delete a mount
+  you published previously and then dropped. If you rename or remove a target,
+  clear its old mount directory yourself.
+- **After a failed assembly, clear the output directory before retrying.** If a
+  run fails partway through a multi-target assembly, a partially written mount
+  may be left without its ownership marker, and the next run will refuse to
+  overwrite it. Remove the output directory (or the offending mount) and re-run.
+
 ## Mixed-Site Example
 
 If your repo already builds other static content at the root and you want OpenSCAD under `/model/`, assemble into the same output directory:
