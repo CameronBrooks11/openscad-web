@@ -68,6 +68,7 @@ describe('loadBootConfig', () => {
             download: false,
             parentOrigin: 'https://store.example.com',
             title: 'Configured Project',
+            assetBase: '../_openscad-web/v0.4.0/',
             unknown: 'ignored',
           }),
           {
@@ -89,6 +90,7 @@ describe('loadBootConfig', () => {
       download: false,
       parentOrigin: 'https://store.example.com',
       title: 'Configured Project',
+      assetBase: '../_openscad-web/v0.4.0/',
     });
   });
 

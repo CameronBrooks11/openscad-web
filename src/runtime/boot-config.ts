@@ -5,6 +5,13 @@ export interface BootConfig {
   download?: boolean;
   parentOrigin?: string;
   title?: string;
+  /**
+   * Base for runtime-fetched assets (libraries/fonts), relative to this
+   * surface's document. Set when a shared runtime is assembled once and
+   * multiple thin mounts point at it (multi-target publish). Absent for a
+   * self-contained mount, where assets resolve relative to the document.
+   */
+  assetBase?: string;
 }
 
 export const BOOT_CONFIG_TIMEOUT_MS = 2_000;
@@ -26,6 +33,7 @@ function normalizeBootConfig(value: unknown): BootConfig {
   if (typeof value.download === 'boolean') config.download = value.download;
   if (typeof value.parentOrigin === 'string') config.parentOrigin = value.parentOrigin;
   if (typeof value.title === 'string') config.title = value.title;
+  if (typeof value.assetBase === 'string') config.assetBase = value.assetBase;
 
   return config;
 }
