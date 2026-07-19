@@ -496,6 +496,50 @@ async function copyDirectoryContents(sourceDirPath, targetDirPath) {
   );
 }
 
+// The asset files (basenames under assets/) reachable from an entry HTML: its
+// script/modulepreload refs plus their transitive chunk imports. This lets a
+// static mount copy only the viewer chunks, never the compiler/WASM/libraries.
+async function collectReachableAssetFiles(artifactDirPath, entryHtml) {
+  const assetsDirPath = path.join(artifactDirPath, 'assets');
+  const referenceRe = /["'`](?:[^"'`]*\/)?([\w-]+\.(?:js|css))["'`]/g;
+  const reachable = new Set();
+  const queue = [...entryHtml.matchAll(referenceRe)].map((match) => match[1]);
+  while (queue.length > 0) {
+    const file = queue.shift();
+    if (reachable.has(file)) continue;
+    reachable.add(file);
+    if (!file.endsWith('.js')) continue;
+    let content;
+    try {
+      content = await readFile(path.join(assetsDirPath, file), 'utf8');
+    } catch {
+      continue; // not an emitted assets chunk
+    }
+    for (const match of content.matchAll(referenceRe)) {
+      if (!reachable.has(match[1])) queue.push(match[1]);
+    }
+  }
+  return reachable;
+}
+
+// Assemble a self-contained static mount: the static viewer page as index.html
+// plus only the assets it references — no compiler, WASM, Monaco, or libraries.
+async function assembleStaticMount(artifactDirPath, mountDirPath) {
+  const staticHtml = await readFile(path.join(artifactDirPath, 'static.html'), 'utf8');
+  await writeFile(path.join(mountDirPath, 'index.html'), staticHtml, 'utf8');
+
+  const assetFiles = await collectReachableAssetFiles(artifactDirPath, staticHtml);
+  await mkdir(path.join(mountDirPath, 'assets'), { recursive: true });
+  await Promise.all(
+    [...assetFiles].map(async (file) => {
+      const sourcePath = path.join(artifactDirPath, 'assets', file);
+      if ((await pathKind(sourcePath)) === 'file') {
+        await cp(sourcePath, path.join(mountDirPath, 'assets', file));
+      }
+    }),
+  );
+}
+
 function resolveMountDirectory(outputDirPath, mountPath) {
   if (mountPath === '/') {
     return outputDirPath;
@@ -545,7 +589,7 @@ function buildBootConfig(target, modelPath, assetBase) {
   return bootConfig;
 }
 
-function buildStaticBootConfig(target, geometryUrl, posterUrl, assetBase) {
+function buildStaticBootConfig(target, geometryUrl, posterUrl) {
   const bootConfig = {
     mode: SURFACE_TO_MODE.static,
     geometry: geometryUrl,
@@ -554,7 +598,6 @@ function buildStaticBootConfig(target, geometryUrl, posterUrl, assetBase) {
   if (typeof posterUrl === 'string') bootConfig.poster = posterUrl;
   if (typeof target.title === 'string' && target.title.trim() !== '')
     bootConfig.title = target.title;
-  if (typeof assetBase === 'string') bootConfig.assetBase = assetBase;
 
   return bootConfig;
 }
@@ -699,7 +742,12 @@ export async function runDeployConfigure(
       return entryHtmlCache.get(name);
     };
 
-    const useSharedRuntime = targets.length > 1;
+    // Only compile surfaces (viewer/customizer/editor) use the ~13 MB runtime;
+    // static mounts are always self-contained and light. So the shared runtime
+    // is assembled only when more than one *compile* target would otherwise each
+    // carry its own copy.
+    const compileTargetCount = targets.filter((target) => target.surface !== 'static').length;
+    const useSharedRuntime = compileTargetCount > 1;
     let sharedRuntimeDirPath = null;
 
     if (useSharedRuntime) {
@@ -720,7 +768,6 @@ export async function runDeployConfigure(
     const assembled = [];
     for (const target of targets) {
       const isStatic = target.surface === 'static';
-      const entryHtmlName = isStatic ? 'static.html' : 'index.html';
       const mountDirPath = resolveMountDirectory(outputDirPath, target.mountPath);
       const { replaceExisting } = await assertMountDirectoryCanBeReplaced(mountDirPath);
       if (replaceExisting) {
@@ -729,32 +776,26 @@ export async function runDeployConfigure(
 
       await mkdir(mountDirPath, { recursive: true });
 
-      let assetBase;
-      if (useSharedRuntime) {
-        // Thin mount: the entry page rewritten to point at the shared runtime,
-        // plus its own payload, boot config, and ownership marker.
-        assetBase = `${toPosixPath(path.relative(mountDirPath, sharedRuntimeDirPath))}/`;
-        await writeFile(
-          path.join(mountDirPath, 'index.html'),
-          rewriteThinIndexHtml(await readEntryHtml(entryHtmlName), assetBase),
-          'utf8',
-        );
-      } else {
-        await copyDirectoryContents(extractedArtifactDirPath, mountDirPath);
-        if (isStatic) {
-          // Serve the static viewer as the mount's index page.
-          await cp(
-            path.join(extractedArtifactDirPath, 'static.html'),
-            path.join(mountDirPath, 'index.html'),
-          );
-        }
-      }
-
       let bootConfig;
       if (isStatic) {
+        // Self-contained light mount: the static viewer page + only its chunks +
+        // the pre-rendered geometry. No compiler runtime, no shared runtime.
+        await assembleStaticMount(extractedArtifactDirPath, mountDirPath);
         const { geometry, poster } = await populateGeometryPayload(mountDirPath, target);
-        bootConfig = buildStaticBootConfig(target, geometry, poster, assetBase);
+        bootConfig = buildStaticBootConfig(target, geometry, poster);
       } else {
+        let assetBase;
+        if (useSharedRuntime) {
+          // Thin mount: index.html rewritten to point at the shared runtime.
+          assetBase = `${toPosixPath(path.relative(mountDirPath, sharedRuntimeDirPath))}/`;
+          await writeFile(
+            path.join(mountDirPath, 'index.html'),
+            rewriteThinIndexHtml(await readEntryHtml('index.html'), assetBase),
+            'utf8',
+          );
+        } else {
+          await copyDirectoryContents(extractedArtifactDirPath, mountDirPath);
+        }
         const modelPath = await populateProjectPayload(mountDirPath, target);
         bootConfig = buildBootConfig(target, modelPath, assetBase);
       }

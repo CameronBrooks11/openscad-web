@@ -770,6 +770,18 @@ targets:
     expect(indexHtml).toContain('id="viewer-root"');
     expect(indexHtml).toContain('assets/static.js');
 
+    // The mount carries ONLY the static viewer's chunk — not the compiler app's
+    // entry chunk and no library payloads.
+    await expect(
+      readFile(path.join(cwd, 'site', 'widget', 'assets', 'static.js'), 'utf8'),
+    ).resolves.toContain('static viewer');
+    await expect(
+      readFile(path.join(cwd, 'site', 'widget', 'assets', 'app.js'), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      readFile(path.join(cwd, 'site', 'widget', 'libraries', 'example.zip'), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+
     // Geometry + poster copied under fixed names; no .scad project.
     await expect(readFile(path.join(cwd, 'site', 'widget', 'geometry.off'), 'utf8')).resolves.toBe(
       'OFF\n8 12 0\n',
@@ -791,17 +803,22 @@ targets:
     });
   });
 
-  it('assembles a static thin mount that shares the runtime with a live target', async () => {
+  it('keeps a static mount self-contained even beside a shared runtime', async () => {
     const cwd = await makeTempDir();
     const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
     await createPublishArtifact(artifactPath);
-    await writeTextFile(path.join(cwd, 'models', 'live.scad'), 'cube(1);');
+    await writeTextFile(path.join(cwd, 'models', 'a.scad'), 'cube(1);');
+    await writeTextFile(path.join(cwd, 'models', 'b.scad'), 'cube(2);');
     await writeTextFile(path.join(cwd, 'rendered', 'still.off'), 'OFF\n');
     await writeTextFile(
       path.join(cwd, 'openscad-publish.yml'),
+      // Two compile targets trigger the shared runtime; the static one must not.
       `targets:
-  - source: ./models/live.scad
-    mountPath: /live/
+  - source: ./models/a.scad
+    mountPath: /a/
+    surface: viewer
+  - source: ./models/b.scad
+    mountPath: /b/
     surface: viewer
   - surface: static
     geometry: ./rendered/still.off
@@ -809,7 +826,7 @@ targets:
 `,
     );
 
-    await runDeployConfigure(
+    const result = await runDeployConfigure(
       [
         '--config',
         './openscad-publish.yml',
@@ -823,23 +840,26 @@ targets:
       { cwd },
     );
 
-    // The static mount is thin: its index is the rewritten STATIC page pointing
-    // at the shared runtime, plus its geometry — no runtime copy of its own.
+    // The compile targets share one runtime...
+    expect(result.sharedRuntimeDirPath).toBe(path.join(cwd, 'site', '_openscad-web', 'v0.4.0'));
+    const liveIndex = await readFile(path.join(cwd, 'site', 'a', 'index.html'), 'utf8');
+    expect(liveIndex).toContain('../_openscad-web/v0.4.0/assets/app.js');
+
+    // ...but the static mount is self-contained: its own index + chunk + geometry,
+    // mount-relative refs, and NO assetBase pointing at the shared runtime.
     const stillIndex = await readFile(path.join(cwd, 'site', 'still', 'index.html'), 'utf8');
-    expect(stillIndex).toContain('src="../_openscad-web/v0.4.0/assets/static.js"');
-    expect(stillIndex).not.toContain('="./');
+    expect(stillIndex).toContain('src="./assets/static.js"');
+    await expect(
+      readFile(path.join(cwd, 'site', 'still', 'assets', 'static.js'), 'utf8'),
+    ).resolves.toContain('static viewer');
     await expect(readFile(path.join(cwd, 'site', 'still', 'geometry.off'), 'utf8')).resolves.toBe(
       'OFF\n',
     );
-    await expect(
-      readFile(path.join(cwd, 'site', 'still', 'assets', 'static.js'), 'utf8'),
-    ).rejects.toMatchObject({ code: 'ENOENT' });
     await expect(
       readJson(path.join(cwd, 'site', 'still', 'openscad-web.config.json')),
     ).resolves.toEqual({
       mode: 'static',
       geometry: './geometry.off',
-      assetBase: '../_openscad-web/v0.4.0/',
     });
   });
 
