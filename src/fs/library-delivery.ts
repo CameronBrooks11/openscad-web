@@ -11,34 +11,16 @@ export function getPrefetchedArchives(archives: ZipArchive[] = zipArchives): Zip
   return archives.filter((archive) => archive.prefetch === true);
 }
 
-// Absolute runtime-chunk URLs (worker + WASM). These come from Vite `?url`
-// imports, so they are correct the moment the module evaluates and can be
-// prefetched immediately.
-export function getRuntimeBootstrapPrefetchSpecifiers(
-  workerSpecifier?: string,
-  wasmSpecifier?: string,
-): string[] {
-  return [...(wasmSpecifier ? [wasmSpecifier] : []), ...(workerSpecifier ? [workerSpecifier] : [])];
-}
-
-// Relative library archives (fonts + any prefetch-flagged libraries). These
-// resolve against the runtime asset base, which on a shared-runtime thin mount
-// is only known once the boot config's `assetBase` is applied — so prefetch
-// them after that, or the hint 404s against the mount (which has no libraries/).
-export function getLibraryBootstrapPrefetchSpecifiers(
-  archives: ZipArchive[] = zipArchives,
-): string[] {
-  return [...CORE_PREFETCH_SPECIFIERS, ...getPrefetchedArchives(archives).map((a) => a.zipPath)];
-}
-
 export function getBootstrapPrefetchSpecifiers(
   archives: ZipArchive[] = zipArchives,
   workerSpecifier?: string,
   wasmSpecifier?: string,
 ): string[] {
   return [
-    ...getRuntimeBootstrapPrefetchSpecifiers(workerSpecifier, wasmSpecifier),
-    ...getLibraryBootstrapPrefetchSpecifiers(archives),
+    ...(wasmSpecifier ? [wasmSpecifier] : []),
+    ...CORE_PREFETCH_SPECIFIERS,
+    ...(workerSpecifier ? [workerSpecifier] : []),
+    ...getPrefetchedArchives(archives).map((a) => a.zipPath),
   ];
 }
 

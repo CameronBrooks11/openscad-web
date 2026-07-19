@@ -479,6 +479,10 @@ targets:
     expect(oneIndex).toContain('src="../_openscad-web/v0.4.0/assets/app.js"');
     expect(oneIndex).toContain('href="../_openscad-web/v0.4.0/favicon.ico"');
     expect(oneIndex).not.toContain('="./');
+    // A synchronous asset-base hint for the early (module-eval) library prefetch.
+    expect(oneIndex).toContain(
+      '<meta name="openscad-asset-base" content="../_openscad-web/v0.4.0/" />',
+    );
 
     await expect(
       readJson(path.join(cwd, 'site', 'one', 'openscad-web.config.json')),
