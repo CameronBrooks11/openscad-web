@@ -620,9 +620,14 @@ function sharedRuntimeVersionSegment(artifactVersion) {
 // Rewrite the runtime artifact's index.html so its `./`-relative asset refs
 // (entry script/CSS, modulepreload, icons, audio) point at the shared runtime.
 // The app's dynamic chunks, worker, and WASM then chain off the entry script's
-// location; runtime-fetched libraries follow `assetBase` in the boot config.
+// location. A `<meta>` carries the runtime base synchronously so the app's early
+// (module-eval) library prefetch resolves against the shared runtime, not this
+// mount; runtime-fetched libraries also follow `assetBase` in the boot config.
 function rewriteThinIndexHtml(indexHtml, relativeRuntimePrefix) {
-  return indexHtml.replaceAll('="./', `="${relativeRuntimePrefix}`);
+  const assetBaseMeta = `<meta name="openscad-asset-base" content="${relativeRuntimePrefix}" />`;
+  return indexHtml
+    .replace('<head>', `<head>\n    ${assetBaseMeta}`)
+    .replaceAll('="./', `="${relativeRuntimePrefix}`);
 }
 
 async function writeOwnershipMarker(targetDirPath, artifactVersion, now) {

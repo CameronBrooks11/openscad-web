@@ -39,6 +39,19 @@ if (!import.meta.env.PROD) {
   debug.disable();
 }
 
+// A shared-runtime thin mount injects its asset base as a <meta> so the early
+// library prefetch below (and every other runtime-asset fetch) resolves against
+// the shared runtime rather than this mount, which has no libraries/. The boot
+// config carries the same value and re-applies it in the load handler.
+const assetBaseMeta =
+  typeof document === 'object'
+    ? document.querySelector('meta[name="openscad-asset-base"]')?.getAttribute('content')
+    : null;
+if (assetBaseMeta) {
+  const resolved = new URL(assetBaseMeta, document.baseURI).toString();
+  setRuntimeAssetBase(resolved.endsWith('/') ? resolved : `${resolved}/`);
+}
+
 injectBootstrapPrefetchHints(
   getBootstrapPrefetchSpecifiers(undefined, openSCADWorkerUrl, openSCADWasmUrl),
 );

@@ -36,16 +36,19 @@ test('a shared-runtime compile mount fetches libraries from the shared runtime a
   // fonts.zip (done at FS init on every compile) succeeds there. If it had
   // resolved against the thin mount instead (the #240 blocker), FS init would
   // have thrown and the geometry above would never have loaded.
-  //
-  // (A separate, harmless main-thread prefetch hint still points a `<link
-  // rel=prefetch>` at the mount path and 404s; that is non-fatal and not what
-  // this test guards.)
   const sharedFonts = responses.find(
     (response) =>
       response.url.includes('/_openscad-web/') && response.url.includes('/libraries/fonts.zip'),
   );
   expect(sharedFonts, 'the worker fetched fonts.zip from the shared runtime').toBeTruthy();
   expect(sharedFonts!.status).toBe(200);
+
+  // No library asset 404s — the main-thread prefetch hint also targets the
+  // shared runtime, not the mount (guards #248).
+  const libraryNotFound = responses.filter(
+    (response) => response.url.includes('/libraries/') && response.status === 404,
+  );
+  expect(libraryNotFound, 'no library asset 404d').toEqual([]);
 });
 
 test('a static mount renders the pre-rendered geometry with no WASM (#241)', async ({ page }) => {
