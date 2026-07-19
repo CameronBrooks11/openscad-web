@@ -4,12 +4,15 @@ const serverMode = process.env.E2E_SERVER_MODE ?? 'prod';
 const isDevelopmentServer = serverMode === 'dev';
 const isPublishRootServer = serverMode === 'publish-root';
 const isPublishSubpathServer = serverMode === 'publish-subpath';
+// Assembled publish surfaces (deploy-configure): a multi-target site with a
+// shared runtime + a static mount, served at root. See publish-assembled.spec.ts.
+const isPublishAssembledServer = serverMode === 'publish-assembled';
 // The compile-capable distributable (#193): dist-session served at root (base
 // './'), so session.html sits at http://localhost:3000/session.html.
 const isSessionServer = serverMode === 'session';
 const appUrl = isDevelopmentServer
   ? 'http://localhost:4000/'
-  : isPublishRootServer || isSessionServer
+  : isPublishRootServer || isSessionServer || isPublishAssembledServer
     ? 'http://localhost:3000/'
     : isPublishSubpathServer
       ? 'http://localhost:3000/openscad-web/'
@@ -18,13 +21,15 @@ const webServerCommand = isDevelopmentServer
   ? 'npm run start:development'
   : isSessionServer
     ? 'npm run serve:session'
-    : isPublishRootServer || isPublishSubpathServer
+    : isPublishRootServer || isPublishSubpathServer || isPublishAssembledServer
       ? 'node ./scripts/serve-publish-e2e.mjs'
       : 'npm run start:production';
 
 export default defineConfig({
   testDir: './tests',
-  testMatch: /.*\.spec\.ts$/,
+  // The assembled-surfaces server hosts mounts, not viewer.html/index.html, so
+  // only its own spec runs in that mode; the rest run everywhere else.
+  testMatch: isPublishAssembledServer ? /publish-assembled\.spec\.ts$/ : /.*\.spec\.ts$/,
   timeout: 90_000,
   fullyParallel: false,
   forbidOnly: process.env.CI === 'true',
@@ -84,6 +89,7 @@ export default defineConfig({
       process.env.CI !== 'true' &&
       !isPublishRootServer &&
       !isPublishSubpathServer &&
+      !isPublishAssembledServer &&
       !isSessionServer,
   },
 });
