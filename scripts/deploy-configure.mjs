@@ -476,7 +476,12 @@ const SHARED_RUNTIME_DIRNAME = '_openscad-web';
 
 function sharedRuntimeVersionSegment(artifactVersion) {
   const segment = getString(artifactVersion)?.replace(/[^A-Za-z0-9._-]/g, '_');
-  return segment == null || segment === '' ? DEFAULT_ARTIFACT_VERSION : segment;
+  // Never let the version escape the shared-runtime dir. The version is
+  // maintainer/CI-controlled, but '.'/'..' would resolve to the parent tree.
+  if (segment == null || segment === '' || segment === '.' || segment === '..') {
+    return DEFAULT_ARTIFACT_VERSION;
+  }
+  return segment;
 }
 
 // Rewrite the runtime artifact's index.html so its `./`-relative asset refs
@@ -569,20 +574,23 @@ export async function runDeployConfigure(
     new AdmZip(path.resolve(cwd, artifactPath)).extractAllTo(extractedArtifactDirPath, true);
     await assertArtifactLayout(extractedArtifactDirPath);
 
+    // `/_openscad-web/` is reserved for the shared runtime — reject it for any
+    // publish (not only multi-target), so a single-target mount there can't
+    // collide with a shared runtime assembled later into the same output dir.
+    const reservedPrefix = `/${SHARED_RUNTIME_DIRNAME}/`;
+    for (const target of targets) {
+      if (target.mountPath.startsWith(reservedPrefix)) {
+        throw new Error(
+          `mountPath must not use the reserved shared-runtime path ${reservedPrefix}. Got: ${target.mountPath}`,
+        );
+      }
+    }
+
     const useSharedRuntime = targets.length > 1;
     let sharedRuntimeDirPath = null;
     let baseIndexHtml = null;
 
     if (useSharedRuntime) {
-      const reservedPrefix = `/${SHARED_RUNTIME_DIRNAME}/`;
-      for (const target of targets) {
-        if (target.mountPath.startsWith(reservedPrefix)) {
-          throw new Error(
-            `mountPath must not use the reserved shared-runtime path ${reservedPrefix}. Got: ${target.mountPath}`,
-          );
-        }
-      }
-
       sharedRuntimeDirPath = path.join(
         outputDirPath,
         SHARED_RUNTIME_DIRNAME,

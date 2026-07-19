@@ -545,6 +545,42 @@ targets:
     ).rejects.toThrow(/reserved shared-runtime path/i);
   });
 
+  it('does not let a path-traversal artifact version escape the shared-runtime dir', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'models', 'one.scad'), 'cube(1);');
+    await writeTextFile(path.join(cwd, 'models', 'two.scad'), 'cube(2);');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `targets:
+  - source: ./models/one.scad
+    mountPath: /one/
+    surface: viewer
+  - source: ./models/two.scad
+    mountPath: /two/
+    surface: viewer
+`,
+    );
+
+    const result = await runDeployConfigure(
+      [
+        '--config',
+        './openscad-publish.yml',
+        '--artifact-path',
+        './openscad-web-publish.zip',
+        '--artifact-version',
+        '..',
+        '--output-dir',
+        './site',
+      ],
+      { cwd },
+    );
+
+    // '..' would resolve to the site root; it must fall back to a safe segment.
+    expect(result.sharedRuntimeDirPath).toBe(path.join(cwd, 'site', '_openscad-web', 'unknown'));
+  });
+
   it('rejects duplicate mount paths across targets', async () => {
     const cwd = await makeTempDir();
     const artifactPath = path.join(cwd, 'openscad-web-publish.zip');

@@ -15,7 +15,7 @@
 
 import openSCADWorkerUrl from './openscad-worker.ts?worker&url';
 import { openSCADWasmUrl } from './openscad-asset-urls.ts';
-import { resolveDefaultRuntimeBaseUrl } from '../runtime/asset-urls.ts';
+import { getDefaultRuntimeBaseUrl } from '../runtime/asset-urls.ts';
 import type { ConfigureRequest } from './worker-protocol.ts';
 
 let blobWorkerUrl: string | null = null;
@@ -62,11 +62,17 @@ export function createOpenSCADWorker(): Worker {
  * The `configure` message the host posts to a freshly-created worker, before any
  * compile. `wasmUrl` and `assetBase` are resolved HERE (main thread), where
  * `import.meta.url` is a real URL, then handed to the worker verbatim (#196).
+ *
+ * `assetBase` goes through `getDefaultRuntimeBaseUrl()` so it honors a
+ * `setRuntimeAssetBase()` override — e.g. a shared-runtime thin mount pins the
+ * base to the shared runtime, which is where the worker's libraries/fonts live.
+ * Without that, the worker would inherit the mount's `document.baseURI`, which
+ * on a thin mount has no `libraries/`.
  */
 export function workerConfigPayload(): ConfigureRequest {
   return {
     type: 'configure',
-    assetBase: assetBaseOverride ?? resolveDefaultRuntimeBaseUrl(import.meta.env.BASE_URL),
+    assetBase: assetBaseOverride ?? getDefaultRuntimeBaseUrl(),
     wasmUrl: wasmUrlOverride ?? openSCADWasmUrl,
     ...(assetUrlsOverride ? { assetUrls: assetUrlsOverride } : {}),
   };
