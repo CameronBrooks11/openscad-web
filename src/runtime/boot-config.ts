@@ -12,6 +12,17 @@ export interface BootConfig {
    * self-contained mount, where assets resolve relative to the document.
    */
   assetBase?: string;
+  /**
+   * URL (relative to this document) of a pre-rendered OFF geometry file, for the
+   * `static` surface — the standalone geometry viewer fetches and displays it
+   * with no in-browser compile.
+   */
+  geometry?: string;
+  /**
+   * URL (relative to this document) of a pre-rendered PNG poster for the
+   * `static` surface, shown before the geometry loads / as a social preview.
+   */
+  poster?: string;
 }
 
 export const BOOT_CONFIG_TIMEOUT_MS = 2_000;
@@ -34,6 +45,8 @@ function normalizeBootConfig(value: unknown): BootConfig {
   if (typeof value.parentOrigin === 'string') config.parentOrigin = value.parentOrigin;
   if (typeof value.title === 'string') config.title = value.title;
   if (typeof value.assetBase === 'string') config.assetBase = value.assetBase;
+  if (typeof value.geometry === 'string') config.geometry = value.geometry;
+  if (typeof value.poster === 'string') config.poster = value.poster;
 
   return config;
 }

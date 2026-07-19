@@ -37,6 +37,15 @@ async function createPublishArtifact(zipPath) {
     ),
   );
   archive.addFile('assets/app.js', Buffer.from('console.log("publish artifact");'));
+  archive.addFile(
+    'static.html',
+    Buffer.from(
+      '<!doctype html><html><head>' +
+        '<script type="module" src="./assets/static.js"></script>' +
+        '</head><body><div id="viewer-root"></div></body></html>',
+    ),
+  );
+  archive.addFile('assets/static.js', Buffer.from('console.log("static viewer");'));
   archive.addFile('libraries/example.zip', Buffer.from('placeholder'));
   archive.writeZip(zipPath);
 }
@@ -723,5 +732,156 @@ targets:
         },
       ),
     ).rejects.toThrow(/site\.outDir as a non-empty string/i);
+  });
+
+  it('assembles a static surface from pre-rendered geometry + poster', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'rendered', 'widget.off'), 'OFF\n8 12 0\n');
+    await writeTextFile(path.join(cwd, 'rendered', 'widget.png'), 'PNGDATA');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `targets:
+  - surface: static
+    geometry: ./rendered/widget.off
+    poster: ./rendered/widget.png
+    mountPath: /widget/
+    title: Widget
+`,
+    );
+
+    const result = await runDeployConfigure(
+      [
+        '--config',
+        './openscad-publish.yml',
+        '--artifact-path',
+        './openscad-web-publish.zip',
+        '--output-dir',
+        './site',
+      ],
+      { cwd },
+    );
+
+    // Single target → self-contained; the mount's index page is the STATIC
+    // viewer (static.html), not the compile app.
+    expect(result.sharedRuntimeDirPath).toBeNull();
+    const indexHtml = await readFile(path.join(cwd, 'site', 'widget', 'index.html'), 'utf8');
+    expect(indexHtml).toContain('id="viewer-root"');
+    expect(indexHtml).toContain('assets/static.js');
+
+    // Geometry + poster copied under fixed names; no .scad project.
+    await expect(readFile(path.join(cwd, 'site', 'widget', 'geometry.off'), 'utf8')).resolves.toBe(
+      'OFF\n8 12 0\n',
+    );
+    await expect(readFile(path.join(cwd, 'site', 'widget', 'poster.png'), 'utf8')).resolves.toBe(
+      'PNGDATA',
+    );
+    await expect(
+      readFile(path.join(cwd, 'site', 'widget', 'project', 'anything'), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+
+    await expect(
+      readJson(path.join(cwd, 'site', 'widget', 'openscad-web.config.json')),
+    ).resolves.toEqual({
+      mode: 'static',
+      geometry: './geometry.off',
+      poster: './poster.png',
+      title: 'Widget',
+    });
+  });
+
+  it('assembles a static thin mount that shares the runtime with a live target', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'models', 'live.scad'), 'cube(1);');
+    await writeTextFile(path.join(cwd, 'rendered', 'still.off'), 'OFF\n');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `targets:
+  - source: ./models/live.scad
+    mountPath: /live/
+    surface: viewer
+  - surface: static
+    geometry: ./rendered/still.off
+    mountPath: /still/
+`,
+    );
+
+    await runDeployConfigure(
+      [
+        '--config',
+        './openscad-publish.yml',
+        '--artifact-path',
+        './openscad-web-publish.zip',
+        '--artifact-version',
+        'v0.4.0',
+        '--output-dir',
+        './site',
+      ],
+      { cwd },
+    );
+
+    // The static mount is thin: its index is the rewritten STATIC page pointing
+    // at the shared runtime, plus its geometry — no runtime copy of its own.
+    const stillIndex = await readFile(path.join(cwd, 'site', 'still', 'index.html'), 'utf8');
+    expect(stillIndex).toContain('src="../_openscad-web/v0.4.0/assets/static.js"');
+    expect(stillIndex).not.toContain('="./');
+    await expect(readFile(path.join(cwd, 'site', 'still', 'geometry.off'), 'utf8')).resolves.toBe(
+      'OFF\n',
+    );
+    await expect(
+      readFile(path.join(cwd, 'site', 'still', 'assets', 'static.js'), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      readJson(path.join(cwd, 'site', 'still', 'openscad-web.config.json')),
+    ).resolves.toEqual({
+      mode: 'static',
+      geometry: './geometry.off',
+      assetBase: '../_openscad-web/v0.4.0/',
+    });
+  });
+
+  it('rejects a static target with no geometry', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `targets:
+  - surface: static
+    mountPath: /widget/
+`,
+    );
+    await expect(
+      runDeployConfigure(
+        ['--config', './openscad-publish.yml', '--artifact-path', './openscad-web-publish.zip'],
+        { cwd },
+      ),
+    ).rejects.toThrow(/geometry is required/i);
+  });
+
+  it('rejects a static target that also passes a .scad source', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'rendered', 'widget.off'), 'OFF\n');
+    await writeTextFile(path.join(cwd, 'models', 'widget.scad'), 'cube(1);');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `targets:
+  - surface: static
+    geometry: ./rendered/widget.off
+    source: ./models/widget.scad
+    mountPath: /widget/
+`,
+    );
+    await expect(
+      runDeployConfigure(
+        ['--config', './openscad-publish.yml', '--artifact-path', './openscad-web-publish.zip'],
+        { cwd },
+      ),
+    ).rejects.toThrow(/static surface does not use source/i);
   });
 });

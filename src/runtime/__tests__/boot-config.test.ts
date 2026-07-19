@@ -69,6 +69,8 @@ describe('loadBootConfig', () => {
             parentOrigin: 'https://store.example.com',
             title: 'Configured Project',
             assetBase: '../_openscad-web/v0.4.0/',
+            geometry: './geometry.off',
+            poster: './poster.png',
             unknown: 'ignored',
           }),
           {
@@ -91,6 +93,8 @@ describe('loadBootConfig', () => {
       parentOrigin: 'https://store.example.com',
       title: 'Configured Project',
       assetBase: '../_openscad-web/v0.4.0/',
+      geometry: './geometry.off',
+      poster: './poster.png',
     });
   });
 

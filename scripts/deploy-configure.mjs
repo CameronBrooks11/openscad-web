@@ -15,6 +15,9 @@ const SURFACE_TO_MODE = Object.freeze({
   viewer: 'embed',
   customizer: 'customizer',
   editor: 'editor',
+  // Read-only pre-rendered geometry (no in-browser compile). Uses a different
+  // page (static.html) and takes `geometry`/`poster` instead of a `.scad` source.
+  static: 'static',
 });
 
 const SUPPORTED_FLAGS = new Set([
@@ -24,6 +27,8 @@ const SUPPORTED_FLAGS = new Set([
   'entry',
   'surface',
   'mount-path',
+  'geometry',
+  'poster',
   'artifact-path',
   'artifact-version',
   'output-dir',
@@ -35,6 +40,7 @@ const HELP_TEXT = `Usage:
   node scripts/deploy-configure.mjs --config ./openscad-publish.yml --artifact-path ./openscad-web-publish.zip [--output-dir ./site]
   node scripts/deploy-configure.mjs --source ./models/widget.scad --surface viewer --mount-path /model/ --artifact-path ./openscad-web-publish.zip [--output-dir ./site]
   node scripts/deploy-configure.mjs --project-root ./models/assembly --entry ./main.scad --surface customizer --mount-path /assembly/ --artifact-path ./openscad-web-publish.zip [--output-dir ./site]
+  node scripts/deploy-configure.mjs --surface static --geometry ./models/widget.off --poster ./models/widget.png --mount-path /widget/ --artifact-path ./openscad-web-publish.zip [--output-dir ./site]
 `;
 
 function isRecord(value) {
@@ -174,6 +180,8 @@ function parseCliArgs(argv) {
     entry: parsed.entry,
     surface: parsed.surface,
     mountPath: parsed['mount-path'],
+    geometry: parsed.geometry,
+    poster: parsed.poster,
     artifactPath: parsed['artifact-path'],
     artifactVersion: parsed['artifact-version'] ?? DEFAULT_ARTIFACT_VERSION,
     outputDir: parsed['output-dir'],
@@ -243,6 +251,8 @@ function resolveTargetsFromShorthand(args, cwdPath) {
         entry: args.entry,
         surface: args.surface,
         mountPath: args.mountPath,
+        geometry: args.geometry,
+        poster: args.poster,
       },
     ],
   };
@@ -291,6 +301,12 @@ async function validateAndResolveTarget(rawTarget, baseDirPath) {
     normalizedMountPath = normalizeMountPath(mountPath);
   } catch (error) {
     errors.push(error instanceof Error ? error.message : String(error));
+  }
+
+  // The static surface takes a pre-rendered geometry (+ optional poster), not a
+  // .scad source — validate and resolve it on its own path.
+  if (surface === 'static') {
+    return resolveStaticTarget(rawTarget, baseDirPath, normalizedMountPath, errors);
   }
 
   if (source != null && (projectRoot != null || entry != null)) {
@@ -377,6 +393,51 @@ async function validateAndResolveTarget(rawTarget, baseDirPath) {
   };
 }
 
+async function resolveStaticTarget(rawTarget, baseDirPath, normalizedMountPath, errors) {
+  const geometry = getString(rawTarget.geometry);
+  const poster = getString(rawTarget.poster);
+
+  for (const field of ['source', 'projectRoot', 'entry', 'controls', 'download', 'parentOrigin']) {
+    if (rawTarget[field] !== undefined) {
+      errors.push(`static surface does not use ${field}.`);
+    }
+  }
+  if (geometry == null) {
+    errors.push('geometry is required for the static surface.');
+  }
+  if (rawTarget.title !== undefined && typeof rawTarget.title !== 'string') {
+    errors.push('title must be a string when provided.');
+  }
+
+  let geometryPath = null;
+  if (geometry != null) {
+    geometryPath = path.resolve(baseDirPath, geometry);
+    if ((await pathKind(geometryPath)) !== 'file') {
+      errors.push(`geometry file not found: ${geometryPath}`);
+    }
+  }
+
+  let posterPath = null;
+  if (poster != null) {
+    posterPath = path.resolve(baseDirPath, poster);
+    if ((await pathKind(posterPath)) !== 'file') {
+      errors.push(`poster file not found: ${posterPath}`);
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`Invalid publish target:\n- ${errors.join('\n- ')}`);
+  }
+
+  return {
+    mountPath: /** @type {string} */ (normalizedMountPath),
+    surface: 'static',
+    geometryPath,
+    posterPath,
+    title: rawTarget.title,
+  };
+}
+
 async function assertArtifactLayout(artifactDirPath) {
   const requiredPaths = ['index.html', 'assets', 'libraries'];
   const missing = [];
@@ -406,6 +467,21 @@ async function populateProjectPayload(targetDirPath, target) {
 
   await copyDirectoryContents(target.projectRootPath, projectDirPath);
   return `./project/${target.entryPath}`;
+}
+
+// Copy a static target's pre-rendered geometry (+ optional poster) into the
+// mount under fixed names, and return their mount-relative URLs for the config.
+async function populateGeometryPayload(targetDirPath, target) {
+  await cp(target.geometryPath, path.join(targetDirPath, 'geometry.off'));
+
+  let posterUrl = null;
+  if (target.posterPath != null) {
+    const posterFileName = `poster${path.extname(target.posterPath) || '.png'}`;
+    await cp(target.posterPath, path.join(targetDirPath, posterFileName));
+    posterUrl = `./${posterFileName}`;
+  }
+
+  return { geometry: './geometry.off', poster: posterUrl };
 }
 
 async function copyDirectoryContents(sourceDirPath, targetDirPath) {
@@ -469,6 +545,20 @@ function buildBootConfig(target, modelPath, assetBase) {
   return bootConfig;
 }
 
+function buildStaticBootConfig(target, geometryUrl, posterUrl, assetBase) {
+  const bootConfig = {
+    mode: SURFACE_TO_MODE.static,
+    geometry: geometryUrl,
+  };
+
+  if (typeof posterUrl === 'string') bootConfig.poster = posterUrl;
+  if (typeof target.title === 'string' && target.title.trim() !== '')
+    bootConfig.title = target.title;
+  if (typeof assetBase === 'string') bootConfig.assetBase = assetBase;
+
+  return bootConfig;
+}
+
 // Directory (under the site root) that holds the shared runtime, versioned so
 // multiple artifact versions can coexist. Thin mounts reference it via a
 // relative path so the site works under any base URL.
@@ -523,19 +613,22 @@ export async function runDeployConfigure(
     args.entry,
     args.surface,
     args.mountPath,
+    args.geometry,
+    args.poster,
   ].some((value) => getString(value) != null);
 
   const sourceSelectionProvided =
     getString(args.source) != null ||
     getString(args.projectRoot) != null ||
-    getString(args.entry) != null;
+    getString(args.entry) != null ||
+    getString(args.geometry) != null;
 
   if (getString(args.config) != null && shorthandFieldsProvided) {
     throw new Error('Use either --config or the shorthand target flags, not both.');
   }
   if (getString(args.config) == null && !sourceSelectionProvided) {
     throw new Error(
-      'You must provide either --config or one of --source / --project-root with shorthand target flags.',
+      'You must provide either --config or a shorthand target (--source / --project-root / --geometry).',
     );
   }
 
@@ -586,9 +679,28 @@ export async function runDeployConfigure(
       }
     }
 
+    // The static surface serves a different entry page (static.html). Require it
+    // in the artifact when any target needs it, and cache entry HTML for thin
+    // mounts (index.html for compile surfaces, static.html for static).
+    const needsStatic = targets.some((target) => target.surface === 'static');
+    if (
+      needsStatic &&
+      (await pathKind(path.join(extractedArtifactDirPath, 'static.html'))) !== 'file'
+    ) {
+      throw new Error(
+        'Publish artifact does not contain static.html; the static surface needs a newer artifact version.',
+      );
+    }
+    const entryHtmlCache = new Map();
+    const readEntryHtml = async (name) => {
+      if (!entryHtmlCache.has(name)) {
+        entryHtmlCache.set(name, await readFile(path.join(extractedArtifactDirPath, name), 'utf8'));
+      }
+      return entryHtmlCache.get(name);
+    };
+
     const useSharedRuntime = targets.length > 1;
     let sharedRuntimeDirPath = null;
-    let baseIndexHtml = null;
 
     if (useSharedRuntime) {
       sharedRuntimeDirPath = path.join(
@@ -603,12 +715,12 @@ export async function runDeployConfigure(
       await mkdir(path.dirname(sharedRuntimeDirPath), { recursive: true });
       await copyDirectoryContents(extractedArtifactDirPath, sharedRuntimeDirPath);
       await writeOwnershipMarker(sharedRuntimeDirPath, args.artifactVersion, now);
-
-      baseIndexHtml = await readFile(path.join(extractedArtifactDirPath, 'index.html'), 'utf8');
     }
 
     const assembled = [];
     for (const target of targets) {
+      const isStatic = target.surface === 'static';
+      const entryHtmlName = isStatic ? 'static.html' : 'index.html';
       const mountDirPath = resolveMountDirectory(outputDirPath, target.mountPath);
       const { replaceExisting } = await assertMountDirectoryCanBeReplaced(mountDirPath);
       if (replaceExisting) {
@@ -619,20 +731,33 @@ export async function runDeployConfigure(
 
       let assetBase;
       if (useSharedRuntime) {
-        // Thin mount: a rewritten index.html pointing at the shared runtime,
-        // plus its own project payload, boot config, and ownership marker.
+        // Thin mount: the entry page rewritten to point at the shared runtime,
+        // plus its own payload, boot config, and ownership marker.
         assetBase = `${toPosixPath(path.relative(mountDirPath, sharedRuntimeDirPath))}/`;
         await writeFile(
           path.join(mountDirPath, 'index.html'),
-          rewriteThinIndexHtml(baseIndexHtml, assetBase),
+          rewriteThinIndexHtml(await readEntryHtml(entryHtmlName), assetBase),
           'utf8',
         );
       } else {
         await copyDirectoryContents(extractedArtifactDirPath, mountDirPath);
+        if (isStatic) {
+          // Serve the static viewer as the mount's index page.
+          await cp(
+            path.join(extractedArtifactDirPath, 'static.html'),
+            path.join(mountDirPath, 'index.html'),
+          );
+        }
       }
 
-      const modelPath = await populateProjectPayload(mountDirPath, target);
-      const bootConfig = buildBootConfig(target, modelPath, assetBase);
+      let bootConfig;
+      if (isStatic) {
+        const { geometry, poster } = await populateGeometryPayload(mountDirPath, target);
+        bootConfig = buildStaticBootConfig(target, geometry, poster, assetBase);
+      } else {
+        const modelPath = await populateProjectPayload(mountDirPath, target);
+        bootConfig = buildBootConfig(target, modelPath, assetBase);
+      }
       await writeFile(
         path.join(mountDirPath, 'openscad-web.config.json'),
         `${JSON.stringify(bootConfig, null, 2)}\n`,
