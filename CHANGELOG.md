@@ -6,6 +6,33 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-07-19
+
+### Added
+
+- **Multi-target publish** (#239): `deploy-configure` / the publish Action now
+  assemble **every** `targets[]` entry, each into its own `mountPath`, instead
+  of only the first. Mount paths must be unique and non-overlapping (a mount may
+  not nest inside another; `mountPath: /` only when it is the sole target). The
+  `--json` output gains a `targets[]` array; top-level `outputDirPath` is
+  retained for the Action.
+- **Shared runtime across publish targets** (#240): with more than one compile
+  target the ~13 MB runtime is assembled **once** into
+  `<site>/_openscad-web/<version>/` and each target's mount is thin (a rewritten
+  `index.html` pointing at it + its own project/config). A site with N models is
+  roughly `runtime + N × (small payload)` instead of N runtime copies. Shared
+  paths are relative (base-URL agnostic); `/_openscad-web/` is reserved. A new
+  `assetBase` boot-config field points a thin mount's runtime-asset fetches at
+  the shared runtime; the compile worker inherits it via its configure message.
+- **Static (pre-rendered) geometry surface** (#241): a new `surface: static`
+  ships a pre-rendered model to a self-contained ~0.6 MB read-only viewer with
+  **no in-browser WASM compile** — for docs pages that only need to show a
+  model. It takes a pre-rendered `geometry` (OFF) + optional `poster` (PNG)
+  rather than a `.scad`. The new `static.html` / `src/static-entry/` self-loads
+  the geometry via the existing `osc-geometry-viewer`; a static mount carries
+  only the viewer chunks (no compiler/WASM/libraries). `scripts/render-geometry.mjs`
+  wraps the OpenSCAD CLI to produce the OFF (+ PNG) from a `.scad`.
+
 ## [0.4.0] - 2026-07-04
 
 ### Added
