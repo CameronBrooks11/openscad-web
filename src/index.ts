@@ -2,7 +2,8 @@
 
 import { createEditorFS } from './fs/filesystem.ts';
 import {
-  getBootstrapPrefetchSpecifiers,
+  getLibraryBootstrapPrefetchSpecifiers,
+  getRuntimeBootstrapPrefetchSpecifiers,
   injectBootstrapPrefetchHints,
   shouldPreloadEditorLibraries,
 } from './fs/library-delivery.ts';
@@ -39,8 +40,12 @@ if (!import.meta.env.PROD) {
   debug.disable();
 }
 
+// The runtime chunks (worker + WASM) are absolute URLs, correct immediately, so
+// prefetch them now. The library archives (fonts) are relative and resolve
+// against the runtime asset base — deferred to after the boot config sets it
+// (below), so a shared-runtime thin mount doesn't 404 the hint against itself.
 injectBootstrapPrefetchHints(
-  getBootstrapPrefetchSpecifiers(undefined, openSCADWorkerUrl, openSCADWasmUrl),
+  getRuntimeBootstrapPrefetchSpecifiers(openSCADWorkerUrl, openSCADWasmUrl),
 );
 
 window.addEventListener('load', async () => {
@@ -59,6 +64,10 @@ window.addEventListener('load', async () => {
     const resolved = new URL(bootConfig.assetBase, document.baseURI).toString();
     setRuntimeAssetBase(resolved.endsWith('/') ? resolved : `${resolved}/`);
   }
+
+  // Now the runtime base is set, prefetch the library archives (fonts) against
+  // it — the shared runtime for a thin mount, or this document otherwise.
+  injectBootstrapPrefetchHints(getLibraryBootstrapPrefetchSpecifiers());
 
   const urlModeResult = parseUrlMode(mergeConfigIntoSearch(window.location.search, bootConfig));
 
