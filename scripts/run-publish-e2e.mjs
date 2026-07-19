@@ -38,6 +38,7 @@ async function main() {
 
   await runCommand(resolveCommand('npx'), playwrightArgs, { E2E_SERVER_MODE: 'publish-root' });
   await runCommand(resolveCommand('npx'), playwrightArgs, { E2E_SERVER_MODE: 'publish-subpath' });
+  await runCommand(resolveCommand('npx'), playwrightArgs, { E2E_SERVER_MODE: 'publish-assembled' });
 }
 
 await main();
