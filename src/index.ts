@@ -49,10 +49,12 @@ window.addEventListener('load', async () => {
   if (typeof bootConfig.title === 'string' && bootConfig.title.trim() !== '') {
     document.title = bootConfig.title;
   }
-  // A shared-runtime mount (multi-target publish) points main-thread
-  // runtime-asset fetches (libraries/fonts) at the shared runtime, resolved
-  // relative to this document. The compile worker lives in the shared runtime
-  // and derives the same base from its own location, so it needs no override.
+  // A shared-runtime mount (multi-target publish) points runtime-asset fetches
+  // (libraries/fonts) at the shared runtime, resolved relative to this document.
+  // This runs before the session (and thus the compile worker) is created, so
+  // the worker inherits the shared base via its configure message
+  // (workerConfigPayload -> getDefaultRuntimeBaseUrl) — the thin mount itself
+  // has no libraries/.
   if (typeof bootConfig.assetBase === 'string' && bootConfig.assetBase.trim() !== '') {
     const resolved = new URL(bootConfig.assetBase, document.baseURI).toString();
     setRuntimeAssetBase(resolved.endsWith('/') ? resolved : `${resolved}/`);

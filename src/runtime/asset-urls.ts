@@ -66,7 +66,7 @@ export function setRuntimeAssetBase(base: string | null): void {
   overrideBase = base;
 }
 
-function getDefaultRuntimeBaseUrl(): string {
+export function getDefaultRuntimeBaseUrl(): string {
   return overrideBase ?? resolveDefaultRuntimeBaseUrl(import.meta.env.BASE_URL);
 }
 

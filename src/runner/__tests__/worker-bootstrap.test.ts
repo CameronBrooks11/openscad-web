@@ -9,6 +9,7 @@ import {
   createOpenSCADWorker,
   workerConfigPayload,
 } from '../worker-bootstrap.ts';
+import { setRuntimeAssetBase } from '../../runtime/asset-urls.ts';
 
 const workerArgs: { url: unknown; opts: unknown }[] = [];
 const origCreateObjectURL = URL.createObjectURL;
@@ -45,6 +46,19 @@ describe('worker bootstrap (#196)', () => {
     createOpenSCADWorker();
     expect(workerArgs.at(-1)).toMatchObject({ opts: { type: 'module' } });
     expect(String(workerArgs.at(-1)!.url)).not.toMatch(/^blob:/);
+  });
+
+  // Regression (#240): on a shared-runtime thin mount (no webview configure),
+  // setRuntimeAssetBase pins the main-thread base to the shared runtime. The
+  // worker's configure payload must carry THAT base, not the mount's
+  // document.baseURI — the thin mount has no libraries/fonts of its own.
+  it('shared-runtime override → the config payload carries the shared base', () => {
+    setRuntimeAssetBase('https://site.example/_openscad-web/v0.4.0/');
+    try {
+      expect(workerConfigPayload().assetBase).toBe('https://site.example/_openscad-web/v0.4.0/');
+    } finally {
+      setRuntimeAssetBase(null);
+    }
   });
 
   it('after configure → a classic blob worker, and the payload carries the injected base', async () => {
