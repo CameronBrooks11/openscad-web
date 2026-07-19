@@ -198,7 +198,7 @@ function parseYamlConfig(fileContents, configPath) {
   return parsedConfig;
 }
 
-async function resolveTargetFromConfig(configPath, logger) {
+async function resolveTargetsFromConfig(configPath) {
   const configFilePath = path.resolve(configPath);
   const configDirPath = path.dirname(configFilePath);
   const configText = await readFile(configFilePath, 'utf8');
@@ -216,12 +216,6 @@ async function resolveTargetFromConfig(configPath, logger) {
     throw new Error(`Publish config ${configFilePath} must define at least one target.`);
   }
 
-  if (targets.length > 1) {
-    logger.warn(
-      `[deploy-configure] Multiple targets are not supported in v1; using only the first target from ${configFilePath}.`,
-    );
-  }
-
   if (site.outDir !== undefined && getString(site.outDir) == null) {
     throw new Error(
       `Publish config ${configFilePath} must define site.outDir as a non-empty string when provided.`,
@@ -234,22 +228,42 @@ async function resolveTargetFromConfig(configPath, logger) {
       getString(site.outDir) == null
         ? null
         : path.resolve(configDirPath, /** @type {string} */ (site.outDir)),
-    rawTarget: targets[0],
+    rawTargets: targets,
   };
 }
 
-function resolveTargetFromShorthand(args, cwdPath) {
+function resolveTargetsFromShorthand(args, cwdPath) {
   return {
     baseDirPath: cwdPath,
     outputDirPath: null,
-    rawTarget: {
-      source: args.source,
-      projectRoot: args.projectRoot,
-      entry: args.entry,
-      surface: args.surface,
-      mountPath: args.mountPath,
-    },
+    rawTargets: [
+      {
+        source: args.source,
+        projectRoot: args.projectRoot,
+        entry: args.entry,
+        surface: args.surface,
+        mountPath: args.mountPath,
+      },
+    ],
   };
+}
+
+// Mount paths are normalized to end with '/', so a simple prefix test detects
+// nesting: '/a/' is a prefix of '/a/b/'. Root ('/') is a prefix of everything,
+// so it may only be used when it is the sole target.
+function assertMountPathsDoNotCollide(resolvedTargets) {
+  for (let i = 0; i < resolvedTargets.length; i += 1) {
+    for (let j = i + 1; j < resolvedTargets.length; j += 1) {
+      const a = resolvedTargets[i].mountPath;
+      const b = resolvedTargets[j].mountPath;
+      if (a === b) {
+        throw new Error(`Duplicate mount path across targets: ${a}`);
+      }
+      if (b.startsWith(a) || a.startsWith(b)) {
+        throw new Error(`Overlapping mount path across targets: ${a} and ${b}`);
+      }
+    }
+  }
 }
 
 async function validateAndResolveTarget(rawTarget, baseDirPath) {
@@ -508,9 +522,9 @@ export async function runDeployConfigure(
 
   let resolvedInput;
   if (getString(args.config) != null) {
-    resolvedInput = await resolveTargetFromConfig(path.resolve(cwd, args.config), logger);
+    resolvedInput = await resolveTargetsFromConfig(path.resolve(cwd, args.config));
   } else {
-    resolvedInput = resolveTargetFromShorthand(args, cwd);
+    resolvedInput = resolveTargetsFromShorthand(args, cwd);
   }
 
   const outputDirPath =
@@ -518,39 +532,49 @@ export async function runDeployConfigure(
       ? path.resolve(cwd, args.outputDir)
       : (resolvedInput.outputDirPath ?? path.resolve(cwd, DEFAULT_OUTPUT_DIR));
 
-  const target = await validateAndResolveTarget(resolvedInput.rawTarget, resolvedInput.baseDirPath);
+  const targets = [];
+  for (const rawTarget of resolvedInput.rawTargets) {
+    targets.push(await validateAndResolveTarget(rawTarget, resolvedInput.baseDirPath));
+  }
+  assertMountPathsDoNotCollide(targets);
 
   const tempRootDirPath = await mkdtemp(path.join(os.tmpdir(), 'openscad-web-assemble-'));
   const extractedArtifactDirPath = path.join(tempRootDirPath, 'artifact');
 
   try {
+    // Extract the runtime once as an immutable base; each target is composed
+    // into its own mount from it (its own runtime copy — a shared runtime is
+    // tracked separately in #240).
     await mkdir(extractedArtifactDirPath, { recursive: true });
     new AdmZip(path.resolve(cwd, artifactPath)).extractAllTo(extractedArtifactDirPath, true);
     await assertArtifactLayout(extractedArtifactDirPath);
 
-    const modelPath = await populateProjectPayload(extractedArtifactDirPath, target);
-    const bootConfig = buildBootConfig(target, modelPath);
-    await writeFile(
-      path.join(extractedArtifactDirPath, 'openscad-web.config.json'),
-      `${JSON.stringify(bootConfig, null, 2)}\n`,
-      'utf8',
-    );
-    await writeOwnershipMarker(extractedArtifactDirPath, args.artifactVersion, now);
+    const assembled = [];
+    for (const target of targets) {
+      const mountDirPath = resolveMountDirectory(outputDirPath, target.mountPath);
+      const { replaceExisting } = await assertMountDirectoryCanBeReplaced(mountDirPath);
+      if (replaceExisting) {
+        await rm(mountDirPath, { recursive: true, force: true });
+      }
 
-    const mountDirPath = resolveMountDirectory(outputDirPath, target.mountPath);
-    const { replaceExisting } = await assertMountDirectoryCanBeReplaced(mountDirPath);
-    if (replaceExisting) {
-      await rm(mountDirPath, { recursive: true, force: true });
+      await mkdir(path.dirname(mountDirPath), { recursive: true });
+      await copyDirectoryContents(extractedArtifactDirPath, mountDirPath);
+
+      const modelPath = await populateProjectPayload(mountDirPath, target);
+      const bootConfig = buildBootConfig(target, modelPath);
+      await writeFile(
+        path.join(mountDirPath, 'openscad-web.config.json'),
+        `${JSON.stringify(bootConfig, null, 2)}\n`,
+        'utf8',
+      );
+      await writeOwnershipMarker(mountDirPath, args.artifactVersion, now);
+
+      assembled.push({ mountDirPath, target, bootConfig });
     }
-
-    await mkdir(path.dirname(mountDirPath), { recursive: true });
-    await copyDirectoryContents(extractedArtifactDirPath, mountDirPath);
 
     return {
       outputDirPath,
-      mountDirPath,
-      target,
-      bootConfig,
+      targets: assembled,
       json: args.json,
     };
   } finally {
@@ -568,9 +592,11 @@ if (isMainModule) {
       process.stdout.write(
         `${JSON.stringify({
           outputDirPath: result.outputDirPath,
-          mountDirPath: result.mountDirPath,
-          mode: result.bootConfig.mode,
-          model: result.bootConfig.model,
+          targets: result.targets.map((entry) => ({
+            mountDirPath: entry.mountDirPath,
+            mode: entry.bootConfig.mode,
+            model: entry.bootConfig.model,
+          })),
         })}\n`,
       );
     }

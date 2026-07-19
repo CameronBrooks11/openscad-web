@@ -122,12 +122,15 @@ Field reference:
 | `targets[].title`        | Optional page title.                                                                       |
 | `targets[].parentOrigin` | Optional embed security setting for trusted iframe parents.                                |
 
-Important v1 limits:
+Multiple targets:
 
-- only the first `targets[]` entry is assembled
-- if you need multiple published targets, that is deferred to a later phase
+- every `targets[]` entry is assembled, each into its own `mountPath`
+- mount paths must be unique and non-overlapping — one mount path may not be
+  nested inside another, and `mountPath: /` (site root) may only be used when it
+  is the single target
 - `projectRoot` is the publish boundary; files outside it are not copied into the site
-- each assembled target carries its own runtime copy in v1
+- each assembled target currently carries its own runtime copy; de-duplicating a
+  shared runtime across targets is tracked in [#240](https://github.com/CameronBrooks11/openscad-web/issues/240)
 
 ## Mixed-Site Example
 
