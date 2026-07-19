@@ -24,14 +24,15 @@ export function getPackageHomepagePath(): string {
 export function createAppViteConfig({
   base,
   outDir,
-  entries = ['index.html', 'viewer.html'],
+  entries = ['index.html', 'viewer.html', 'static.html'],
   publicDir = 'public',
 }: {
   base: string;
   outDir: string;
   /**
-   * The HTML entry files to build. Defaults to the full app (`index.html`) + the
-   * standalone viewer (`viewer.html`). The distributable viewer-only build
+   * The HTML entry files to build. Defaults to the full app (`index.html`), the
+   * postMessage-driven standalone viewer (`viewer.html`), and the self-loading
+   * static geometry viewer (`static.html`). The distributable viewer-only build
    * (`vite.viewer.config.ts`) passes just `['viewer.html']`. Each entry's chunk is
    * keyed by its base name, so `index.html` keeps the `index-*` chunk name the
    * bundle budgets / tooling rely on.

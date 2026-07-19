@@ -7,10 +7,19 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-function distRoot() {
-  const i = process.argv.indexOf('--dir');
-  return path.resolve(i === -1 ? 'dist' : (process.argv[i + 1] ?? 'dist'));
+function argValue(flag, fallback) {
+  const i = process.argv.indexOf(flag);
+  return i === -1 ? fallback : (process.argv[i + 1] ?? fallback);
 }
+
+function distRoot() {
+  return path.resolve(argValue('--dir', 'dist'));
+}
+
+// Which HTML entry to gate: the postMessage viewer (`viewer.html`, default) or
+// the self-loading static geometry viewer (`static.html`). Both must stay free
+// of the editor/compiler stack.
+const entryHtmlName = argValue('--entry', 'viewer.html');
 
 function basename(p) {
   return p.split('/').pop();
@@ -24,11 +33,11 @@ function fail(message) {
 const dist = distRoot();
 const assetsDir = path.join(dist, 'assets');
 
-const viewerHtml = await readFile(path.join(dist, 'viewer.html'), 'utf8').catch(() => {
-  fail(`viewer.html not found under ${dist}`);
+const entryHtml = await readFile(path.join(dist, entryHtmlName), 'utf8').catch(() => {
+  fail(`${entryHtmlName} not found under ${dist}`);
 });
-const entryMatch = viewerHtml.match(/<script[^>]*\btype="module"[^>]*\bsrc="([^"]+)"/);
-if (!entryMatch) fail('viewer.html has no module entry script');
+const entryMatch = entryHtml.match(/<script[^>]*\btype="module"[^>]*\bsrc="([^"]+)"/);
+if (!entryMatch) fail(`${entryHtmlName} has no module entry script`);
 const entryFile = basename(entryMatch[1]);
 
 // BFS the reachable chunk graph. The reference regex captures any quoted `*.js`

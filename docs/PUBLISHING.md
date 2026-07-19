@@ -116,11 +116,48 @@ Field reference:
 | `targets[].projectRoot`  | Publish boundary for a multi-file project. Everything under this directory becomes public. |
 | `targets[].entry`        | Entry `.scad` file inside `projectRoot`. Resolved relative to `projectRoot`.               |
 | `targets[].mountPath`    | Mount path inside the final site tree, such as `/` or `/model/`.                           |
-| `targets[].surface`      | One of `viewer`, `customizer`, or `editor`.                                                |
+| `targets[].surface`      | One of `viewer`, `customizer`, `editor`, or `static`.                                      |
+| `targets[].geometry`     | **`static` only.** Path to a pre-rendered OFF geometry file (see below).                   |
+| `targets[].poster`       | **`static` only.** Optional path to a pre-rendered PNG poster.                             |
 | `targets[].controls`     | Optional default for embed/customizer controls.                                            |
 | `targets[].download`     | Optional default for download UI.                                                          |
 | `targets[].title`        | Optional page title.                                                                       |
 | `targets[].parentOrigin` | Optional embed security setting for trusted iframe parents.                                |
+
+## Static (Pre-Rendered) Surface
+
+The `viewer`/`customizer`/`editor` surfaces run the OpenSCAD **WASM compiler in
+the browser** (~13 MB) so the model is live. The `static` surface instead ships
+a **pre-rendered** model to a lightweight read-only viewer (~0.6 MB, no WASM) —
+ideal for docs pages that only need to _show_ a model.
+
+Render the geometry (and an optional poster) with the OpenSCAD **CLI** — the
+bundled helper does both:
+
+```bash
+node scripts/render-geometry.mjs --source ./models/widget.scad --out-dir ./rendered
+# -> ./rendered/widget.off  (geometry the viewer displays)
+#    ./rendered/widget.png  (poster; add --no-poster to skip)
+```
+
+(Equivalent by hand: `openscad -o widget.off widget.scad` and
+`openscad -o widget.png --viewall --autocenter --render widget.scad`.)
+
+Then publish the pre-rendered files with `surface: static`:
+
+```yaml
+targets:
+  - surface: static
+    geometry: ./rendered/widget.off
+    poster: ./rendered/widget.png
+    mountPath: /widget/
+    title: Widget
+```
+
+The mount holds `geometry.off`, `poster.png`, a boot config, and the static
+viewer page — no compiler, no `.scad`. The OpenSCAD CLI must be available where
+you run the render step (it is not part of `deploy-configure`, which stays
+dependency-free); GitHub's `ubuntu-*` runners can `apt-get install -y openscad`.
 
 Multiple targets:
 
