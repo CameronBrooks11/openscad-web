@@ -27,7 +27,15 @@ async function writeTextFile(filePath, contents) {
 
 async function createPublishArtifact(zipPath) {
   const archive = new AdmZip();
-  archive.addFile('index.html', Buffer.from('<!doctype html><div id="root"></div>'));
+  archive.addFile(
+    'index.html',
+    Buffer.from(
+      '<!doctype html><html><head>' +
+        '<link rel="icon" href="./favicon.ico" />' +
+        '<script type="module" src="./assets/app.js"></script>' +
+        '</head><body><div id="root"></div></body></html>',
+    ),
+  );
   archive.addFile('assets/app.js', Buffer.from('console.log("publish artifact");'));
   archive.addFile('libraries/example.zip', Buffer.from('placeholder'));
   archive.writeZip(zipPath);
@@ -295,12 +303,23 @@ targets:
     await expect(readFile(path.join(cwd, 'site', 'two', 'index.html'), 'utf8')).resolves.toContain(
       '<div id="root"></div>',
     );
+    // Multiple targets share one runtime, so each mount's boot config carries
+    // an assetBase pointing at it (default artifact version -> "unknown").
     await expect(
       readJson(path.join(cwd, 'site', 'one', 'openscad-web.config.json')),
-    ).resolves.toEqual({ mode: 'embed', model: './project/one.scad' });
+    ).resolves.toEqual({
+      mode: 'embed',
+      model: './project/one.scad',
+      assetBase: '../_openscad-web/unknown/',
+    });
     await expect(
       readJson(path.join(cwd, 'site', 'two', 'openscad-web.config.json')),
-    ).resolves.toEqual({ mode: 'customizer', model: './project/two.scad', controls: true });
+    ).resolves.toEqual({
+      mode: 'customizer',
+      model: './project/two.scad',
+      controls: true,
+      assetBase: '../_openscad-web/unknown/',
+    });
 
     expect(result.targets).toHaveLength(2);
     expect(result.targets.map((entry) => entry.mountDirPath)).toEqual([
@@ -394,6 +413,136 @@ targets:
     await expect(
       readFile(path.join(cwd, 'site', 'one', 'stale.txt'), 'utf8'),
     ).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('assembles the runtime once and thin mounts for multiple targets', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'models', 'one.scad'), 'cube(1);');
+    await writeTextFile(path.join(cwd, 'models', 'two.scad'), 'cube(2);');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `targets:
+  - source: ./models/one.scad
+    mountPath: /one/
+    surface: viewer
+  - source: ./models/two.scad
+    mountPath: /two/
+    surface: viewer
+`,
+    );
+
+    const result = await runDeployConfigure(
+      [
+        '--config',
+        './openscad-publish.yml',
+        '--artifact-path',
+        './openscad-web-publish.zip',
+        '--artifact-version',
+        'v0.4.0',
+        '--output-dir',
+        './site',
+      ],
+      { cwd },
+    );
+
+    // Exactly one runtime copy, at the versioned shared path.
+    const sharedDir = path.join(cwd, 'site', '_openscad-web', 'v0.4.0');
+    expect(result.sharedRuntimeDirPath).toBe(sharedDir);
+    await expect(readFile(path.join(sharedDir, 'assets', 'app.js'), 'utf8')).resolves.toContain(
+      'publish artifact',
+    );
+    await expect(readFile(path.join(sharedDir, 'libraries', 'example.zip'), 'utf8')).resolves.toBe(
+      'placeholder',
+    );
+
+    // Each mount is thin: model + rewritten index.html + config, but no runtime.
+    await expect(
+      readFile(path.join(cwd, 'site', 'one', 'project', 'one.scad'), 'utf8'),
+    ).resolves.toBe('cube(1);');
+    await expect(
+      readFile(path.join(cwd, 'site', 'one', 'assets', 'app.js'), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+
+    // The mount's index.html points its asset refs at the shared runtime.
+    const oneIndex = await readFile(path.join(cwd, 'site', 'one', 'index.html'), 'utf8');
+    expect(oneIndex).toContain('src="../_openscad-web/v0.4.0/assets/app.js"');
+    expect(oneIndex).toContain('href="../_openscad-web/v0.4.0/favicon.ico"');
+    expect(oneIndex).not.toContain('="./');
+
+    await expect(
+      readJson(path.join(cwd, 'site', 'one', 'openscad-web.config.json')),
+    ).resolves.toEqual({
+      mode: 'embed',
+      model: './project/one.scad',
+      assetBase: '../_openscad-web/v0.4.0/',
+    });
+  });
+
+  it('keeps a single target self-contained without a shared runtime', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'models', 'widget.scad'), 'cube(10);');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `targets:
+  - source: ./models/widget.scad
+    mountPath: /model/
+    surface: viewer
+`,
+    );
+
+    const result = await runDeployConfigure(
+      [
+        '--config',
+        './openscad-publish.yml',
+        '--artifact-path',
+        './openscad-web-publish.zip',
+        '--output-dir',
+        './site',
+      ],
+      { cwd },
+    );
+
+    expect(result.sharedRuntimeDirPath).toBeNull();
+    // The single mount carries its own runtime and no assetBase.
+    await expect(
+      readFile(path.join(cwd, 'site', 'model', 'assets', 'app.js'), 'utf8'),
+    ).resolves.toContain('publish artifact');
+    await expect(
+      readFile(path.join(cwd, 'site', '_openscad-web', 'unknown', 'index.html'), 'utf8'),
+    ).rejects.toMatchObject({ code: 'ENOENT' });
+    await expect(
+      readJson(path.join(cwd, 'site', 'model', 'openscad-web.config.json')),
+    ).resolves.toEqual({ mode: 'embed', model: './project/widget.scad' });
+  });
+
+  it('rejects a mount path under the reserved shared-runtime directory', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'models', 'one.scad'), 'cube(1);');
+    await writeTextFile(path.join(cwd, 'models', 'two.scad'), 'cube(2);');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `targets:
+  - source: ./models/one.scad
+    mountPath: /one/
+    surface: viewer
+  - source: ./models/two.scad
+    mountPath: /_openscad-web/two/
+    surface: viewer
+`,
+    );
+
+    await expect(
+      runDeployConfigure(
+        ['--config', './openscad-publish.yml', '--artifact-path', './openscad-web-publish.zip'],
+        { cwd },
+      ),
+    ).rejects.toThrow(/reserved shared-runtime path/i);
   });
 
   it('rejects duplicate mount paths across targets', async () => {

@@ -129,8 +129,25 @@ Multiple targets:
   nested inside another, and `mountPath: /` (site root) may only be used when it
   is the single target
 - `projectRoot` is the publish boundary; files outside it are not copied into the site
-- each assembled target currently carries its own runtime copy; de-duplicating a
-  shared runtime across targets is tracked in [#240](https://github.com/CameronBrooks11/openscad-web/issues/240)
+
+### Runtime sharing
+
+- **A single target is self-contained.** Its mount holds the whole runtime plus
+  its project and boot config — the mount directory is complete on its own.
+- **Multiple targets share one runtime.** The runtime is assembled once into
+  `<site>/_openscad-web/<artifact-version>/`, and each target's mount is thin: a
+  rewritten `index.html` pointing at the shared runtime, plus its own `project/`
+  and `openscad-web.config.json`. So a site with N models is roughly
+  `runtime + N × (small project payload)` instead of N runtime copies.
+- The shared runtime path is versioned, so publishing with a new artifact
+  version adds a new runtime alongside the old one rather than replacing it.
+- `/_openscad-web/` is reserved; a `mountPath` may not live under it.
+- Shared-runtime paths are **relative**, so the site works under any base URL
+  (repo Pages subpath, user site, or a custom domain) with no configuration.
+- If you serve the assembled tree by feeding it **back through a Jekyll build**
+  (rather than uploading it as a static Pages artifact, the normal path), add a
+  `.nojekyll` file so the underscore-prefixed `_openscad-web/` directory is not
+  stripped.
 
 ### Re-runs and recovery
 

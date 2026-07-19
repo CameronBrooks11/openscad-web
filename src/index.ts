@@ -8,6 +8,7 @@ import {
 } from './fs/library-delivery.ts';
 import { ensureBrowserFSLoaded, getBrowserFS } from './runtime/browserfs-runtime.ts';
 import { loadBootConfig, mergeConfigIntoSearch } from './runtime/boot-config.ts';
+import { setRuntimeAssetBase } from './runtime/asset-urls.ts';
 import { registerAppServiceWorker } from './runtime/service-worker.ts';
 import { readStateFromFragment, writeStateInFragment } from './state/fragment-state.ts';
 import { readPersistedState, writePersistedState } from './state/persisted-state.ts';
@@ -47,6 +48,14 @@ window.addEventListener('load', async () => {
   const bootConfig = await loadBootConfig();
   if (typeof bootConfig.title === 'string' && bootConfig.title.trim() !== '') {
     document.title = bootConfig.title;
+  }
+  // A shared-runtime mount (multi-target publish) points main-thread
+  // runtime-asset fetches (libraries/fonts) at the shared runtime, resolved
+  // relative to this document. The compile worker lives in the shared runtime
+  // and derives the same base from its own location, so it needs no override.
+  if (typeof bootConfig.assetBase === 'string' && bootConfig.assetBase.trim() !== '') {
+    const resolved = new URL(bootConfig.assetBase, document.baseURI).toString();
+    setRuntimeAssetBase(resolved.endsWith('/') ? resolved : `${resolved}/`);
   }
 
   const urlModeResult = parseUrlMode(mergeConfigIntoSearch(window.location.search, bootConfig));

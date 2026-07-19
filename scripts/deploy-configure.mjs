@@ -453,7 +453,7 @@ async function assertMountDirectoryCanBeReplaced(mountDirPath) {
   return { replaceExisting: true };
 }
 
-function buildBootConfig(target, modelPath) {
+function buildBootConfig(target, modelPath, assetBase) {
   const bootConfig = {
     mode: SURFACE_TO_MODE[target.surface],
     model: modelPath,
@@ -464,8 +464,27 @@ function buildBootConfig(target, modelPath) {
   if (typeof target.title === 'string' && target.title.trim() !== '')
     bootConfig.title = target.title;
   if (typeof target.parentOrigin === 'string') bootConfig.parentOrigin = target.parentOrigin;
+  if (typeof assetBase === 'string') bootConfig.assetBase = assetBase;
 
   return bootConfig;
+}
+
+// Directory (under the site root) that holds the shared runtime, versioned so
+// multiple artifact versions can coexist. Thin mounts reference it via a
+// relative path so the site works under any base URL.
+const SHARED_RUNTIME_DIRNAME = '_openscad-web';
+
+function sharedRuntimeVersionSegment(artifactVersion) {
+  const segment = getString(artifactVersion)?.replace(/[^A-Za-z0-9._-]/g, '_');
+  return segment == null || segment === '' ? DEFAULT_ARTIFACT_VERSION : segment;
+}
+
+// Rewrite the runtime artifact's index.html so its `./`-relative asset refs
+// (entry script/CSS, modulepreload, icons, audio) point at the shared runtime.
+// The app's dynamic chunks, worker, and WASM then chain off the entry script's
+// location; runtime-fetched libraries follow `assetBase` in the boot config.
+function rewriteThinIndexHtml(indexHtml, relativeRuntimePrefix) {
+  return indexHtml.replaceAll('="./', `="${relativeRuntimePrefix}`);
 }
 
 async function writeOwnershipMarker(targetDirPath, artifactVersion, now) {
@@ -542,12 +561,43 @@ export async function runDeployConfigure(
   const extractedArtifactDirPath = path.join(tempRootDirPath, 'artifact');
 
   try {
-    // Extract the runtime once as an immutable base; each target is composed
-    // into its own mount from it (its own runtime copy — a shared runtime is
-    // tracked separately in #240).
+    // Extract the runtime once as an immutable base. With a single target each
+    // mount is self-contained (its own runtime copy). With multiple targets the
+    // runtime is assembled once into a shared dir and each mount is thin,
+    // pointing at it — one runtime copy for the whole site (#240).
     await mkdir(extractedArtifactDirPath, { recursive: true });
     new AdmZip(path.resolve(cwd, artifactPath)).extractAllTo(extractedArtifactDirPath, true);
     await assertArtifactLayout(extractedArtifactDirPath);
+
+    const useSharedRuntime = targets.length > 1;
+    let sharedRuntimeDirPath = null;
+    let baseIndexHtml = null;
+
+    if (useSharedRuntime) {
+      const reservedPrefix = `/${SHARED_RUNTIME_DIRNAME}/`;
+      for (const target of targets) {
+        if (target.mountPath.startsWith(reservedPrefix)) {
+          throw new Error(
+            `mountPath must not use the reserved shared-runtime path ${reservedPrefix}. Got: ${target.mountPath}`,
+          );
+        }
+      }
+
+      sharedRuntimeDirPath = path.join(
+        outputDirPath,
+        SHARED_RUNTIME_DIRNAME,
+        sharedRuntimeVersionSegment(args.artifactVersion),
+      );
+      const sharedReplace = await assertMountDirectoryCanBeReplaced(sharedRuntimeDirPath);
+      if (sharedReplace.replaceExisting) {
+        await rm(sharedRuntimeDirPath, { recursive: true, force: true });
+      }
+      await mkdir(path.dirname(sharedRuntimeDirPath), { recursive: true });
+      await copyDirectoryContents(extractedArtifactDirPath, sharedRuntimeDirPath);
+      await writeOwnershipMarker(sharedRuntimeDirPath, args.artifactVersion, now);
+
+      baseIndexHtml = await readFile(path.join(extractedArtifactDirPath, 'index.html'), 'utf8');
+    }
 
     const assembled = [];
     for (const target of targets) {
@@ -557,11 +607,24 @@ export async function runDeployConfigure(
         await rm(mountDirPath, { recursive: true, force: true });
       }
 
-      await mkdir(path.dirname(mountDirPath), { recursive: true });
-      await copyDirectoryContents(extractedArtifactDirPath, mountDirPath);
+      await mkdir(mountDirPath, { recursive: true });
+
+      let assetBase;
+      if (useSharedRuntime) {
+        // Thin mount: a rewritten index.html pointing at the shared runtime,
+        // plus its own project payload, boot config, and ownership marker.
+        assetBase = `${toPosixPath(path.relative(mountDirPath, sharedRuntimeDirPath))}/`;
+        await writeFile(
+          path.join(mountDirPath, 'index.html'),
+          rewriteThinIndexHtml(baseIndexHtml, assetBase),
+          'utf8',
+        );
+      } else {
+        await copyDirectoryContents(extractedArtifactDirPath, mountDirPath);
+      }
 
       const modelPath = await populateProjectPayload(mountDirPath, target);
-      const bootConfig = buildBootConfig(target, modelPath);
+      const bootConfig = buildBootConfig(target, modelPath, assetBase);
       await writeFile(
         path.join(mountDirPath, 'openscad-web.config.json'),
         `${JSON.stringify(bootConfig, null, 2)}\n`,
@@ -574,6 +637,7 @@ export async function runDeployConfigure(
 
     return {
       outputDirPath,
+      sharedRuntimeDirPath,
       targets: assembled,
       json: args.json,
     };
@@ -592,6 +656,7 @@ if (isMainModule) {
       process.stdout.write(
         `${JSON.stringify({
           outputDirPath: result.outputDirPath,
+          sharedRuntimeDirPath: result.sharedRuntimeDirPath,
           targets: result.targets.map((entry) => ({
             mountDirPath: entry.mountDirPath,
             mode: entry.bootConfig.mode,
