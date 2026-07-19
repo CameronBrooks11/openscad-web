@@ -251,10 +251,9 @@ targets:
     });
   });
 
-  it('warns and uses only the first target when config defines multiple targets', async () => {
+  it('assembles every target defined in config', async () => {
     const cwd = await makeTempDir();
     const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
-    const warnings = [];
     await createPublishArtifact(artifactPath);
     await writeTextFile(path.join(cwd, 'models', 'one.scad'), 'cube(1);');
     await writeTextFile(path.join(cwd, 'models', 'two.scad'), 'cube(2);');
@@ -266,11 +265,12 @@ targets:
     surface: viewer
   - source: ./models/two.scad
     mountPath: /two/
-    surface: viewer
+    surface: customizer
+    controls: true
 `,
     );
 
-    await runDeployConfigure(
+    const result = await runDeployConfigure(
       [
         '--config',
         './openscad-publish.yml',
@@ -279,28 +279,112 @@ targets:
         '--output-dir',
         './site',
       ],
-      {
-        cwd,
-        logger: {
-          log() {},
-          warn(message) {
-            warnings.push(String(message));
-          },
-          error() {},
-        },
-      },
+      { cwd },
     );
 
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]).toMatch(/Multiple targets are not supported in v1/i);
+    // Every target is assembled into its own mount, each with its own runtime.
     await expect(
       readFile(path.join(cwd, 'site', 'one', 'project', 'one.scad'), 'utf8'),
     ).resolves.toBe('cube(1);');
     await expect(
       readFile(path.join(cwd, 'site', 'two', 'project', 'two.scad'), 'utf8'),
-    ).rejects.toMatchObject({
-      code: 'ENOENT',
-    });
+    ).resolves.toBe('cube(2);');
+    await expect(readFile(path.join(cwd, 'site', 'one', 'index.html'), 'utf8')).resolves.toContain(
+      '<div id="root"></div>',
+    );
+    await expect(readFile(path.join(cwd, 'site', 'two', 'index.html'), 'utf8')).resolves.toContain(
+      '<div id="root"></div>',
+    );
+    await expect(
+      readJson(path.join(cwd, 'site', 'one', 'openscad-web.config.json')),
+    ).resolves.toEqual({ mode: 'embed', model: './project/one.scad' });
+    await expect(
+      readJson(path.join(cwd, 'site', 'two', 'openscad-web.config.json')),
+    ).resolves.toEqual({ mode: 'customizer', model: './project/two.scad', controls: true });
+
+    expect(result.targets).toHaveLength(2);
+    expect(result.targets.map((entry) => entry.mountDirPath)).toEqual([
+      path.join(cwd, 'site', 'one'),
+      path.join(cwd, 'site', 'two'),
+    ]);
+  });
+
+  it('rejects duplicate mount paths across targets', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'models', 'one.scad'), 'cube(1);');
+    await writeTextFile(path.join(cwd, 'models', 'two.scad'), 'cube(2);');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `targets:
+  - source: ./models/one.scad
+    mountPath: /model/
+    surface: viewer
+  - source: ./models/two.scad
+    mountPath: /model/
+    surface: viewer
+`,
+    );
+
+    await expect(
+      runDeployConfigure(
+        ['--config', './openscad-publish.yml', '--artifact-path', './openscad-web-publish.zip'],
+        { cwd },
+      ),
+    ).rejects.toThrow(/duplicate mount path/i);
+  });
+
+  it('rejects a mount path nested inside another target mount path', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'models', 'one.scad'), 'cube(1);');
+    await writeTextFile(path.join(cwd, 'models', 'two.scad'), 'cube(2);');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `targets:
+  - source: ./models/one.scad
+    mountPath: /model/
+    surface: viewer
+  - source: ./models/two.scad
+    mountPath: /model/nested/
+    surface: viewer
+`,
+    );
+
+    await expect(
+      runDeployConfigure(
+        ['--config', './openscad-publish.yml', '--artifact-path', './openscad-web-publish.zip'],
+        { cwd },
+      ),
+    ).rejects.toThrow(/overlapping mount path/i);
+  });
+
+  it('rejects a root mount combined with additional targets', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'models', 'one.scad'), 'cube(1);');
+    await writeTextFile(path.join(cwd, 'models', 'two.scad'), 'cube(2);');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `targets:
+  - source: ./models/one.scad
+    mountPath: /
+    surface: viewer
+  - source: ./models/two.scad
+    mountPath: /two/
+    surface: viewer
+`,
+    );
+
+    await expect(
+      runDeployConfigure(
+        ['--config', './openscad-publish.yml', '--artifact-path', './openscad-web-publish.zip'],
+        { cwd },
+      ),
+    ).rejects.toThrow(/overlapping mount path/i);
   });
 
   it('lets --output-dir override site.outDir from config', async () => {
