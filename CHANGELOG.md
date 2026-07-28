@@ -6,6 +6,26 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-07-28
+
+### Fixed
+
+- **Thin-mount early library prefetch** (#248): `deploy-configure` injects a
+  `<meta name="openscad-asset-base">` tag into each thin mount's `index.html`
+  and the app applies it at module evaluation, before the early library
+  prefetch fires. Previously the prefetch resolved against the mount instead of
+  the shared runtime and 404'd (non-fatal — the compile-time fetch already went
+  to the right place). Perf-neutral: the `fonts.zip` warmup prefetch stays at
+  module eval.
+
+### Added
+
+- **Browser e2e for assembled publish output** (#244): a `publish-assembled`
+  Playwright mode assembles a real multi-target site (thin compile mounts +
+  shared runtime + a static mount) and asserts in a browser that a thin mount
+  compiles (worker fetches `fonts.zip` from the shared runtime, guarding #240)
+  and the static mount renders geometry with no WASM (guarding #241).
+
 ## [0.5.0] - 2026-07-19
 
 ### Added
