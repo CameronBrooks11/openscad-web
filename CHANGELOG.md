@@ -6,6 +6,8 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-07-28
+
 ### Added
 
 - **Published project trees boot compile surfaces** (#253): a `projectRoot`
@@ -27,6 +29,13 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
   customizer and embed shells render the compile error inline. Previously the
   error state existed only in the editor's footer, which published surfaces do
   not include — a failed compile left an empty viewer with no message.
+- Hardening from #253's adversarial review: hydration fetch URLs percent-encode
+  each path segment (filenames with `#`, `?`, `%`, or spaces load correctly);
+  the publish fails loudly when a project file name would be dropped by the
+  runtime's path validator (`:` or `\`), instead of shipping a config the
+  runtime silently ignores; `deploy-configure` warns when a `projectRoot`
+  target is assembled with a pre-0.6 artifact; and the runtime names the
+  reason on the console when it drops a malformed `project` field.
 
 ## [0.5.1] - 2026-07-28
 
