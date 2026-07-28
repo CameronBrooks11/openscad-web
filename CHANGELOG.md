@@ -6,6 +6,28 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+### Added
+
+- **Published project trees boot compile surfaces** (#253): a `projectRoot`
+  target's boot config now carries a `project { entry, files }` list emitted by
+  `deploy-configure`, and the customizer/embed surfaces hydrate every listed
+  file into the compile filesystem (via the existing multi-file `setProject`
+  contract) before compiling — so `use <…>` / `include <…>` between published
+  project files resolve, and binary assets ride along byte-exact. Previously
+  compile surfaces booted from the entry file's text alone, so any sibling
+  reference silently failed (empty geometry, no error) — the live tier
+  effectively supported standalone single-file models only. Malformed or
+  partially unfetchable projects fail the load visibly instead of compiling a
+  partial tree. Additive: single-file `source` targets and explicit `?model=`
+  URLs are unchanged.
+
+### Fixed
+
+- **Compile errors are now visible on published surfaces** (#253): the
+  customizer and embed shells render the compile error inline. Previously the
+  error state existed only in the editor's footer, which published surfaces do
+  not include — a failed compile left an empty viewer with no message.
+
 ## [0.5.1] - 2026-07-28
 
 ### Fixed

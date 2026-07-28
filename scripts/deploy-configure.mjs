@@ -462,11 +462,32 @@ async function populateProjectPayload(targetDirPath, target) {
   if (target.sourcePath != null) {
     const sourceFileName = path.basename(target.sourcePath);
     await cp(target.sourcePath, path.join(projectDirPath, sourceFileName));
-    return `./project/${sourceFileName}`;
+    return { modelPath: `./project/${sourceFileName}`, project: null };
   }
 
-  await copyDirectoryContents(target.projectRootPath, projectDirPath);
-  return `./project/${target.entryPath}`;
+  // Dereference symlinks: the published tree must be self-contained regular
+  // files, and the file list below counts only regular files — a symlink
+  // copied verbatim would be published but never hydrated (#253).
+  await copyDirectoryContents(target.projectRootPath, projectDirPath, { dereference: true });
+  // The published file list (#253): the runtime hydrates the compile FS from
+  // it, so use <…>/include <…> between project files resolve. Walked from the
+  // copied tree so it lists exactly what was published.
+  const files = await listFilesRecursive(projectDirPath);
+  return {
+    modelPath: `./project/${target.entryPath}`,
+    project: { entry: target.entryPath, files },
+  };
+}
+
+// Every file under `rootDirPath`, as sorted root-relative POSIX paths.
+async function listFilesRecursive(rootDirPath) {
+  const entries = await readdir(rootDirPath, { recursive: true, withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile())
+    .map((entry) =>
+      path.relative(rootDirPath, path.join(entry.parentPath, entry.name)).split(path.sep).join('/'),
+    )
+    .sort();
 }
 
 // Copy a static target's pre-rendered geometry (+ optional poster) into the
@@ -484,13 +505,14 @@ async function populateGeometryPayload(targetDirPath, target) {
   return { geometry: './geometry.off', poster: posterUrl };
 }
 
-async function copyDirectoryContents(sourceDirPath, targetDirPath) {
+async function copyDirectoryContents(sourceDirPath, targetDirPath, { dereference = false } = {}) {
   await mkdir(targetDirPath, { recursive: true });
   const entryNames = await readdir(sourceDirPath);
   await Promise.all(
     entryNames.map((entryName) =>
       cp(path.join(sourceDirPath, entryName), path.join(targetDirPath, entryName), {
         recursive: true,
+        dereference,
       }),
     ),
   );
@@ -573,7 +595,7 @@ async function assertMountDirectoryCanBeReplaced(mountDirPath) {
   return { replaceExisting: true };
 }
 
-function buildBootConfig(target, modelPath, assetBase) {
+function buildBootConfig(target, modelPath, assetBase, project) {
   const bootConfig = {
     mode: SURFACE_TO_MODE[target.surface],
     model: modelPath,
@@ -585,6 +607,7 @@ function buildBootConfig(target, modelPath, assetBase) {
     bootConfig.title = target.title;
   if (typeof target.parentOrigin === 'string') bootConfig.parentOrigin = target.parentOrigin;
   if (typeof assetBase === 'string') bootConfig.assetBase = assetBase;
+  if (project != null) bootConfig.project = project;
 
   return bootConfig;
 }
@@ -801,8 +824,8 @@ export async function runDeployConfigure(
         } else {
           await copyDirectoryContents(extractedArtifactDirPath, mountDirPath);
         }
-        const modelPath = await populateProjectPayload(mountDirPath, target);
-        bootConfig = buildBootConfig(target, modelPath, assetBase);
+        const { modelPath, project } = await populateProjectPayload(mountDirPath, target);
+        bootConfig = buildBootConfig(target, modelPath, assetBase, project);
       }
       await writeFile(
         path.join(mountDirPath, 'openscad-web.config.json'),

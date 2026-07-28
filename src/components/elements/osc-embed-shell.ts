@@ -5,7 +5,7 @@ import { LitElement, html, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { provideSession } from '../../state/session-context.ts';
 import type { OpenScadSession } from '../../state/session.ts';
-import { UrlModeParams, fetchExternalModel } from '../../state/url-mode.ts';
+import { UrlModeParams, fetchExternalModel, fetchPublishedProject } from '../../state/url-mode.ts';
 import type { State } from '../../state/app-state.ts';
 import type { Model } from '../../state/model.ts';
 import './osc-viewer-panel.ts';
@@ -67,6 +67,14 @@ export class OscEmbedShell extends LitElement {
     .error {
       padding: 2rem;
       color: var(--osc-error);
+    }
+    .compile-error {
+      padding: 4px 8px;
+      font-size: 0.8em;
+      font-family: monospace;
+      white-space: pre-wrap;
+      color: var(--osc-error);
+      background: var(--osc-overlay-hover);
     }
   `;
 
@@ -255,18 +263,36 @@ export class OscEmbedShell extends LitElement {
 
     // Load external model
     (async () => {
+      const applyPreVars = () => {
+        const preVars = params.prePopulatedVars;
+        if (Object.keys(preVars).length > 0) {
+          this._model.mutate((s) => {
+            s.params.vars = { ...(s.params.vars ?? {}), ...coerceUrlVars(preVars) };
+          });
+        }
+      };
+
+      // A published multi-file project (#253): hydrate the whole tree so
+      // use <…> / include <…> between project files resolve in the compile FS.
+      if (params.project) {
+        const files = await fetchPublishedProject(params.project);
+        if ('error' in files) {
+          this._loadError = files.error;
+          this._notifyHost('stateChange', { error: files.error });
+          return;
+        }
+        applyPreVars();
+        this._model.setProject(files, params.project.entry);
+        return;
+      }
+
       const result = await fetchExternalModel(params.modelUrl!);
       if (typeof result === 'object' && 'error' in result) {
         this._loadError = result.error;
         this._notifyHost('stateChange', { error: result.error });
         return;
       }
-      const preVars = params.prePopulatedVars;
-      if (Object.keys(preVars).length > 0) {
-        this._model.mutate((s) => {
-          s.params.vars = { ...(s.params.vars ?? {}), ...coerceUrlVars(preVars) };
-        });
-      }
+      applyPreVars();
       this._model.source = result;
     })();
   }
@@ -280,6 +306,12 @@ export class OscEmbedShell extends LitElement {
       <div class="viewer-wrap">
         <osc-viewer-panel></osc-viewer-panel>
       </div>
+      ${
+        // Published surfaces have no footer/editor chrome, so a failed compile
+        // must surface here — an empty viewer with no message is the silent
+        // failure mode #253 removes.
+        this._st?.error ? html`<div class="compile-error">${this._st.error}</div>` : ''
+      }
       ${
         params?.embedControls
           ? html`<osc-customizer-panel style="max-height:40vh;"></osc-customizer-panel>`

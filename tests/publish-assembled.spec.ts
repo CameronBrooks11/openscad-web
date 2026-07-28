@@ -51,6 +51,32 @@ test('a shared-runtime compile mount fetches libraries from the shared runtime a
   expect(libraryNotFound, 'no library asset 404d').toEqual([]);
 });
 
+test('a projectRoot mount hydrates the published tree and compiles a multi-file model (#253)', async ({
+  page,
+}) => {
+  test.skip(!assembled, 'requires E2E_SERVER_MODE=publish-assembled');
+
+  const responses: { url: string; status: number }[] = [];
+  page.on('response', (response) =>
+    responses.push({ url: response.url(), status: response.status() }),
+  );
+
+  await page.goto(new URL('assembly/', baseUrl).toString());
+
+  // The entry is `use <lib/box.scad> box(12);` — geometry exists only if the
+  // sibling file reached the compile FS. Before #253 the boot loaded just the
+  // entry text, the `use` silently failed to resolve, and the compile produced
+  // an empty top level (no geometry, no error).
+  await page.waitForSelector('[data-geometry-loaded="true"]', { timeout: 90_000 });
+
+  // The sibling was actually fetched from the mount's published project tree.
+  const sibling = responses.find((response) =>
+    response.url.endsWith('/assembly/project/lib/box.scad'),
+  );
+  expect(sibling, 'the runtime fetched the sibling project file').toBeTruthy();
+  expect(sibling!.status).toBe(200);
+});
+
 test('a static mount renders the pre-rendered geometry with no WASM (#241)', async ({ page }) => {
   test.skip(!assembled, 'requires E2E_SERVER_MODE=publish-assembled');
 

@@ -258,3 +258,60 @@ describe('buildCustomizerShareUrl', () => {
     expect(parsed.searchParams.has('teeth')).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// fetchPublishedProject (#253)
+// ---------------------------------------------------------------------------
+
+import { fetchPublishedProject } from '../url-mode.ts';
+
+describe('fetchPublishedProject', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('fetches every project file as bytes from ./project/<path>', async () => {
+    const bodies: Record<string, string> = {
+      'examples/main.scad': 'use <../lib.scad>; part();',
+      'lib.scad': 'module part() { cube(5); }',
+    };
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      const match = Object.keys(bodies).find((rel) => url.endsWith(`/project/${rel}`));
+      if (!match) return new Response('missing', { status: 404 });
+      return new Response(bodies[match], { status: 200 });
+    });
+
+    const result = await fetchPublishedProject({
+      entry: 'examples/main.scad',
+      files: ['examples/main.scad', 'lib.scad'],
+    });
+
+    expect('error' in result).toBe(false);
+    if ('error' in result) return;
+    expect(result.map((f) => f.path)).toEqual(['examples/main.scad', 'lib.scad']);
+    expect(new TextDecoder().decode(result[0].bytes)).toBe(bodies['examples/main.scad']);
+    expect(new TextDecoder().decode(result[1].bytes)).toBe(bodies['lib.scad']);
+    // Every fetch resolved under the mount's own project/ directory.
+    for (const call of fetchMock.mock.calls) {
+      const url = new URL(String(call[0]));
+      expect(url.origin).toBe(new URL(window.location.href).origin);
+      expect(url.pathname).toContain('/project/');
+    }
+  });
+
+  it('fails the whole load when any file fails (no partial hydration)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/project/lib.scad')) return new Response('missing', { status: 404 });
+      return new Response('use <lib.scad>;', { status: 200 });
+    });
+
+    const result = await fetchPublishedProject({
+      entry: 'main.scad',
+      files: ['main.scad', 'lib.scad'],
+    });
+
+    expect(result).toHaveProperty('error');
+  });
+});

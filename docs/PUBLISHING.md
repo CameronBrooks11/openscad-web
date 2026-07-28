@@ -124,6 +124,25 @@ Field reference:
 | `targets[].title`        | Optional page title.                                                                       |
 | `targets[].parentOrigin` | Optional embed security setting for trusted iframe parents.                                |
 
+### Multi-File Projects
+
+A `projectRoot` compile target publishes the **whole tree** and boots the
+compiler with it: the boot config carries a `project` file list, the surface
+fetches every file into the compile filesystem before the first compile, and
+`use <…>` / `include <…>` between project files resolve exactly as they do
+locally (relative to the including file). Binary assets (`import()`ed meshes,
+images) ride along byte-exact.
+
+Notes:
+
+- Requires artifact version **>= 0.6** — earlier runtimes boot compile
+  surfaces from the entry file alone, so sibling references silently fail.
+- A dependency outside `projectRoot` is invisible to the publish. Stage
+  external libraries into the tree you publish (e.g. copy the library beside
+  the entry so `include <lib/…>` resolves relative to it).
+- If any project file fails to load, the surface shows an error instead of
+  compiling a partial tree.
+
 ## Static (Pre-Rendered) Surface
 
 The `viewer`/`customizer`/`editor` surfaces run the OpenSCAD **WASM compiler in

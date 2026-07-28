@@ -4,7 +4,7 @@ import AdmZip from 'adm-zip';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 
 import {
   DEFAULT_ARTIFACT_VERSION,
@@ -164,6 +164,11 @@ targets:
       download: true,
       title: 'Assembly Configurator',
       parentOrigin: 'https://store.example.com',
+      // #253: the published file list the runtime hydrates the compile FS from.
+      project: {
+        entry: 'main.scad',
+        files: ['main.scad', 'parts/bracket.scad'],
+      },
     });
     await expect(
       readJson(path.join(cwd, 'publish', 'assembled-site', 'assembly', OWNERSHIP_MARKER_FILENAME)),
@@ -171,6 +176,40 @@ targets:
       version: DEFAULT_ARTIFACT_VERSION,
       assembledAt: expect.any(String),
     });
+  });
+
+  it('dereferences symlinked project files so they are published and listed (#253)', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    const logger = { log() {}, warn() {}, error() {} };
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'shared-lib', 'util.scad'), 'module util() { cube(1); }');
+    await writeTextFile(path.join(cwd, 'proj', 'main.scad'), 'use <util.scad>\nutil();');
+    await symlink(path.join(cwd, 'shared-lib', 'util.scad'), path.join(cwd, 'proj', 'util.scad'));
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `site:
+  outDir: ./site
+targets:
+  - projectRoot: ./proj
+    entry: ./main.scad
+    mountPath: /model/
+    surface: customizer
+`,
+    );
+
+    await runDeployConfigure(
+      ['--config', './openscad-publish.yml', '--artifact-path', './openscad-web-publish.zip'],
+      { cwd, logger },
+    );
+
+    // The symlinked file was copied as a regular file (self-contained tree)…
+    await expect(
+      readFile(path.join(cwd, 'site', 'model', 'project', 'util.scad'), 'utf8'),
+    ).resolves.toBe('module util() { cube(1); }');
+    // …and appears in the hydration list, so the runtime fetches it.
+    const config = await readJson(path.join(cwd, 'site', 'model', 'openscad-web.config.json'));
+    expect(config.project).toEqual({ entry: 'main.scad', files: ['main.scad', 'util.scad'] });
   });
 
   it('places a root mount directly into the output directory', async () => {

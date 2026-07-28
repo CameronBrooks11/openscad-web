@@ -58,6 +58,18 @@ async function prepareAssembledFixture() {
 
   await writeFile(path.join(inputDirPath, 'model.scad'), 'cube(10);\n');
   await writeFile(path.join(inputDirPath, 'model.off'), FIXTURE_OFF);
+  // A multi-file project (#253): the entry compiles to geometry ONLY if the
+  // sibling file was hydrated into the compile FS — a single-file boot warns
+  // about the unresolved `use` and yields an empty top level.
+  await mkdir(path.join(inputDirPath, 'project', 'lib'), { recursive: true });
+  await writeFile(
+    path.join(inputDirPath, 'project', 'main.scad'),
+    'use <lib/box.scad>\nbox(12);\n',
+  );
+  await writeFile(
+    path.join(inputDirPath, 'project', 'lib', 'box.scad'),
+    'module box(size) { cube(size); }\n',
+  );
   await writeFile(
     path.join(inputDirPath, 'openscad-publish.yml'),
     `site:
@@ -69,6 +81,10 @@ targets:
   - source: ./model.scad
     surface: customizer
     mountPath: /customizer/
+  - projectRoot: ./project
+    entry: ./main.scad
+    surface: customizer
+    mountPath: /assembly/
   - surface: static
     geometry: ./model.off
     mountPath: /static/
