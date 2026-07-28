@@ -8,6 +8,8 @@ import {
   resolveExternalSourceUrl,
 } from '../external-source.ts';
 import { formatExternalLoadError } from '../user-facing-errors.ts';
+import type { BootProject } from '../runtime/boot-config.ts';
+import type { ProjectFile } from '../state/project-store.ts';
 
 export type AppMode = 'editor' | 'customizer' | 'embed';
 
@@ -23,6 +25,14 @@ export interface UrlModeParams {
     color?: string;
     lineNumbers?: boolean;
   };
+  /**
+   * The published multi-file project tree, when this surface boots a mount
+   * assembled from a `projectRoot` (#253). Comes from the boot config only —
+   * never from the URL — and is attached by the booter after validating that
+   * `modelUrl` still points at the project's entry (an explicit `?model=`
+   * override keeps plain single-file behavior).
+   */
+  project?: BootProject;
 }
 
 /** Query-param keys that are reserved by the router and must NOT be treated
@@ -164,6 +174,54 @@ export async function fetchExternalModel(modelUrl: string): Promise<string | { e
   try {
     const buffer = await fetchResolvedExternalSourceBytes(resolved, { maxBytes: MODEL_MAX_BYTES });
     return new TextDecoder().decode(buffer);
+  } catch (e) {
+    return { error: formatExternalLoadError(e, 'model') };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Published project hydration (#253)
+// ---------------------------------------------------------------------------
+
+/** Where a mount's published project files live, relative to its document.
+ *  Fixed by the publish contract: `deploy-configure` always assembles a
+ *  `projectRoot` target's tree into `<mount>/project/`. */
+const PUBLISHED_PROJECT_BASE = './project/';
+
+/** The mount-relative URL of a published project file. Each segment is
+ *  percent-encoded so legal-but-special filename characters (`#`, `?`, `%`,
+ *  spaces) fetch the literal file instead of being parsed as URL syntax. */
+export function publishedProjectFileUrl(relativePath: string): string {
+  return PUBLISHED_PROJECT_BASE + relativePath.split('/').map(encodeURIComponent).join('/');
+}
+
+/**
+ * Fetch every file of a published project tree, ready for
+ * `model.setProject(files, project.entry)`.
+ *
+ * All files are fetched as bytes and pushed uniformly — `setProject` decodes
+ * text-suffix paths itself (session-contract `ProjectFile` semantics), so
+ * `.scad` sources become editable text while binary assets (images,
+ * `import()`ed meshes) keep their exact bytes. Paths were validated as safe
+ * relative paths by the boot-config normalizer, and resolve under the mount's
+ * own `project/` directory, so every fetch is same-origin.
+ *
+ * Any failed file fails the whole load: compiling a partially hydrated tree
+ * is the silent-empty-geometry failure #253 exists to eliminate.
+ */
+export async function fetchPublishedProject(
+  project: BootProject,
+): Promise<ProjectFile[] | { error: string }> {
+  try {
+    return await Promise.all(
+      project.files.map(async (relativePath): Promise<ProjectFile> => {
+        const resolved = new URL(publishedProjectFileUrl(relativePath), window.location.href);
+        const bytes = await fetchResolvedExternalSourceBytes(resolved, {
+          maxBytes: MODEL_MAX_BYTES,
+        });
+        return { path: relativePath, bytes };
+      }),
+    );
   } catch (e) {
     return { error: formatExternalLoadError(e, 'model') };
   }

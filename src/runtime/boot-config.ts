@@ -1,3 +1,18 @@
+/**
+ * A published multi-file project (#253). `deploy-configure` emits this for
+ * compile-surface targets assembled from a `projectRoot`: every published file,
+ * as paths relative to the mount's `project/` directory (POSIX separators).
+ * The runtime fetches each file from `./project/<path>` and boots the compiler
+ * with the whole tree, so `use <…>` / `include <…>` between project files
+ * resolve. Absent for single-file (`source`) targets.
+ */
+export interface BootProject {
+  /** The entry `.scad` file, relative to `project/`. Always listed in `files`. */
+  entry: string;
+  /** Every published project file, relative to `project/` (entry included). */
+  files: string[];
+}
+
 export interface BootConfig {
   model?: string;
   mode?: string;
@@ -5,6 +20,8 @@ export interface BootConfig {
   download?: boolean;
   parentOrigin?: string;
   title?: string;
+  /** The published project tree for a multi-file compile target (#253). */
+  project?: BootProject;
   /**
    * Base for runtime-fetched assets (libraries/fonts), relative to this
    * surface's document. Set when a shared runtime is assembled once and
@@ -31,6 +48,44 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return value != null && typeof value === 'object' && !Array.isArray(value);
 }
 
+/**
+ * A project-relative path that is safe to resolve under the mount's `project/`
+ * directory: non-empty, relative, forward-slash separated, and unable to
+ * escape (`..`), re-anchor (leading `/`, drive letter, URL scheme), or smuggle
+ * odd segments (empty, `.`). The boot config is same-origin data, but it is
+ * still fetched input — validate before building fetch URLs from it.
+ */
+function isSafeProjectRelativePath(value: unknown): value is string {
+  if (typeof value !== 'string' || value === '') return false;
+  if (value.includes('\\') || value.includes(':') || value.startsWith('/')) return false;
+  const segments = value.split('/');
+  return segments.every((segment) => segment !== '' && segment !== '.' && segment !== '..');
+}
+
+/**
+ * Validate a raw `project` value. Malformed input yields `undefined` (the
+ * surface falls back to single-file boot) rather than a partial project — a
+ * half-hydrated tree would compile against missing files, which is exactly the
+ * silent failure this field exists to fix.
+ */
+function normalizeBootProject(value: unknown): BootProject | undefined {
+  const dropped = (reason: string) => {
+    // A dropped project falls back to single-file boot, whose sibling
+    // references fail with no other diagnostic — say why, loudly.
+    console.warn(`[openscad-web] boot config "project" ignored (${reason}).`);
+    return undefined;
+  };
+  if (!isRecord(value)) return dropped('not an object');
+  const { entry, files } = value;
+  if (!isSafeProjectRelativePath(entry)) return dropped('invalid entry path');
+  if (!Array.isArray(files) || files.length === 0) return dropped('files missing or empty');
+  if (!files.every(isSafeProjectRelativePath)) return dropped('invalid file path in files');
+  const unique = new Set(files);
+  if (unique.size !== files.length) return dropped('duplicate file paths');
+  if (!unique.has(entry)) return dropped('entry not listed in files');
+  return { entry, files: [...files] };
+}
+
 function normalizeBootConfig(value: unknown): BootConfig {
   if (!isRecord(value)) {
     return {};
@@ -47,6 +102,11 @@ function normalizeBootConfig(value: unknown): BootConfig {
   if (typeof value.assetBase === 'string') config.assetBase = value.assetBase;
   if (typeof value.geometry === 'string') config.geometry = value.geometry;
   if (typeof value.poster === 'string') config.poster = value.poster;
+
+  if (value.project != null) {
+    const project = normalizeBootProject(value.project);
+    if (project) config.project = project;
+  }
 
   return config;
 }

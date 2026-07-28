@@ -103,6 +103,60 @@ describe('loadBootConfig', () => {
   });
 });
 
+describe('loadBootConfig — project field (#253)', () => {
+  const loadWithConfig = (value: unknown) =>
+    loadBootConfig({
+      fetchImpl: (async () =>
+        new Response(JSON.stringify(value), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })) as typeof fetch,
+      configUrl: 'https://example.com/openscad-web.config.json',
+    });
+
+  it('parses a valid project tree', async () => {
+    await expect(
+      loadWithConfig({
+        mode: 'customizer',
+        model: './project/examples/main.scad',
+        project: {
+          entry: 'examples/main.scad',
+          files: ['examples/main.scad', 'lib.scad', 'parts/bracket.scad'],
+        },
+      }),
+    ).resolves.toEqual({
+      mode: 'customizer',
+      model: './project/examples/main.scad',
+      project: {
+        entry: 'examples/main.scad',
+        files: ['examples/main.scad', 'lib.scad', 'parts/bracket.scad'],
+      },
+    });
+  });
+
+  // Malformed projects are dropped whole rather than partially honored: a
+  // half-hydrated tree would compile against missing files — the silent
+  // failure the field exists to eliminate.
+  it.each([
+    ['entry missing', { files: ['a.scad'] }],
+    ['entry not listed in files', { entry: 'main.scad', files: ['other.scad'] }],
+    ['files empty', { entry: 'main.scad', files: [] }],
+    ['files not an array', { entry: 'main.scad', files: 'main.scad' }],
+    ['duplicate files', { entry: 'a.scad', files: ['a.scad', 'a.scad'] }],
+    ['absolute path', { entry: '/etc/passwd', files: ['/etc/passwd'] }],
+    ['parent traversal', { entry: '../outside.scad', files: ['../outside.scad'] }],
+    ['dot segment', { entry: './main.scad', files: ['./main.scad'] }],
+    ['empty segment', { entry: 'a//b.scad', files: ['a//b.scad'] }],
+    ['backslash separator', { entry: 'a\\b.scad', files: ['a\\b.scad'] }],
+    ['scheme or drive colon', { entry: 'https://x/a.scad', files: ['https://x/a.scad'] }],
+    ['non-string file entry', { entry: 'a.scad', files: ['a.scad', 42] }],
+  ])('drops a malformed project (%s)', async (_label, project) => {
+    await expect(loadWithConfig({ mode: 'customizer', project })).resolves.toEqual({
+      mode: 'customizer',
+    });
+  });
+});
+
 describe('mergeConfigIntoSearch', () => {
   it('projects config values into the search string when the URL search is empty', () => {
     expect(

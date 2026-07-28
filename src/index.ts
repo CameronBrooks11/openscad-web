@@ -75,6 +75,17 @@ window.addEventListener('load', async () => {
 
   const urlModeResult = parseUrlMode(mergeConfigIntoSearch(window.location.search, bootConfig));
 
+  // A published multi-file project (#253) applies only while the model URL
+  // still points at the project's entry — an explicit `?model=` override took
+  // precedence in the merge above and keeps plain single-file behavior.
+  if (
+    !('error' in urlModeResult) &&
+    bootConfig.project &&
+    urlModeResult.modelUrl === `./project/${bootConfig.project.entry}`
+  ) {
+    urlModeResult.project = bootConfig.project;
+  }
+
   if ('error' in urlModeResult) {
     markPerf('osc:app-bootstrap-error');
     rootEl.replaceChildren();
