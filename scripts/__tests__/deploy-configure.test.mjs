@@ -212,6 +212,84 @@ targets:
     expect(config.project).toEqual({ entry: 'main.scad', files: ['main.scad', 'util.scad'] });
   });
 
+  it('fails the publish loudly when a project file name would be dropped by the runtime (#253)', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    const logger = { log() {}, warn() {}, error() {} };
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'proj', 'main.scad'), 'cube(1);');
+    // Legal on Linux, but the runtime's path validator rejects ':' — publishing
+    // it would make the runtime drop the whole project silently at boot.
+    await writeTextFile(path.join(cwd, 'proj', 'part:v2.scad'), 'cube(2);');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `site:
+  outDir: ./site
+targets:
+  - projectRoot: ./proj
+    entry: ./main.scad
+    mountPath: /model/
+    surface: customizer
+`,
+    );
+
+    await expect(
+      runDeployConfigure(
+        ['--config', './openscad-publish.yml', '--artifact-path', './openscad-web-publish.zip'],
+        { cwd, logger },
+      ),
+    ).rejects.toThrow(/part:v2\.scad/);
+  });
+
+  it('warns when a project target is assembled with a pre-0.6 artifact (#253)', async () => {
+    const cwd = await makeTempDir();
+    const artifactPath = path.join(cwd, 'openscad-web-publish.zip');
+    const warnings = [];
+    const logger = { log() {}, warn: (m) => warnings.push(m), error() {} };
+    await createPublishArtifact(artifactPath);
+    await writeTextFile(path.join(cwd, 'proj', 'main.scad'), 'cube(1);');
+    await writeTextFile(
+      path.join(cwd, 'openscad-publish.yml'),
+      `site:
+  outDir: ./site
+targets:
+  - projectRoot: ./proj
+    entry: ./main.scad
+    mountPath: /model/
+    surface: customizer
+`,
+    );
+
+    await runDeployConfigure(
+      [
+        '--config',
+        './openscad-publish.yml',
+        '--artifact-path',
+        './openscad-web-publish.zip',
+        '--artifact-version',
+        'v0.5.1',
+      ],
+      { cwd, logger },
+    );
+    expect(warnings.some((m) => m.includes('>= 0.6'))).toBe(true);
+
+    // A 0.6+ artifact does not warn.
+    warnings.length = 0;
+    await rm(path.join(cwd, 'site'), { recursive: true, force: true });
+    await runDeployConfigure(
+      [
+        '--config',
+        './openscad-publish.yml',
+        '--artifact-path',
+        './openscad-web-publish.zip',
+        '--artifact-version',
+        'v0.6.0',
+      ],
+      { cwd, logger },
+    );
+    expect(warnings).toEqual([]);
+  });
+
   it('places a root mount directly into the output directory', async () => {
     const cwd = await makeTempDir();
     const artifactPath = path.join(cwd, 'openscad-web-publish.zip');

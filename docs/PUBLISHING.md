@@ -136,7 +136,11 @@ images) ride along byte-exact.
 Notes:
 
 - Requires artifact version **>= 0.6** — earlier runtimes boot compile
-  surfaces from the entry file alone, so sibling references silently fail.
+  surfaces from the entry file alone, so sibling references silently fail
+  (`deploy-configure` warns when it can tell the artifact is older).
+- File names must be portable: a name containing `:` or `\` fails the publish
+  (the runtime could not hydrate it). Special-but-legal characters like
+  spaces, `#`, and `%` are fine.
 - A dependency outside `projectRoot` is invisible to the publish. Stage
   external libraries into the tree you publish (e.g. copy the library beside
   the entry so `include <lib/…>` resolves relative to it).

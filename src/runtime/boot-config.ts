@@ -69,13 +69,20 @@ function isSafeProjectRelativePath(value: unknown): value is string {
  * silent failure this field exists to fix.
  */
 function normalizeBootProject(value: unknown): BootProject | undefined {
-  if (!isRecord(value)) return undefined;
+  const dropped = (reason: string) => {
+    // A dropped project falls back to single-file boot, whose sibling
+    // references fail with no other diagnostic — say why, loudly.
+    console.warn(`[openscad-web] boot config "project" ignored (${reason}).`);
+    return undefined;
+  };
+  if (!isRecord(value)) return dropped('not an object');
   const { entry, files } = value;
-  if (!isSafeProjectRelativePath(entry)) return undefined;
-  if (!Array.isArray(files) || files.length === 0) return undefined;
-  if (!files.every(isSafeProjectRelativePath)) return undefined;
+  if (!isSafeProjectRelativePath(entry)) return dropped('invalid entry path');
+  if (!Array.isArray(files) || files.length === 0) return dropped('files missing or empty');
+  if (!files.every(isSafeProjectRelativePath)) return dropped('invalid file path in files');
   const unique = new Set(files);
-  if (unique.size !== files.length || !unique.has(entry)) return undefined;
+  if (unique.size !== files.length) return dropped('duplicate file paths');
+  if (!unique.has(entry)) return dropped('entry not listed in files');
   return { entry, files: [...files] };
 }
 
@@ -96,8 +103,10 @@ function normalizeBootConfig(value: unknown): BootConfig {
   if (typeof value.geometry === 'string') config.geometry = value.geometry;
   if (typeof value.poster === 'string') config.poster = value.poster;
 
-  const project = normalizeBootProject(value.project);
-  if (project) config.project = project;
+  if (value.project != null) {
+    const project = normalizeBootProject(value.project);
+    if (project) config.project = project;
+  }
 
   return config;
 }

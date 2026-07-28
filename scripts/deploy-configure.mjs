@@ -473,10 +473,44 @@ async function populateProjectPayload(targetDirPath, target) {
   // it, so use <…>/include <…> between project files resolve. Walked from the
   // copied tree so it lists exactly what was published.
   const files = await listFilesRecursive(projectDirPath);
+  assertHydratableProjectFiles(files, target.entryPath, target.projectRootPath);
   return {
     modelPath: `./project/${target.entryPath}`,
     project: { entry: target.entryPath, files },
   };
+}
+
+// The runtime's boot-config validator drops the WHOLE project (falling back to
+// the silent-empty-geometry single-file boot #253 exists to fix) when any
+// listed path violates its rules — so enforce the same rules here, at publish
+// time, where the failure is loud and the fix (rename the file) is obvious.
+// Mirrors isSafeProjectRelativePath in src/runtime/boot-config.ts.
+function assertHydratableProjectFiles(files, entryPath, projectRootPath) {
+  const offending = files.filter((file) => {
+    if (file.includes('\\') || file.includes(':')) return true;
+    return file.split('/').some((segment) => segment === '' || segment === '.' || segment === '..');
+  });
+  if (offending.length > 0) {
+    throw new Error(
+      `Project files under ${projectRootPath} have non-portable names the runtime cannot ` +
+        `hydrate (':' or '\\' in a name): ${offending.join(', ')}. Rename them to publish.`,
+    );
+  }
+  if (!files.includes(entryPath)) {
+    throw new Error(
+      `Entry ${entryPath} is not among the published project files of ${projectRootPath} ` +
+        `(exact case and path must match a real file): found ${files.length} file(s).`,
+    );
+  }
+}
+
+// Whether the artifact runtime understands the boot config `project` field
+// (#253, shipped in 0.6). Unknown versions return false so the caller can warn.
+function artifactSupportsProjectHydration(artifactVersion) {
+  const match = /^v?(\d+)\.(\d+)/.exec(getString(artifactVersion) ?? '');
+  if (!match) return false;
+  const [major, minor] = [Number(match[1]), Number(match[2])];
+  return major > 0 || minor >= 6;
 }
 
 // Every file under `rootDirPath`, as sorted root-relative POSIX paths.
@@ -825,6 +859,14 @@ export async function runDeployConfigure(
           await copyDirectoryContents(extractedArtifactDirPath, mountDirPath);
         }
         const { modelPath, project } = await populateProjectPayload(mountDirPath, target);
+        if (project != null && !artifactSupportsProjectHydration(args.artifactVersion)) {
+          logger.warn(
+            `Warning: multi-file project target ${target.mountPath} needs an artifact ` +
+              `>= 0.6 to hydrate sibling files; this artifact reports version ` +
+              `"${getString(args.artifactVersion) ?? 'unknown'}". An older runtime will ` +
+              `ignore the project field and boot from the entry file alone.`,
+          );
+        }
         bootConfig = buildBootConfig(target, modelPath, assetBase, project);
       }
       await writeFile(

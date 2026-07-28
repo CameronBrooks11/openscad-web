@@ -314,4 +314,22 @@ describe('fetchPublishedProject', () => {
 
     expect(result).toHaveProperty('error');
   });
+  it('percent-encodes special filename characters in fetch URLs', async () => {
+    const fetched: string[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
+      fetched.push(String(input));
+      return new Response('cube(1);', { status: 200 });
+    });
+
+    const result = await fetchPublishedProject({
+      entry: 'notes #1.scad',
+      files: ['notes #1.scad', 'lib/50%.scad'],
+    });
+
+    expect('error' in result).toBe(false);
+    // '#' would otherwise become a fragment, '%' would be server-decoded, and
+    // a space is invalid raw — each segment must be percent-encoded.
+    expect(fetched.some((url) => url.endsWith('/project/notes%20%231.scad'))).toBe(true);
+    expect(fetched.some((url) => url.endsWith('/project/lib/50%25.scad'))).toBe(true);
+  });
 });

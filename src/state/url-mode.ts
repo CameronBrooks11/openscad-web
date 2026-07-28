@@ -188,9 +188,11 @@ export async function fetchExternalModel(modelUrl: string): Promise<string | { e
  *  `projectRoot` target's tree into `<mount>/project/`. */
 const PUBLISHED_PROJECT_BASE = './project/';
 
-/** The mount-relative URL of a published project file. */
+/** The mount-relative URL of a published project file. Each segment is
+ *  percent-encoded so legal-but-special filename characters (`#`, `?`, `%`,
+ *  spaces) fetch the literal file instead of being parsed as URL syntax. */
 export function publishedProjectFileUrl(relativePath: string): string {
-  return `${PUBLISHED_PROJECT_BASE}${relativePath}`;
+  return PUBLISHED_PROJECT_BASE + relativePath.split('/').map(encodeURIComponent).join('/');
 }
 
 /**
