@@ -15,7 +15,7 @@
     "debug": "^4.4.0",
     "jszip": "^3.10.1",
     "lit": "^3.3.3",
-    "monaco-editor": "^0.55.1",
+    "monaco-editor": "^0.56.0",
     "three": "^0.185.1",
     "thumbhash": "^0.1.1",
     "uuid": "^14.0.1",
