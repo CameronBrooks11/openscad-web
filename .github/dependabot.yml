@@ -17,16 +17,6 @@ updates:
       interval: 'weekly'
     commit-message:
       prefix: 'chore(deps): '
-    ignore:
-      # monaco 0.56 rewrote `editor.api` from a re-export shim into a module
-      # that statically pulls the standalone editor and its CSS, and dropped
-      # every CSS subpath export. That breaks the editor panel's lazy-loaded
-      # stylesheet and makes the monaco chunk eager. Held at 0.55.x until
-      # monaco ships a CSS-free API entry again -- see #254.
-      - dependency-name: 'monaco-editor'
-        update-types:
-          - 'version-update:semver-minor'
-          - 'version-update:semver-major'
     groups:
       npm-production:
         dependency-type: 'production'
