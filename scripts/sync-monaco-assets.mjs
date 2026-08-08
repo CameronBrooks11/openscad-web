@@ -9,11 +9,11 @@
 //
 // Pruning matters because the service worker precaches everything in dist
 // (scripts/build-sw.mjs), so anything shipped here is downloaded on first
-// visit. The full `min/vs` is ~16 MB, of which ~8.7 MB is language-service
-// workers for TypeScript, CSS, HTML and JSON. This app registers exactly one
-// language — OpenSCAD, via Monarch — and never creates a model in any of
-// those, so their workers are never spawned. The extra locale bundles are
-// likewise dead: we never call `loader.config({ 'vs/nls': ... })`.
+// visit. The full `min/vs` is ~23 MB, most of it language-service workers for
+// TypeScript, CSS, HTML and JSON — which 0.56 ships in triplicate — plus
+// translated UI strings. This app registers exactly one language (OpenSCAD,
+// via Monarch) and never creates a model in any of those, so their workers are
+// never spawned.
 //
 // Exclusions are matched by PATTERN, not by exact filename, because these
 // assets are content-hashed and the hashes change on every Monaco release.
@@ -22,36 +22,50 @@ import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'no
 import { createRequire } from 'node:module';
 import path from 'node:path';
 
-/** Language-service workers for languages this app never registers. */
-const EXCLUDED_WORKERS = [
-  /^ts\.worker-.*\.js$/,
-  /^css\.worker-.*\.js$/,
-  /^html\.worker-.*\.js$/,
-  /^json\.worker-.*\.js$/,
-];
+/**
+ * The heavy language-service worker bundles, for languages this app never
+ * registers. `editor.worker` is deliberately not in this set — the core editor
+ * needs it.
+ *
+ * These are pruned only under `assets/`. 0.56 also ships a ~200-byte AMD stub
+ * for each at the root (`ts.worker-<hash>.js` and friends) whose whole job is
+ * to resolve the `assets/` URL. Those stubs are loaded EAGERLY when the editor
+ * boots, so dropping them 404s and the editor never initializes — pruning them
+ * is what broke the first attempt at this upgrade. They are kept; the multi-MB
+ * bundles they point at stay lazy and are never fetched.
+ */
+const EXCLUDED_WORKER = /^(ts|css|html|json)\.worker(-[^.]+)?\.js$/;
 
-/** Localized UI strings. `nls.messages.js.js` is the built-in English bundle. */
-const EXCLUDED_NLS = /^nls\.messages\.(?!js\.js$).+\.js\.js$/;
+/**
+ * Whole directories with nothing we use.
+ *
+ * `language/` holds the per-language mode entry points for TypeScript, CSS,
+ * HTML and JSON, including a second ~6.4 MB copy of ts.worker. `nls/` holds the
+ * translated UI strings for thirteen locales; the English strings are baked
+ * into the editor bundle and we never call `loader.config({ 'vs/nls': ... })`.
+ */
+const EXCLUDED_DIRS = ['language', 'nls'];
 
 /**
  * Files that must survive the prune. If Monaco reorganizes and one of these
- * stops matching, fail the build rather than ship a broken editor.
+ * stops matching, fail the build rather than ship a broken editor. This is not
+ * theoretical: 0.56 moved the NLS bundles into `nls/` and this list caught it.
  */
 const REQUIRED = [
   { label: 'AMD loader', test: (rel) => rel === 'loader.js' },
   { label: 'editor stylesheet', test: (rel) => rel === 'editor/editor.main.css' },
   { label: 'editor entry', test: (rel) => rel === 'editor/editor.main.js' },
-  { label: 'core editor worker', test: (rel) => /^assets\/editor\.worker-.*\.js$/.test(rel) },
-  { label: 'default NLS bundle', test: (rel) => rel === 'nls.messages.js.js' },
+  {
+    label: 'core editor worker',
+    test: (rel) => /(^|\/)editor\.worker(-[^.]+)?\.js$/.test(rel),
+  },
 ];
 
 /** True when `relPath` (posix, relative to `min/vs`) should be pruned. */
 export function isExcluded(relPath) {
-  const base = path.posix.basename(relPath);
-  if (path.posix.dirname(relPath) === 'assets' && EXCLUDED_WORKERS.some((re) => re.test(base))) {
-    return true;
-  }
-  return path.posix.dirname(relPath) === '.' && EXCLUDED_NLS.test(base);
+  const dir = path.posix.dirname(relPath);
+  if (EXCLUDED_DIRS.includes(dir.split('/')[0])) return true;
+  return dir === 'assets' && EXCLUDED_WORKER.test(path.posix.basename(relPath));
 }
 
 /** All files under `dir`, as posix paths relative to it. */
