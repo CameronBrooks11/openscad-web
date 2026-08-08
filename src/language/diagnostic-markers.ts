@@ -1,13 +1,14 @@
 // Adapter from host-neutral Diagnostics to Monaco editor markers. This is the
 // only place the editor's marker representation meets the core diagnostics, so
 // Monaco stays out of domain and runner code.
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import type * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import { MarkerSeverity } from './monaco-constants.ts';
 import type { Diagnostic, DiagnosticSeverity } from '../diagnostics.ts';
 
 const MONACO_SEVERITY: Record<DiagnosticSeverity, monaco.MarkerSeverity> = {
-  error: monaco.MarkerSeverity.Error,
-  warning: monaco.MarkerSeverity.Warning,
-  info: monaco.MarkerSeverity.Info,
+  error: MarkerSeverity.Error,
+  warning: MarkerSeverity.Warning,
+  info: MarkerSeverity.Info,
 };
 
 export function toMonacoMarkers(diagnostics: Diagnostic[]): monaco.editor.IMarkerData[] {

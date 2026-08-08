@@ -1,4 +1,4 @@
-import * as monaco from 'monaco-editor/esm/vs/editor/editor.api';
+import { MarkerSeverity } from '../language/monaco-constants.ts';
 import {
   countDiagnostics,
   maxDiagnosticSeverity,
@@ -41,9 +41,9 @@ describe('toMonacoMarkers adapter (#55)', () => {
     const markers = toMonacoMarkers([diag('error', 3), diag('warning', 5), diag('info', 7)]);
 
     expect(markers.map((m) => m.severity)).toEqual([
-      monaco.MarkerSeverity.Error,
-      monaco.MarkerSeverity.Warning,
-      monaco.MarkerSeverity.Info,
+      MarkerSeverity.Error,
+      MarkerSeverity.Warning,
+      MarkerSeverity.Info,
     ]);
     expect(markers[0]).toMatchObject({
       message: 'error at 3',

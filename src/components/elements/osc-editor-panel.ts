@@ -2,10 +2,13 @@
 import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import openscadEditorOptions from '../../language/openscad-editor-options.ts';
-import * as monacoTypes from 'monaco-editor/esm/vs/editor/editor.api';
-// Monaco's stylesheet ships with the editor so it loads only when the editor
-// panel does — embed/customizer surfaces never fetch it.
-import 'monaco-editor/min/vs/editor/editor.main.css';
+import type * as monacoTypes from 'monaco-editor/esm/vs/editor/editor.api';
+// No stylesheet import here: Monaco is loaded at runtime from the AMD build we
+// ship (see openscad-register-language.ts), and that build pulls its own
+// `editor/editor.main.css` when the editor initializes. The styles still arrive
+// only with the editor panel — embed/customizer surfaces never fetch them — but
+// the bundler is no longer involved, so monaco's ESM subpath layout can't break
+// it the way 0.56 did (#254).
 import { resolveSession } from '../../state/session-context.ts';
 import { isProjectScopedPath, staleModelPaths } from './editor-model-ownership.ts';
 import { isProbablyTextPath } from '../../state/project-source.ts';

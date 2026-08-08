@@ -19,6 +19,9 @@ src/wasm
 public/libraries/*
 !public/libraries/.gitkeep
 
+# Monaco AMD build, vendored into the artifact by scripts/sync-monaco-assets.mjs
+public/monaco/
+
 # TypeScript incremental build cache
 *.tsbuildinfo
 

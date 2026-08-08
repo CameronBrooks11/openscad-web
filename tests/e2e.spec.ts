@@ -619,9 +619,13 @@ test.describe('embed mode', () => {
     await waitForEmbedViewer(frame);
     await waitForEmbedMessage(page, 'renderComplete');
 
-    // The editor shell (and its Monaco chunk + stylesheet) must never be fetched
-    // for the reduced embed surface.
-    const monacoRequests = requested.filter((u) => /\/monaco-[^/]*\.(js|css)/.test(u));
+    // The editor shell and Monaco must never be fetched for the reduced embed
+    // surface. Monaco now arrives as the AMD build under `monaco/vs/` rather
+    // than a bundled `monaco-*` chunk (#267), so match both: the legacy chunk
+    // pattern would pass vacuously on its own.
+    const monacoRequests = requested.filter(
+      (u) => /\/monaco-[^/]*\.(js|css)/.test(u) || /\/monaco\/vs\//.test(u),
+    );
     expect(monacoRequests).toEqual([]);
   });
 
