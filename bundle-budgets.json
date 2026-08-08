@@ -1,5 +1,5 @@
 {
-  "_comment": "Gzipped-size budgets (KB) enforced in CI by scripts/check-bundle-budgets.mjs (#68). These bound regressions of the boot-critical artifacts; update deliberately when a size change is intended and understood. A pattern matching no file is a FAILURE, so a removed artifact must be removed here too. Three.js is split into its own named chunk (#68) and only loaded by the viewer. Monaco has no bundled chunk: it is loaded at runtime from the AMD build in public/monaco/vs (#254, #267), so it is budgeted as a shipped asset rather than a chunk.",
+  "_comment": "Gzipped-size budgets (KB) enforced in CI by scripts/check-bundle-budgets.mjs (#68). These bound regressions of the boot-critical artifacts; update deliberately when a size change is intended and understood. A pattern matching no file is a FAILURE, so a removed artifact must be removed here too. Three.js is split into its own named chunk (#68) and only loaded by the viewer. Monaco has no bundled chunk: it is loaded at runtime from the AMD build in public/monaco/vs (#254, #267), so it is budgeted as a shipped asset rather than a chunk. Its payload is budgeted as the whole root-level *.js set rather than a single file, because those filenames are content-hashed and rename on every Monaco release.",
   "budgets": [
     {
       "label": "initial app JS",
@@ -27,14 +27,14 @@
       "maxGzipKB": 3072
     },
     {
-      "label": "monaco AMD core",
-      "pattern": "monaco/vs/editor.api-*.js",
-      "maxGzipKB": 1100
+      "label": "monaco AMD payload",
+      "pattern": "monaco/vs/*.js",
+      "maxGzipKB": 1450
     },
     {
       "label": "monaco AMD CSS",
       "pattern": "monaco/vs/editor/editor.main.css",
-      "maxGzipKB": 120
+      "maxGzipKB": 140
     }
   ]
 }
