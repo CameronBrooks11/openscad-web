@@ -25,8 +25,7 @@ async function waitForEditor(page: Page): Promise<void> {
   await page.waitForFunction(
     () => {
       const p = document.querySelector('osc-editor-panel') as
-        | (Element & { _editor?: { getValue(): string } })
-        | null;
+        (Element & { _editor?: { getValue(): string } }) | null;
       return Boolean(p && p._editor);
     },
     null,
