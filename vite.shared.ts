@@ -1,9 +1,32 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-import type { UserConfig } from 'vite';
+import type { Plugin, UserConfig } from 'vite';
+
+// @ts-expect-error -- plain .mjs build script, no type declarations.
+import { syncMonacoAssets } from './scripts/sync-monaco-assets.mjs';
 
 const htmlInput = (name: string) => fileURLToPath(new URL(`./${name}`, import.meta.url));
+
+/**
+ * Populate `public/monaco/vs` before the build reads `public/`.
+ *
+ * Monaco is loaded at runtime by @monaco-editor/loader from our own origin
+ * rather than a CDN (#267), so the AMD build has to be part of the artifact.
+ * Only surfaces that copy `public/` get it — the viewer and session builds pass
+ * `publicDir: false` and must never reach Monaco at all.
+ */
+function syncMonacoAssetsPlugin(): Plugin {
+  return {
+    name: 'sync-monaco-assets',
+    buildStart() {
+      syncMonacoAssets({
+        destDir: fileURLToPath(new URL('./public/monaco/vs', import.meta.url)),
+        log: (message: string) => this.info(message),
+      });
+    },
+  };
+}
 
 type PackageJsonShape = {
   homepage?: string;
@@ -52,6 +75,9 @@ export function createAppViteConfig({
   return {
     base,
     publicDir,
+    // Only the surfaces that ship `public/` carry the editor; the viewer and
+    // session builds opt out of both in one move.
+    plugins: publicDir === false ? [] : [syncMonacoAssetsPlugin()],
     optimizeDeps: {
       entries,
     },
@@ -65,14 +91,18 @@ export function createAppViteConfig({
         // Model, or service worker (asserted by scripts/verify-viewer-bundle.mjs).
         input,
         output: {
-          // Split the two heavy vendor libraries into their own named chunks so
-          // they can be budgeted separately and are only fetched by the surfaces
-          // that dynamically import them (editor → monaco, viewer → three).
+          // Split the heavy vendor library into its own named chunk so it can be
+          // budgeted separately and is only fetched by the surface that
+          // dynamically imports it (viewer → three).
           // rolldown-vite requires manualChunks as a function.
+          //
+          // Monaco is deliberately absent: it is no longer part of the module
+          // graph at all. `src/` imports it for types only, and the editor is
+          // fetched at runtime from the AMD build in `public/monaco/vs`
+          // (#254, #267).
           manualChunks: (id: string) => {
-            // Trailing slash so these match only the package itself, not a
-            // future `three-*` / `monaco-*`-prefixed dependency.
-            if (id.includes('node_modules/monaco-editor/')) return 'monaco';
+            // Trailing slash so this matches only the package itself, not a
+            // future `three-*`-prefixed dependency.
             if (id.includes('node_modules/three/')) return 'three';
             return undefined;
           },

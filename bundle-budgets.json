@@ -1,12 +1,40 @@
 {
-  "_comment": "Gzipped-size budgets (KB) enforced in CI by scripts/check-bundle-budgets.mjs (#68). These bound regressions of the boot-critical artifacts; update deliberately when a size change is intended and understood. Monaco and Three.js are now split into their own named chunks (#68) so they are budgeted separately and only loaded by the surfaces that import them (editor -> monaco, viewer -> three).",
+  "_comment": "Gzipped-size budgets (KB) enforced in CI by scripts/check-bundle-budgets.mjs (#68). These bound regressions of the boot-critical artifacts; update deliberately when a size change is intended and understood. A pattern matching no file is a FAILURE, so a removed artifact must be removed here too. Three.js is split into its own named chunk (#68) and only loaded by the viewer. Monaco has no bundled chunk: it is loaded at runtime from the AMD build in public/monaco/vs (#254, #267), so it is budgeted as a shipped asset rather than a chunk.",
   "budgets": [
-    { "label": "initial app JS", "pattern": "assets/index-*.js", "maxGzipKB": 175 },
-    { "label": "app CSS", "pattern": "assets/index-*.css", "maxGzipKB": 20 },
-    { "label": "monaco chunk", "pattern": "assets/monaco-*.js", "maxGzipKB": 700 },
-    { "label": "monaco CSS", "pattern": "assets/monaco-*.css", "maxGzipKB": 120 },
-    { "label": "three chunk", "pattern": "assets/three-*.js", "maxGzipKB": 160 },
-    { "label": "openscad worker", "pattern": "assets/openscad-worker-*.js", "maxGzipKB": 110 },
-    { "label": "openscad WASM", "pattern": "assets/openscad-*.wasm", "maxGzipKB": 3072 }
+    {
+      "label": "initial app JS",
+      "pattern": "assets/index-*.js",
+      "maxGzipKB": 175
+    },
+    {
+      "label": "app CSS",
+      "pattern": "assets/index-*.css",
+      "maxGzipKB": 20
+    },
+    {
+      "label": "three chunk",
+      "pattern": "assets/three-*.js",
+      "maxGzipKB": 160
+    },
+    {
+      "label": "openscad worker",
+      "pattern": "assets/openscad-worker-*.js",
+      "maxGzipKB": 110
+    },
+    {
+      "label": "openscad WASM",
+      "pattern": "assets/openscad-*.wasm",
+      "maxGzipKB": 3072
+    },
+    {
+      "label": "monaco AMD core",
+      "pattern": "monaco/vs/editor.api-*.js",
+      "maxGzipKB": 1100
+    },
+    {
+      "label": "monaco AMD CSS",
+      "pattern": "monaco/vs/editor/editor.main.css",
+      "maxGzipKB": 120
+    }
   ]
 }

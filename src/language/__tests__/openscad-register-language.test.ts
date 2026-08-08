@@ -1,6 +1,6 @@
 vi.mock('@monaco-editor/loader', () => ({
   __esModule: true,
-  default: { init: vi.fn() },
+  default: { init: vi.fn(), config: vi.fn() },
 }));
 
 vi.mock('../openscad-completions.ts', () => ({
@@ -39,6 +39,7 @@ describe('OpenSCAD language registration', () => {
 
     const mockedLoader = loader as unknown as {
       init: ReturnType<typeof vi.fn>;
+      config: ReturnType<typeof vi.fn>;
     };
     mockedLoader.init.mockResolvedValue(monacoMock);
 
@@ -67,6 +68,12 @@ describe('OpenSCAD language registration', () => {
       openscadLanguage.language,
     );
     expect(mockedLoader.init).toHaveBeenCalledTimes(1);
+    // Monaco must come from our own origin, never @monaco-editor/loader's
+    // default jsDelivr CDN (#267).
+    expect(mockedLoader.config).toHaveBeenCalledTimes(1);
+    const vsPath = mockedLoader.config.mock.calls[0][0].paths.vs as string;
+    expect(vsPath).toMatch(/\/monaco\/vs$/);
+    expect(vsPath).not.toMatch(/cdn|jsdelivr|unpkg/i);
     expect(mockedBuilder).toHaveBeenCalledTimes(1);
     expect(mockedBuilder).toHaveBeenCalledWith({}, '/home', []);
     expect(monacoMock.languages.registerCompletionItemProvider).toHaveBeenCalledWith(

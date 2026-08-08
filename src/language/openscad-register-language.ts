@@ -1,7 +1,8 @@
 // Portions of this file are Copyright 2021 Google LLC, and licensed under GPL2+. See COPYING.
 
 import loader from '@monaco-editor/loader';
-import * as monacoTypes from 'monaco-editor/esm/vs/editor/editor.api';
+import type * as monacoTypes from 'monaco-editor/esm/vs/editor/editor.api';
+import { resolveRuntimeAssetUrl } from '../runtime/asset-urls.ts';
 import type { ZipArchive } from '../fs/zip-archives.generated.ts';
 import { buildOpenSCADCompletionItemProvider } from './openscad-completions.ts';
 import openscadLanguage from './openscad-language.ts';
@@ -20,6 +21,14 @@ export async function registerOpenSCADLanguage(
 
   registrationPromise = (async () => {
     try {
+      // Load Monaco from the AMD build we ship, not @monaco-editor/loader's
+      // default jsDelivr CDN (#267). The CDN pinned a version chosen by the
+      // loader's release rather than our package.json, broke the offline PWA
+      // and any air-gapped/self-hosted deployment, and put third-party script
+      // on the page. `resolveRuntimeAssetUrl` honours the app base, the
+      // relocatable `./` builds, and a VS Code webview mount.
+      loader.config({ paths: { vs: resolveRuntimeAssetUrl('monaco/vs') } });
+
       const monaco = (await loader.init()) as typeof monacoTypes;
 
       monaco.languages.register({

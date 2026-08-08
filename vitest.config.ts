@@ -8,10 +8,6 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: 'monaco-editor/esm/vs/editor/editor.api',
-        replacement: resolvePath('./tests/mocks/monaco-editor.ts'),
-      },
-      {
         find: /\.css$/,
         replacement: resolvePath('./tests/mocks/file-mock.ts'),
       },
