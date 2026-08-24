@@ -7,6 +7,8 @@ export const LIBRARY_DELIVERY_POLICY =
 
 const CORE_PREFETCH_SPECIFIERS = ['libraries/fonts.zip'];
 
+const UNSAFE_URL_PROTOCOLS = new Set(['javascript:', 'data:', 'vbscript:']);
+
 export function getPrefetchedArchives(archives: ZipArchive[] = zipArchives): ZipArchive[] {
   return archives.filter((archive) => archive.prefetch === true);
 }
@@ -39,8 +41,14 @@ export function injectBootstrapPrefetchHints(
     const href = resolveRuntimeAssetUrl(specifier);
     if (existingHrefs.has(href)) continue;
 
+    const { pathname, protocol } = new URL(href);
+    // Asset URLs resolve against document.baseURI or a host-supplied override,
+    // so refuse script-bearing schemes before they reach a link href. A denylist
+    // rather than an allowlist: webview embedding legitimately delivers assets
+    // over blob: and vscode-resource: (#196, #203).
+    if (UNSAFE_URL_PROTOCOLS.has(protocol)) continue;
+
     const link = document.createElement('link');
-    const { pathname } = new URL(href);
     link.rel = 'prefetch';
     link.href = href;
     if (pathname.endsWith('.js')) {
