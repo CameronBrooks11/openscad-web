@@ -24,6 +24,16 @@ describe('stripComments', () => {
   it('handles source with no comments unchanged', () => {
     expect(stripComments('cube(1);')).toBe('cube(1);');
   });
+
+  it('returns promptly on a long unterminated block comment', () => {
+    // Regression: the old /\/\*(.|[\s\S])*?\*\// alternation matched every
+    // non-newline character two ways, so an unterminated /* backtracked
+    // exponentially. Linear now — this completes in milliseconds.
+    const src = `/* ${'a'.repeat(50_000)}`;
+    const started = performance.now();
+    expect(stripComments(src)).toBe(src);
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -86,6 +96,35 @@ describe('openscad-pseudoparser — module extraction', () => {
     const paramNames = params.map((p) => p.name);
     expect(paramNames).toContain('w');
     expect(paramNames).toContain('h');
+  });
+
+  it('records no params for an empty parameter list', () => {
+    const result = parseOpenSCAD('/test.scad', 'module box() { cube(1); }', false);
+    expect(result.modules['box']?.params).toEqual([]);
+  });
+
+  it('records no params for a whitespace-only parameter list', () => {
+    const result = parseOpenSCAD('/test.scad', 'module box(   ) { cube(1); }', false);
+    expect(result.modules['box']?.params).toEqual([]);
+  });
+
+  it('discards the whole list when one param is malformed', () => {
+    const result = parseOpenSCAD('/test.scad', 'module box(w=10, , h=5) { cube(1); }', false);
+    expect(result.modules['box']?.params).toEqual([]);
+  });
+
+  it('discards the whole list for a bracketed default value', () => {
+    const result = parseOpenSCAD('/test.scad', 'module box(v=[1,2]) { cube(1); }', false);
+    expect(result.modules['box']?.params).toEqual([]);
+  });
+
+  it('returns promptly on a long malformed parameter list', () => {
+    // Regression: the old whole-list gate nested ambiguous quantifiers and
+    // backtracked catastrophically when the list did not match.
+    const src = `module box(${'a='.repeat(2_000)}) { cube(1); }`;
+    const started = performance.now();
+    parseOpenSCAD('/test.scad', src, false);
+    expect(performance.now() - started).toBeLessThan(1_000);
   });
 });
 
