@@ -45,4 +45,32 @@ describe('library-delivery policy', () => {
     expect(prefetchLinks).toHaveLength(1);
     expect(prefetchLinks[0]!.href).toContain('/libraries/MCAD.zip');
   });
+
+  it('refuses to prefetch script-bearing URL schemes', () => {
+    document.head.innerHTML = '';
+
+    injectBootstrapPrefetchHints([
+      'javascript:alert(1)',
+      'data:text/html,<script>alert(1)</script>',
+      './libraries/MCAD.zip',
+    ]);
+
+    const prefetchLinks = [
+      ...document.head.querySelectorAll<HTMLLinkElement>('link[rel="prefetch"]'),
+    ];
+    expect(prefetchLinks).toHaveLength(1);
+    expect(prefetchLinks[0]!.href).toContain('/libraries/MCAD.zip');
+  });
+
+  it('still prefetches blob: assets used by webview embedding', () => {
+    document.head.innerHTML = '';
+
+    injectBootstrapPrefetchHints(['blob:https://example.invalid/9f2c-libraries']);
+
+    const prefetchLinks = [
+      ...document.head.querySelectorAll<HTMLLinkElement>('link[rel="prefetch"]'),
+    ];
+    expect(prefetchLinks).toHaveLength(1);
+    expect(prefetchLinks[0]!.href).toContain('blob:');
+  });
 });

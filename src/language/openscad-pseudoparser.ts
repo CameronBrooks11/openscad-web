@@ -20,7 +20,7 @@ export type ParsedFile = {
   uses: string[];
 };
 
-export const stripComments = (src: string) => src.replaceAll(/\/\*(.|[\s\S])*?\*\/|\/\/.*?$/gm, '');
+export const stripComments = (src: string) => src.replaceAll(/\/\*[\s\S]*?\*\/|\/\/.*?$/gm, '');
 
 export function parseOpenSCAD(path: string, src: string, skipPrivates: boolean): ParsedFile {
   const withoutComments = stripComments(src);
@@ -46,17 +46,22 @@ export function parseOpenSCAD(path: string, src: string, skipPrivates: boolean):
     const paramsStr = m[3];
     const optBody = m[4];
     const params = [];
-    if (/^(\s*([$\w]+(\s*=[^,()[]+)?(\s*,\s*[$\w]+(\s*=[^,()[]+)?)*)?\s*)$/m.test(paramsStr)) {
-      for (const paramStr of paramsStr.split(',')) {
-        const am = /^\s*([$\w]+)(?:\s*=([^,()[]+))?\s*$/.exec(paramStr);
-        if (am) {
-          const paramName = am[1];
-          const defaultValue = am[2];
-          params.push({
-            name: paramName,
-            defaultValue,
-          });
-        }
+    // Validate each comma-separated param on its own rather than gating on a
+    // whole-list regex: the combined pattern nested ambiguous quantifiers and
+    // backtracked catastrophically on long malformed lists. Semantics are
+    // unchanged — a single bad param still discards the whole list.
+    const paramParts = paramsStr.trim() === '' ? [] : paramsStr.split(',');
+    const paramMatches = paramParts.map((paramStr) =>
+      /^\s*([$\w]+)(?:\s*=([^,()[]+))?\s*$/.exec(paramStr),
+    );
+    if (paramMatches.every((am) => am != null)) {
+      for (const am of paramMatches) {
+        const paramName = am[1];
+        const defaultValue = am[2];
+        params.push({
+          name: paramName,
+          defaultValue,
+        });
       }
     }
     (type == 'function' ? functions : modules)[name] = {
