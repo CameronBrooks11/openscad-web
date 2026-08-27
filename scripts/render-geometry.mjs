@@ -55,11 +55,18 @@ export async function supportsManifoldBackend(openscad, runner = execFileAsync) 
   }
 }
 
-/** OpenSCAD CLI args to render a PNG poster (full CGAL render, framed to bounds). */
+/**
+ * OpenSCAD CLI args to render a PNG poster (full render, framed to bounds).
+ *
+ * This is a `--render` (F6) pass, not a preview, so it goes through the same
+ * backend as the OFF export and loses `color()` on CGAL exactly as OFF does.
+ * It therefore takes the same `manifold` decision — otherwise a 2025.03-era CLI
+ * would pair a colored `geometry.off` with a colorless `poster.png` (#258).
+ */
 export function buildPosterArgs(
   entryPath,
   pngPath,
-  { imgsize = DEFAULT_POSTER_SIZE, colorscheme } = {},
+  { imgsize = DEFAULT_POSTER_SIZE, colorscheme, manifold = true } = {},
 ) {
   const args = [
     entryPath,
@@ -70,6 +77,7 @@ export function buildPosterArgs(
     '--autocenter',
     '--render',
   ];
+  if (manifold) args.push('--backend=Manifold');
   if (typeof colorscheme === 'string' && colorscheme !== '') {
     args.push(`--colorscheme=${colorscheme}`);
   }
@@ -97,9 +105,9 @@ export async function renderGeometry({
   const manifold = await supportsManifoldBackend(openscad, runner);
   if (!manifold) {
     process.stderr.write(
-      `${openscad} does not support --backend, so OFF geometry will carry no color() data ` +
-        `and the static viewer will render the model in its default color. ` +
-        `Use OpenSCAD 2025.03 or newer for colored geometry.\n`,
+      `${openscad} does not support --backend, so neither the OFF geometry nor the ` +
+        `poster will carry color() data — the static viewer will render the model in ` +
+        `its default color. Use OpenSCAD 2025.03 or newer for colored geometry.\n`,
     );
   }
   await runner(openscad, buildOffArgs(entryPath, offPath, { manifold }));
@@ -107,7 +115,10 @@ export async function renderGeometry({
   let posterPath = null;
   if (poster) {
     posterPath = path.join(outDir, `${modelName}.png`);
-    await runner(openscad, buildPosterArgs(entryPath, posterPath, { imgsize, colorscheme }));
+    await runner(
+      openscad,
+      buildPosterArgs(entryPath, posterPath, { imgsize, colorscheme, manifold }),
+    );
   }
 
   return { off: offPath, poster: posterPath };

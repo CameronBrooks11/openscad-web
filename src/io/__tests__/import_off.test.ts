@@ -94,14 +94,28 @@ describe('parseOff face colors', () => {
     expect(poly.colors).toHaveLength(2);
   });
 
-  it('ignores a non-numeric trailing field instead of emitting NaN colors', () => {
-    // Third-party OFF only -- our own compiler never writes this. Before the
-    // guard, `.map(Number)` made these NaN and the viewer built a color
-    // attribute full of NaN, which reaches the GPU as garbage.
+  it('ignores non-numeric color fields instead of emitting NaN colors', () => {
+    // Third-party OFF only -- our own compiler never writes this. Unguarded,
+    // `.map(Number)` made these NaN and the viewer built a color attribute full
+    // of NaN, which reaches the GPU as garbage.
     const poly = parseOff(twoFaces('3 0 1 2 foo bar baz', '3 0 1 3'));
     expect(poly.hasSourceColors).toBe(false);
     expect(poly.colors).toEqual([DEFAULT_FACE_COLOR]);
-    expect(poly.colors.flat().some(Number.isNaN)).toBe(false);
+    expect(poly.colors.flat().every(Number.isFinite)).toBe(true);
+  });
+
+  it('rejects a non-finite color channel, which isNaN alone would let through', () => {
+    const poly = parseOff(twoFaces('3 0 1 2 1e999 0 0', '3 0 1 3'));
+    expect(poly.hasSourceColors).toBe(false);
+    expect(poly.colors.flat().every(Number.isFinite)).toBe(true);
+  });
+
+  it('keeps an RGB triple whose 4th field is not a number (trailing comment)', () => {
+    // Judging alpha separately keeps the color; an all-or-nothing check over
+    // four fields would drop a valid green here and render cameo yellow.
+    const poly = parseOff(twoFaces('3 0 1 2 0 128 0 # green', '3 0 1 3 0 128 0'));
+    expect(poly.hasSourceColors).toBe(true);
+    expect(poly.colors).toEqual([[0, 128 / 255, 0, 1]]);
   });
 
   it('reads a color suffix on a triangulated quad face', () => {

@@ -40,7 +40,14 @@ describe('render-geometry arg builders', () => {
       '--viewall',
       '--autocenter',
       '--render',
+      '--backend=Manifold',
     ]);
+  });
+
+  it('buildPosterArgs omits --backend for a CLI too old to know it', () => {
+    expect(buildPosterArgs('/m/widget.scad', '/out/widget.png', { manifold: false })).not.toContain(
+      '--backend=Manifold',
+    );
   });
 
   it('buildPosterArgs honors imgsize + colorscheme', () => {
@@ -54,6 +61,7 @@ describe('render-geometry arg builders', () => {
       '--viewall',
       '--autocenter',
       '--render',
+      '--backend=Manifold',
       '--colorscheme=Tomorrow',
     ]);
   });
@@ -101,6 +109,20 @@ describe('renderGeometry', () => {
       '--backend=Manifold',
     ]);
     expect(renders()[1].args).toContain('--render');
+    // The poster is a --render pass through the same backend, so it loses
+    // color() on CGAL exactly as the OFF does. Both sides must agree, or a
+    // 2025.03-era CLI pairs colored geometry with a colorless poster (#258).
+    expect(renders()[1].args).toContain('--backend=Manifold');
+  });
+
+  it('keeps the poster on the same backend as the OFF when falling back (#258)', async () => {
+    const outDir = await makeOutDir();
+    const { runner, renders } = fakeOpenScad({ backend: false });
+
+    await captureStderr(() => renderGeometry({ entryPath: '/m/widget.scad', outDir, runner }));
+
+    expect(renders()).toHaveLength(2);
+    for (const call of renders()) expect(call.args).not.toContain('--backend=Manifold');
   });
 
   /** Run `fn` with process.stderr captured, so the fallback warning does not
@@ -129,7 +151,7 @@ describe('renderGeometry', () => {
     );
 
     expect(renders()[0].args).toEqual(['/m/widget.scad', '-o', path.join(outDir, 'widget.off')]);
-    expect(warning).toMatch(/no color\(\) data/);
+    expect(warning).toMatch(/neither the OFF geometry nor the poster will carry color\(\) data/);
   });
 
   it('skips the poster when poster is false and honors an explicit name', async () => {

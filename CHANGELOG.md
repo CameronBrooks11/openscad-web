@@ -36,8 +36,11 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
   accept the flag at all, 2025.03 accepts it but still defaults to CGAL (so the
   flag is what produces colored geometry there), and 2026.08 already defaults to
   Manifold (so it is a no-op that pins the behavior). The `openscad` package on
-  GitHub's `ubuntu-*` runners is 2021.01 and renders colorless geometry. See
-  [docs/PUBLISHING.md](docs/PUBLISHING.md#colored-geometry).
+  GitHub's `ubuntu-*` runners is 2021.01 and renders colorless geometry. The
+  poster gets the same backend: it is a `--render` pass, not a preview, so it
+  loses `color()` on CGAL exactly as the OFF does — without this the two would
+  disagree on a 2025.03 CLI, pairing colored geometry with a colorless poster.
+  See [docs/PUBLISHING.md](docs/PUBLISHING.md#colored-geometry).
 
 ## [0.6.0] - 2026-07-28
 

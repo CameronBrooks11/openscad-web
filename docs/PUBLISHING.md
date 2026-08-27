@@ -196,8 +196,23 @@ makes the difference, and passing it pins the behavior either way.
 on GitHub's `ubuntu-*` runners still installs **2021.01**, which predates both
 the flag and color-in-OFF — so a workflow relying on the distro package renders
 colorless geometry. Install a current release (for example the official AppImage)
-in the render step if your models use `color()`. Posters are unaffected: they are
-a preview-mode render and have always kept their colors.
+in the render step if your models use `color()`.
+
+The poster degrades the same way. `render-geometry.mjs` renders it with
+`--render` (a full F6 render, not a preview), so it goes through the same
+backend as the OFF and loses `color()` on CGAL just as the geometry does —
+measured on one binary, changing only the backend:
+
+```
+--backend=Manifold  ->  #008000 green, #0000BD blue
+--backend=CGAL      ->  #FAD82C, #A58F1D  (cameo yellow only)
+2021.01             ->  #FAD82C, #A58F1D  (cameo yellow only)
+```
+
+The helper therefore applies the same backend decision to both, so the OFF and
+the poster always agree. A hand-rolled poster command that omits `--render`
+renders in **preview** mode, which keeps `color()` on any version — that is why
+a workflow doing it by hand can have colored posters beside a colorless model.
 
 Then publish the pre-rendered files with `surface: static`:
 

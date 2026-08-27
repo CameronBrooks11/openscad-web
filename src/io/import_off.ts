@@ -50,15 +50,25 @@ export function parseOff(content: string): IndexedPolyhedron {
     // A face line may carry a trailing color: RGB (numVerts + 4 fields) or
     // RGBA (numVerts + 5). OpenSCAD's Manifold backend emits RGB for `color(c)`
     // and RGBA for `color(c, alpha)`; the CGAL backend emits none.
-    // Non-numeric trailing fields are ignored rather than trusted: `.map(Number)`
-    // turns them into NaN, and a NaN color attribute reaches the GPU as garbage.
-    // Vertex lines are already validated this way below. Float 0..1 colors,
-    // which the OFF spec also permits, are still read as 0-255 (#287).
-    const channels = parts.slice(numVerts + 1, numVerts + 5);
-    const hasFaceColor = parts.length >= numVerts + 4 && !channels.some(isNaN);
+    // Only finite channels are trusted: `.map(Number)` turns a trailing comment
+    // or junk into NaN and `1e999` into Infinity, either of which would reach the
+    // GPU as a broken color attribute. Vertex lines are validated the same way
+    // below. Float 0..1 colors, which the OFF spec also permits, are still read
+    // as 0-255 (#287).
+    const rgb = parts.slice(numVerts + 1, numVerts + 4);
+    const hasFaceColor = rgb.length === 3 && rgb.every(Number.isFinite);
     if (hasFaceColor) hasSourceColors = true;
+    // Alpha is judged separately so a non-numeric 4th field (e.g. a Geomview
+    // trailing comment after an RGB triple) means "no alpha" rather than
+    // discarding an otherwise valid color.
+    const alpha = parts[numVerts + 4];
     const color = hasFaceColor
-      ? (channels.map((c) => c / 255) as [number, number, number, number])
+      ? ([...rgb, Number.isFinite(alpha) ? alpha : 255].map((c) => c / 255) as [
+          number,
+          number,
+          number,
+          number,
+        ])
       : DEFAULT_FACE_COLOR;
     if (vertices.length < 3)
       throw new Error(
