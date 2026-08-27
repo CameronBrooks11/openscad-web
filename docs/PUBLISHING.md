@@ -164,7 +164,12 @@ node scripts/render-geometry.mjs --source ./models/widget.scad --out-dir ./rende
 ```
 
 (Equivalent by hand: `openscad --backend=Manifold -o widget.off widget.scad` and
-`openscad -o widget.png --viewall --autocenter --render widget.scad`.)
+`openscad -o widget.png --viewall --autocenter --render widget.scad`. Note that
+`--backend` needs OpenSCAD 2025.03 or newer — an older CLI **rejects it and
+exits 1** rather than ignoring it. Drop the flag for an older CLI and read
+[Colored geometry](#colored-geometry) for what that costs. The helper script
+probes for the flag and degrades on its own; it is not part of the publish
+artifact, so a consumer workflow drives `openscad` directly as above.)
 
 ### Colored geometry
 
