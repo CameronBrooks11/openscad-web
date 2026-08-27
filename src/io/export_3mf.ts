@@ -1,5 +1,5 @@
 import UZIP from 'uzip';
-import { IndexedPolyhedron } from './common';
+import { Color, IndexedPolyhedron } from './common';
 import { v4 as uuidv4 } from 'uuid';
 import chroma from 'chroma-js';
 
@@ -45,13 +45,21 @@ const PAINT_COLOR_MAP = [
   'DC',
 ];
 
+/**
+ * `Color` is normalized 0..1 per channel; chroma wants RGB in 0..255 and alpha
+ * in 0..1. Both conversions live here so the two call sites below cannot drift —
+ * they previously disagreed, and the one feeding `displaycolor` passed 0..1
+ * straight through, turning every base material near-black (#285).
+ */
+function toChroma([r, g, b, a]: Color): chroma.Color {
+  return chroma.rgb(r * 255, g * 255, b * 255, a);
+}
+
 export function export3MF(data: IndexedPolyhedron, extruderColors?: chroma.Color[]): Blob {
   const objectUuid = uuidv4();
   const buildUuid = uuidv4();
 
-  const dataColors = data.colors.map(([r, g, b, a]) =>
-    chroma.rgb(r * 255, g * 255, b * 255, a * 255),
-  );
+  const dataColors = data.colors.map(toChroma);
   const extruderIndexByColorIndex = extruderColors && getColorMapping(dataColors, extruderColors);
 
   const paintColorByColorIndex = extruderIndexByColorIndex?.map((i) => PAINT_COLOR_MAP[i]);
@@ -67,7 +75,10 @@ export function export3MF(data: IndexedPolyhedron, extruderColors?: chroma.Color
         '<resources>',
         '<basematerials id="2">',
         ...data.colors.map(
-          (color, i) => `<base name="color_${i}" displaycolor="${chroma.rgb(...color).hex()}"/>`,
+          // `hex('rgb')` keeps this 6-digit. Alpha was always clamped away here
+          // before, so a translucent model must not silently start emitting
+          // #RRGGBBAA that a slicer may not expect (see #282 for alpha).
+          (color, i) => `<base name="color_${i}" displaycolor="${toChroma(color).hex('rgb')}"/>`,
         ),
         '</basematerials>',
         `<object id="1" name="OpenSCAD Model" type="model" p:UUID="${objectUuid}" pid="2" pindex="0">`,

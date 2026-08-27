@@ -27,6 +27,13 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
   A model that declares any `color()` now shows those colors in place of a
   host-supplied `color` setting, matching how multi-color models already behaved.
 
+- **3MF export wrote every base material near-black** (#285): `displaycolor` was
+  built by passing `Color`'s normalized 0..1 components straight to
+  `chroma.rgb()`, which expects 0..255, so green became `#000100`. The
+  extruder-matching path in the same file scaled correctly, so the file held two
+  conventions at once; both now share one conversion. Pre-existing, but only
+  reachable in practice once `color()` started rendering.
+
 ### Changed
 
 - `scripts/render-geometry.mjs` now renders OFF on the Manifold backend, so the

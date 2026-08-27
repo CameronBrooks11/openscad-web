@@ -23,6 +23,47 @@ describe('export3MF', () => {
       reader.readAsArrayBuffer(blob);
     });
 
+  const readModelXml = async (data: IndexedPolyhedron = sampleData) => {
+    const zip = UZIP.parse(await readBlobAsArrayBuffer(export3MF(data))) as Record<
+      string,
+      Uint8Array
+    >;
+    return new TextDecoder().decode(zip['3D/3dmodel.model']);
+  };
+
+  it('writes each base material in sRGB, not scaled-down near-black (#285)', async () => {
+    // `Color` is 0..1 per channel and chroma.rgb wants 0..255, so passing the
+    // components straight through turned green (0, 128, 0) into #000100 and made
+    // every material in every export indistinguishably dark.
+    const green: [number, number, number, number] = [0, 128 / 255, 0, 1];
+    const xml = await readModelXml({ ...sampleData, colors: [green] });
+
+    expect(xml).toContain('displaycolor="#008000"');
+    expect(xml).not.toContain('displaycolor="#000100"');
+  });
+
+  it('keeps displaycolor 6-digit for a translucent color', async () => {
+    // chroma emits #RRGGBBAA once alpha < 1. Alpha was always clamped away here
+    // before, so holding the format steady keeps slicers reading what they did.
+    const halfGreen: [number, number, number, number] = [0, 128 / 255, 0, 0.5];
+    const xml = await readModelXml({ ...sampleData, colors: [halfGreen] });
+
+    expect(xml).toContain('displaycolor="#008000"');
+  });
+
+  it('writes one base material per distinct color', async () => {
+    const xml = await readModelXml({
+      ...sampleData,
+      colors: [
+        [0, 128 / 255, 0, 1],
+        [0, 0, 1, 1],
+      ],
+    });
+
+    expect(xml).toContain('displaycolor="#008000"');
+    expect(xml).toContain('displaycolor="#0000ff"');
+  });
+
   it('writes a valid build UUID attribute (no stray brace)', async () => {
     const blob = export3MF(sampleData);
     const zip = UZIP.parse(await readBlobAsArrayBuffer(blob)) as Record<string, Uint8Array>;
