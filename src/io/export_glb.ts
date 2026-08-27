@@ -15,20 +15,24 @@ import { offToBufferGeometry } from '../components/viewer/off-loader.ts';
 /**
  * Serialize a parsed OFF polyhedron to a binary glTF (.glb) byte array.
  *
- * Colors: a multi-color model carries per-vertex colors (the geometry's `color`
- * attribute); a single-color model has none, so the material's base color is set
- * from the model's one face color. The geometry is rotated −90° about X so the
+ * Colors: a model that used `color()` carries per-vertex colors (the geometry's
+ * `color` attribute, already converted to linear by the shared OFF loader); a
+ * colorless model has none, so the material's base color is set from the OFF
+ * loader's default face color. The geometry is rotated −90° about X so the
  * OpenSCAD Z-up model becomes glTF's Y-up convention, i.e. it stands upright in
  * standard glTF viewers (Blender, model-viewer, three.js loaders).
  */
 export async function exportGLB(data: IndexedPolyhedron): Promise<ArrayBuffer> {
   const geometry = offToBufferGeometry(data);
-  const hasMultiColor = data.colors.length > 1;
+  const { hasSourceColors } = data;
 
   const [r, g, b] = data.colors[0] ?? DEFAULT_FACE_COLOR;
   const material = new THREE.MeshStandardMaterial({
-    vertexColors: hasMultiColor,
-    color: hasMultiColor ? 0xffffff : new THREE.Color(r, g, b),
+    vertexColors: hasSourceColors,
+    // glTF's baseColorFactor is linear, and so is Three.js' working space, so
+    // the sRGB face color has to be converted — `new THREE.Color(r, g, b)`
+    // would take these as linear values and skew the exported color.
+    color: hasSourceColors ? 0xffffff : new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace),
     metalness: 0,
     roughness: 1,
     side: THREE.DoubleSide,

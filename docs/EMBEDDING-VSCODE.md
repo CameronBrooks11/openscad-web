@@ -188,13 +188,23 @@ correlation.
 
 **Host → viewer (inbound):**
 
-| Type                | Payload                                                                      | Notes                                                                                                                   |
-| ------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `setGeometry`       | `{ offText }`                                                                | OFF text (≤ 64 MiB). Acked `geometry-set`; render outcome follows.                                                      |
-| `setViewerSettings` | `{ color?, showAxes?, active?, background?, showControls? }`                 | Only provided fields apply. Acked `viewer-settings-set`.                                                                |
-| `setCamera`         | `{ camera: { position:[x,y,z], target:[x,y,z], zoom } }`                     | Raw pose. Acked `camera-set`.                                                                                           |
-| `setNamedView`      | `{ view }` (`VIEWER_NAMED_VIEWS`: Diagonal/Front/Right/Back/Left/Top/Bottom) | **Fit-aware** preset — frames the model to its bounds viewer-side (no host-side bounds needed). Acked `named-view-set`. |
-| `dispose`           | `{}`                                                                         | Tears down the viewer. Acked `disposed`.                                                                                |
+| Type                | Payload                                                                      | Notes                                                                                                                            |
+| ------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `setGeometry`       | `{ offText }`                                                                | OFF text (≤ 64 MiB). Acked `geometry-set`; render outcome follows.                                                               |
+| `setViewerSettings` | `{ color?, showAxes?, active?, background?, showControls? }`                 | Only provided fields apply. Acked `viewer-settings-set`. `color` applies only to geometry with no colors of its own — see below. |
+| `setCamera`         | `{ camera: { position:[x,y,z], target:[x,y,z], zoom } }`                     | Raw pose. Acked `camera-set`.                                                                                                    |
+| `setNamedView`      | `{ view }` (`VIEWER_NAMED_VIEWS`: Diagonal/Front/Right/Back/Left/Top/Bottom) | **Fit-aware** preset — frames the model to its bounds viewer-side (no host-side bounds needed). Acked `named-view-set`.          |
+| `dispose`           | `{}`                                                                         | Tears down the viewer. Acked `disposed`.                                                                                         |
+
+**`color` vs. the model's own colors.** OFF geometry produced on OpenSCAD's
+Manifold backend carries a per-face color for every `color()` in the model. When
+the geometry has colors of its own, the viewer renders those and
+`setViewerSettings { color }` has no visible effect — it still acks
+`viewer-settings-set`, since the setting is stored and applies to any later
+geometry that is colorless. `color` is therefore a default for uncolored
+geometry, not an override. The same holds for the embed URL's `color=`
+parameter. (Before #258 this was true only of models using more than one
+`color()`; a single-`color()` model incorrectly honored the host value.)
 
 **Viewer → host (outbound), all `protocolVersion`-stamped:**
 

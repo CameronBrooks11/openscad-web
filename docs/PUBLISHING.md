@@ -163,8 +163,57 @@ node scripts/render-geometry.mjs --source ./models/widget.scad --out-dir ./rende
 #    ./rendered/widget.png  (poster; add --no-poster to skip)
 ```
 
-(Equivalent by hand: `openscad -o widget.off widget.scad` and
-`openscad -o widget.png --viewall --autocenter --render widget.scad`.)
+(Equivalent by hand: `openscad --backend=Manifold -o widget.off widget.scad` and
+`openscad -o widget.png --viewall --autocenter --render widget.scad`. Note that
+`--backend` needs OpenSCAD 2025.03 or newer — an older CLI **rejects it and
+exits 1** rather than ignoring it. Drop the flag for an older CLI and read
+[Colored geometry](#colored-geometry) for what that costs. The helper script
+probes for the flag and degrades on its own; it is not part of the publish
+artifact, so a consumer workflow drives `openscad` directly as above.)
+
+### Colored geometry
+
+A model's `color()` survives into OFF as a per-face RGB suffix, which the static
+viewer renders — but **only on the Manifold backend**. The CGAL backend drops
+it, and the viewer then paints the whole model its default cameo yellow.
+
+Which backend you get depends on the version, so the flag is worth passing
+explicitly:
+
+| OpenSCAD | `--backend`  | default backend | `color()` in OFF without the flag |
+| -------- | ------------ | --------------- | --------------------------------- |
+| 2021.01  | not accepted | CGAL            | no                                |
+| 2025.03  | accepted     | CGAL            | **no**                            |
+| 2026.08  | accepted     | Manifold        | yes                               |
+
+`render-geometry.mjs` probes the CLI and passes `--backend=Manifold` when it is
+supported, so colored geometry is the default where the toolchain allows it. It
+warns on stderr and falls back to a colorless render when it is not. On a build
+that already defaults to Manifold the flag is a no-op; on 2025.03 it is what
+makes the difference, and passing it pins the behavior either way.
+
+`--backend` requires **OpenSCAD 2025.03 or newer**. `apt-get install -y openscad`
+on GitHub's `ubuntu-*` runners still installs **2021.01**, which predates both
+the flag and color-in-OFF — so a workflow relying on the distro package renders
+colorless geometry. Install a current release (for example the official AppImage)
+in the render step if your models use `color()`.
+
+The poster degrades the same way. `render-geometry.mjs` renders it with
+`--render` (a full F6 render, not a preview), so it goes through the same
+backend as the OFF and loses `color()` on CGAL just as the geometry does: on
+Manifold the model's colors appear, while on CGAL — and on 2021.01, which has no
+choice — the poster comes out in cameo yellow alone. Framing is unaffected;
+only the fill colors change.
+
+The helper therefore applies the same backend decision to both, so the OFF and
+the poster always agree.
+
+A hand-rolled poster command that omits `--render` renders in **preview** mode,
+which keeps `color()` on every version — that is why a workflow doing it by hand
+can end up with colored posters beside a colorless model. Preview is not a
+drop-in substitute, though: it is not a resolved CSG pass and it shades
+differently, so a poster rendered that way will not match the geometry the
+viewer shows for models that lean on `render()` or have coincident faces.
 
 Then publish the pre-rendered files with `surface: static`:
 
@@ -180,7 +229,8 @@ targets:
 The mount holds `geometry.off`, `poster.png`, a boot config, and the static
 viewer page — no compiler, no `.scad`. The OpenSCAD CLI must be available where
 you run the render step (it is not part of `deploy-configure`, which stays
-dependency-free); GitHub's `ubuntu-*` runners can `apt-get install -y openscad`.
+dependency-free); GitHub's `ubuntu-*` runners can `apt-get install -y openscad`,
+though that package is old enough to render colorless geometry (see above).
 
 Multiple targets:
 

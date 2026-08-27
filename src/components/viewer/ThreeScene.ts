@@ -228,7 +228,8 @@ export class ThreeScene {
       this.modelMesh = null;
     }
 
-    // Use per-vertex colors when the OFF loader generated them (multi-material model).
+    // Use per-vertex colors when the OFF loader generated them, i.e. the model
+    // used color(). A colorless model has none and takes the single material.
     const hasVertexColors = geometry.hasAttribute('color');
     const material = new THREE.MeshPhongMaterial({
       color: hasVertexColors ? 0xffffff : color,
@@ -369,7 +370,9 @@ export class ThreeScene {
   setModelColor(color: THREE.ColorRepresentation): void {
     if (this.modelMesh) {
       const mat = this.modelMesh.material as THREE.MeshPhongMaterial;
-      // Don't override per-vertex colors from a multi-material model.
+      // A model that declared its own color() wins over a host-supplied color:
+      // per-vertex colors are already baked into the geometry, so this is a no-op
+      // for it. See docs/EMBEDDING-VSCODE.md on setViewerSettings.
       if (!mat.vertexColors) mat.color.set(color);
       this.requestRender();
     }

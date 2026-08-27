@@ -40,21 +40,36 @@ export function parseOff(content: string): IndexedPolyhedron {
 
   const colors: Color[] = [];
   const colorMap = new Map<string, number>();
+  let hasSourceColors = false;
 
   const faces: Face[] = [];
   for (let i = 0; i < numFaces; i++) {
     const parts = lines[currentLine + i].split(/\s+/).map(Number);
     const numVerts = parts[0];
     const vertices = parts.slice(1, numVerts + 1);
-    const color =
-      parts.length >= numVerts + 4
-        ? (parts.slice(numVerts + 1, numVerts + 5).map((c) => c / 255) as [
-            number,
-            number,
-            number,
-            number,
-          ])
-        : DEFAULT_FACE_COLOR;
+    // A face line may carry a trailing color: RGB (numVerts + 4 fields) or
+    // RGBA (numVerts + 5). OpenSCAD's Manifold backend emits RGB for `color(c)`
+    // and RGBA for `color(c, alpha)`; the CGAL backend emits none.
+    // Only finite channels are trusted: `.map(Number)` turns a trailing comment
+    // or junk into NaN and `1e999` into Infinity, either of which would reach the
+    // GPU as a broken color attribute. Vertex lines are validated the same way
+    // below. Float 0..1 colors, which the OFF spec also permits, are still read
+    // as 0-255 (#287).
+    const rgb = parts.slice(numVerts + 1, numVerts + 4);
+    const hasFaceColor = rgb.length === 3 && rgb.every(Number.isFinite);
+    if (hasFaceColor) hasSourceColors = true;
+    // Alpha is judged separately so a non-numeric 4th field (e.g. a Geomview
+    // trailing comment after an RGB triple) means "no alpha" rather than
+    // discarding an otherwise valid color.
+    const alpha = parts[numVerts + 4];
+    const color = hasFaceColor
+      ? ([...rgb, Number.isFinite(alpha) ? alpha : 255].map((c) => c / 255) as [
+          number,
+          number,
+          number,
+          number,
+        ])
+      : DEFAULT_FACE_COLOR;
     if (vertices.length < 3)
       throw new Error(
         `Invalid OFF file: face at line ${currentLine + i + 1} must have at least 3 vertices`,
@@ -85,5 +100,5 @@ export function parseOff(content: string): IndexedPolyhedron {
     }
   }
 
-  return { vertices, faces, colors };
+  return { vertices, faces, colors, hasSourceColors };
 }

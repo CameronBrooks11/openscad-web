@@ -22,16 +22,51 @@ const execFileAsync = promisify(execFile);
 
 export const DEFAULT_POSTER_SIZE = [1000, 750];
 
-/** OpenSCAD CLI args to export OFF geometry from an entry `.scad`. */
-export function buildOffArgs(entryPath, offPath) {
-  return [entryPath, '-o', offPath];
+/**
+ * OpenSCAD CLI args to export OFF geometry from an entry `.scad`.
+ *
+ * `color()` survives into OFF as a per-face RGB(A) suffix only on the Manifold
+ * backend; CGAL drops it, and the static viewer then paints the whole model its
+ * default cameo yellow (#258). Which backend is the default depends on the
+ * release — 2025.03 still defaults to CGAL, 2026.08 defaults to Manifold — so
+ * pass it explicitly rather than relying on the default. Pass `manifold: false`
+ * for a CLI too old to know the flag (`--backend` landed after 2021.01, which is
+ * what `apt-get install openscad` still gives).
+ */
+export function buildOffArgs(entryPath, offPath, { manifold = true } = {}) {
+  const args = [entryPath, '-o', offPath];
+  if (manifold) args.push('--backend=Manifold');
+  return args;
 }
 
-/** OpenSCAD CLI args to render a PNG poster (full CGAL render, framed to bounds). */
+/**
+ * Whether `openscad` understands `--backend`. Probed from `--help` rather than
+ * parsed out of `--version`, so it tracks the actual capability instead of a
+ * version-number guess. OpenSCAD writes both to stderr, hence the merge.
+ */
+export async function supportsManifoldBackend(openscad, runner = execFileAsync) {
+  try {
+    const { stdout = '', stderr = '' } = (await runner(openscad, ['--help'])) ?? {};
+    return `${stdout}${stderr}`.includes('--backend');
+  } catch (error) {
+    // `--help` exits non-zero on some builds; the output is still on the error.
+    const { stdout = '', stderr = '' } = error ?? {};
+    return `${stdout}${stderr}`.includes('--backend');
+  }
+}
+
+/**
+ * OpenSCAD CLI args to render a PNG poster (full render, framed to bounds).
+ *
+ * This is a `--render` (F6) pass, not a preview, so it goes through the same
+ * backend as the OFF export and loses `color()` on CGAL exactly as OFF does.
+ * It therefore takes the same `manifold` decision — otherwise a 2025.03-era CLI
+ * would pair a colored `geometry.off` with a colorless `poster.png` (#258).
+ */
 export function buildPosterArgs(
   entryPath,
   pngPath,
-  { imgsize = DEFAULT_POSTER_SIZE, colorscheme } = {},
+  { imgsize = DEFAULT_POSTER_SIZE, colorscheme, manifold = true } = {},
 ) {
   const args = [
     entryPath,
@@ -42,6 +77,7 @@ export function buildPosterArgs(
     '--autocenter',
     '--render',
   ];
+  if (manifold) args.push('--backend=Manifold');
   if (typeof colorscheme === 'string' && colorscheme !== '') {
     args.push(`--colorscheme=${colorscheme}`);
   }
@@ -66,12 +102,23 @@ export async function renderGeometry({
   await mkdir(outDir, { recursive: true });
 
   const offPath = path.join(outDir, `${modelName}.off`);
-  await runner(openscad, buildOffArgs(entryPath, offPath));
+  const manifold = await supportsManifoldBackend(openscad, runner);
+  if (!manifold) {
+    process.stderr.write(
+      `${openscad} does not support --backend, so neither the OFF geometry nor the ` +
+        `poster will carry color() data — the static viewer will render the model in ` +
+        `its default color. Use OpenSCAD 2025.03 or newer for colored geometry.\n`,
+    );
+  }
+  await runner(openscad, buildOffArgs(entryPath, offPath, { manifold }));
 
   let posterPath = null;
   if (poster) {
     posterPath = path.join(outDir, `${modelName}.png`);
-    await runner(openscad, buildPosterArgs(entryPath, posterPath, { imgsize, colorscheme }));
+    await runner(
+      openscad,
+      buildPosterArgs(entryPath, posterPath, { imgsize, colorscheme, manifold }),
+    );
   }
 
   return { off: offPath, poster: posterPath };

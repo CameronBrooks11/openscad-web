@@ -6,6 +6,42 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Colored geometry in embedded viewers** (#258): a model using `color()`
+  rendered in the viewer's default cameo yellow instead of its own colors. OFF
+  already carried the colors — OpenSCAD's Manifold backend writes a per-face RGB
+  suffix, and the compile surfaces already use that backend — but two things
+  dropped them:
+  - the viewer built per-vertex colors only when a model had **more than one**
+    distinct color, so a model with a single `color()` fell back to the default
+    material. It now keys off whether the source declared any color at all.
+  - face colors were fed to Three.js unconverted. Three.js converts
+    `material.color` from sRGB but reads a `color` attribute as already linear,
+    so colored models rendered washed out — visibly paler than the same color
+    applied as a material. They are now converted at the renderer boundary.
+    Multi-color models, which already rendered, therefore look more saturated
+    (and now match their posters). GLB export carried the same skew and is
+    fixed with it.
+
+  A model that declares any `color()` now shows those colors in place of a
+  host-supplied `color` setting, matching how multi-color models already behaved.
+
+### Changed
+
+- `scripts/render-geometry.mjs` now renders OFF on the Manifold backend, so the
+  `static` publish surface preserves `color()` too (#258). It probes the CLI for
+  `--backend` and falls back — with a warning on stderr — when it is missing.
+  Which backend you get otherwise depends on the release: 2021.01 does not
+  accept the flag at all, 2025.03 accepts it but still defaults to CGAL (so the
+  flag is what produces colored geometry there), and 2026.08 already defaults to
+  Manifold (so it is a no-op that pins the behavior). The `openscad` package on
+  GitHub's `ubuntu-*` runners is 2021.01 and renders colorless geometry. The
+  poster gets the same backend: it is a `--render` pass, not a preview, so it
+  loses `color()` on CGAL exactly as the OFF does — without this the two would
+  disagree on a 2025.03 CLI, pairing colored geometry with a colorless poster.
+  See [docs/PUBLISHING.md](docs/PUBLISHING.md#colored-geometry).
+
 ## [0.6.0] - 2026-07-28
 
 ### Added
