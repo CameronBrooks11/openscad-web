@@ -22,9 +22,35 @@ const execFileAsync = promisify(execFile);
 
 export const DEFAULT_POSTER_SIZE = [1000, 750];
 
-/** OpenSCAD CLI args to export OFF geometry from an entry `.scad`. */
-export function buildOffArgs(entryPath, offPath) {
-  return [entryPath, '-o', offPath];
+/**
+ * OpenSCAD CLI args to export OFF geometry from an entry `.scad`.
+ *
+ * `color()` survives into OFF as a per-face RGB(A) suffix only on the Manifold
+ * backend; CGAL — still the CLI default — drops it, and the static viewer then
+ * paints the whole model its default cameo yellow (#258). Pass
+ * `manifold: false` for a CLI too old to know the flag (`--backend` landed
+ * after 2021.01, which is what `apt-get install openscad` still gives).
+ */
+export function buildOffArgs(entryPath, offPath, { manifold = true } = {}) {
+  const args = [entryPath, '-o', offPath];
+  if (manifold) args.push('--backend=Manifold');
+  return args;
+}
+
+/**
+ * Whether `openscad` understands `--backend`. Probed from `--help` rather than
+ * parsed out of `--version`, so it tracks the actual capability instead of a
+ * version-number guess. OpenSCAD writes both to stderr, hence the merge.
+ */
+export async function supportsManifoldBackend(openscad, runner = execFileAsync) {
+  try {
+    const { stdout = '', stderr = '' } = (await runner(openscad, ['--help'])) ?? {};
+    return `${stdout}${stderr}`.includes('--backend');
+  } catch (error) {
+    // `--help` exits non-zero on some builds; the output is still on the error.
+    const { stdout = '', stderr = '' } = error ?? {};
+    return `${stdout}${stderr}`.includes('--backend');
+  }
 }
 
 /** OpenSCAD CLI args to render a PNG poster (full CGAL render, framed to bounds). */
@@ -66,7 +92,15 @@ export async function renderGeometry({
   await mkdir(outDir, { recursive: true });
 
   const offPath = path.join(outDir, `${modelName}.off`);
-  await runner(openscad, buildOffArgs(entryPath, offPath));
+  const manifold = await supportsManifoldBackend(openscad, runner);
+  if (!manifold) {
+    process.stderr.write(
+      `${openscad} does not support --backend, so OFF geometry will carry no color() data ` +
+        `and the static viewer will render the model in its default color. ` +
+        `Use OpenSCAD 2025.03 or newer for colored geometry.\n`,
+    );
+  }
+  await runner(openscad, buildOffArgs(entryPath, offPath, { manifold }));
 
   let posterPath = null;
   if (poster) {

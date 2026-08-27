@@ -27,6 +27,15 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
   A model that declares any `color()` now shows those colors in place of a
   host-supplied `color` setting, matching how multi-color models already behaved.
 
+### Changed
+
+- `scripts/render-geometry.mjs` now renders OFF on the Manifold backend, so the
+  `static` publish surface preserves `color()` too (#258). It probes the CLI for
+  `--backend` and falls back — with a warning on stderr — when it is missing.
+  `--backend` needs OpenSCAD **2025.03 or newer**; the `openscad` package on
+  GitHub's `ubuntu-*` runners is 2021.01 and renders colorless geometry. See
+  [docs/PUBLISHING.md](docs/PUBLISHING.md#colored-geometry).
+
 ## [0.6.0] - 2026-07-28
 
 ### Added
