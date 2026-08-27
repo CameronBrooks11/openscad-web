@@ -200,19 +200,20 @@ in the render step if your models use `color()`.
 
 The poster degrades the same way. `render-geometry.mjs` renders it with
 `--render` (a full F6 render, not a preview), so it goes through the same
-backend as the OFF and loses `color()` on CGAL just as the geometry does —
-measured on one binary, changing only the backend:
-
-```
---backend=Manifold  ->  #008000 green, #0000BD blue
---backend=CGAL      ->  #FAD82C, #A58F1D  (cameo yellow only)
-2021.01             ->  #FAD82C, #A58F1D  (cameo yellow only)
-```
+backend as the OFF and loses `color()` on CGAL just as the geometry does: on
+Manifold the model's colors appear, while on CGAL — and on 2021.01, which has no
+choice — the poster comes out in cameo yellow alone. Framing is unaffected;
+only the fill colors change.
 
 The helper therefore applies the same backend decision to both, so the OFF and
-the poster always agree. A hand-rolled poster command that omits `--render`
-renders in **preview** mode, which keeps `color()` on any version — that is why
-a workflow doing it by hand can have colored posters beside a colorless model.
+the poster always agree.
+
+A hand-rolled poster command that omits `--render` renders in **preview** mode,
+which keeps `color()` on every version — that is why a workflow doing it by hand
+can end up with colored posters beside a colorless model. Preview is not a
+drop-in substitute, though: it is not a resolved CSG pass and it shades
+differently, so a poster rendered that way will not match the geometry the
+viewer shows for models that lean on `render()` or have coincident faces.
 
 Then publish the pre-rendered files with `surface: static`:
 
