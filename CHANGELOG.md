@@ -6,6 +6,11 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-27
+
+Models now render in their own `color()` across every viewer surface, and the
+`static` publish path preserves those colors end to end. See #258.
+
 ### Fixed
 
 - **Colored geometry in embedded viewers** (#258): a model using `color()`
