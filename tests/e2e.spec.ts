@@ -473,15 +473,18 @@ test.describe('e2e', () => {
   // reliably (`preserveDrawingBuffer` is off) and which varies with headless GL.
   async function readModelMaterial(page: Page) {
     return page.evaluate(() => {
+      type ColorAttribute = {
+        getX(i: number): number;
+        getY(i: number): number;
+        getZ(i: number): number;
+      };
+      type ModelMesh = {
+        material?: { vertexColors?: boolean };
+        geometry?: { getAttribute(name: string): ColorAttribute | undefined };
+      };
       const viewer = document.querySelector('osc-geometry-viewer') as
-        | (Element & {
-            offText?: string | null;
-            _scene?: { modelMesh?: { material?: { vertexColors?: boolean } } };
-          })
-        | null;
-      const geometry = viewer?._scene?.modelMesh?.geometry as
-        { getAttribute(name: string): { getX(i: number): number } | undefined } | undefined;
-      const color = geometry?.getAttribute('color');
+        (Element & { offText?: string | null; _scene?: { modelMesh?: ModelMesh } }) | null;
+      const color = viewer?._scene?.modelMesh?.geometry?.getAttribute('color');
       return {
         offText: viewer?.offText ?? '',
         vertexColors: Boolean(viewer?._scene?.modelMesh?.material?.vertexColors),
@@ -496,7 +499,7 @@ test.describe('e2e', () => {
    * 0-255 channels when the face carries a color. Face arity is not fixed — the
    * app enables `lazy-union`, under which the compiler emits quads.
    */
-  function offFaceColors(offText: string): string[] {
+  function offFaceLines(offText: string): string[] {
     const lines = offText
       .split('\n')
       .map((line) => line.trim())
@@ -505,10 +508,18 @@ test.describe('e2e', () => {
     const counts = sameLineHeader ? lines[0].slice(3).trim() : lines[1];
     const [vertexCount, faceCount] = counts.split(/\s+/).map(Number);
     const firstFace = (sameLineHeader ? 1 : 2) + vertexCount;
-    return lines.slice(firstFace, firstFace + faceCount).flatMap((line) => {
+    return lines.slice(firstFace, firstFace + faceCount);
+  }
+
+  const offFaceCount = (offText: string) => offFaceLines(offText).length;
+
+  function offFaceColors(offText: string): string[] {
+    return offFaceLines(offText).flatMap((line) => {
       const parts = line.split(/\s+/);
       const arity = Number(parts[0]);
-      return parts.length >= arity + 4 ? [parts.slice(arity + 1).join(',')] : [];
+      // Take exactly the channels parseOff would take, so a 5th trailing field
+      // shows up as a mismatch here rather than being quietly folded in.
+      return parts.length >= arity + 4 ? [parts.slice(arity + 1, arity + 5).join(',')] : [];
     });
   }
 
@@ -548,6 +559,9 @@ test.describe('e2e', () => {
     await waitForViewer(page);
 
     const { offText, vertexColors, firstColor } = await readModelMaterial(page);
+    // Assert the OFF was actually parsed before asserting the absence of color,
+    // otherwise a helper that silently stopped parsing would satisfy this for free.
+    expect(offFaceCount(offText)).toBeGreaterThan(0);
     expect(offFaceColors(offText)).toHaveLength(0);
     expect(vertexColors).toBe(false);
     expect(firstColor).toBeNull();

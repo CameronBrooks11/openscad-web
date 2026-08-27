@@ -50,15 +50,15 @@ export function parseOff(content: string): IndexedPolyhedron {
     // A face line may carry a trailing color: RGB (numVerts + 4 fields) or
     // RGBA (numVerts + 5). OpenSCAD's Manifold backend emits RGB for `color(c)`
     // and RGBA for `color(c, alpha)`; the CGAL backend emits none.
-    const hasFaceColor = parts.length >= numVerts + 4;
+    // Non-numeric trailing fields are ignored rather than trusted: `.map(Number)`
+    // turns them into NaN, and a NaN color attribute reaches the GPU as garbage.
+    // Vertex lines are already validated this way below. Float 0..1 colors,
+    // which the OFF spec also permits, are still read as 0-255 (#287).
+    const channels = parts.slice(numVerts + 1, numVerts + 5);
+    const hasFaceColor = parts.length >= numVerts + 4 && !channels.some(isNaN);
     if (hasFaceColor) hasSourceColors = true;
     const color = hasFaceColor
-      ? (parts.slice(numVerts + 1, numVerts + 5).map((c) => c / 255) as [
-          number,
-          number,
-          number,
-          number,
-        ])
+      ? (channels.map((c) => c / 255) as [number, number, number, number])
       : DEFAULT_FACE_COLOR;
     if (vertices.length < 3)
       throw new Error(

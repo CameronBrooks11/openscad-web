@@ -94,6 +94,16 @@ describe('parseOff face colors', () => {
     expect(poly.colors).toHaveLength(2);
   });
 
+  it('ignores a non-numeric trailing field instead of emitting NaN colors', () => {
+    // Third-party OFF only -- our own compiler never writes this. Before the
+    // guard, `.map(Number)` made these NaN and the viewer built a color
+    // attribute full of NaN, which reaches the GPU as garbage.
+    const poly = parseOff(twoFaces('3 0 1 2 foo bar baz', '3 0 1 3'));
+    expect(poly.hasSourceColors).toBe(false);
+    expect(poly.colors).toEqual([DEFAULT_FACE_COLOR]);
+    expect(poly.colors.flat().some(Number.isNaN)).toBe(false);
+  });
+
   it('reads a color suffix on a triangulated quad face', () => {
     const poly = parseOff(`OFF 4 1 0\n${TRI_VERTS}\n4 0 1 2 3 0 128 0\n`);
     expect(poly.faces).toHaveLength(2); // fan-triangulated

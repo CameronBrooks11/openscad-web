@@ -1,10 +1,18 @@
 import { describe, expect, it } from 'vitest';
 
 import { exportGLB } from '../export_glb.ts';
-import type { IndexedPolyhedron } from '../common.ts';
+import { DEFAULT_FACE_COLOR, type IndexedPolyhedron } from '../common.ts';
 
-// A unit tetrahedron: 4 vertices, 4 triangular faces.
-function tetrahedron(colors: IndexedPolyhedron['colors']): IndexedPolyhedron {
+/** The sRGB transfer function, written out rather than restating the Three.js call. */
+const srgbToLinear = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+
+// A unit tetrahedron: 4 vertices, 4 triangular faces. `hasSourceColors` mirrors
+// what parseOff would report: true when the OFF declared a color(), false when
+// `colors` holds only the fabricated DEFAULT_FACE_COLOR entry.
+function tetrahedron(
+  colors: IndexedPolyhedron['colors'],
+  hasSourceColors = true,
+): IndexedPolyhedron {
   return {
     vertices: [
       { x: 0, y: 0, z: 0 },
@@ -19,7 +27,7 @@ function tetrahedron(colors: IndexedPolyhedron['colors']): IndexedPolyhedron {
       { vertices: [1, 2, 3], colorIndex: 0 },
     ],
     colors,
-    hasSourceColors: true,
+    hasSourceColors,
   };
 }
 
@@ -27,6 +35,8 @@ function tetrahedron(colors: IndexedPolyhedron['colors']): IndexedPolyhedron {
 // Layout: 12-byte header, then [uint32 chunkLength][uint32 chunkType='JSON'][bytes].
 function readGlbJson(buffer: ArrayBuffer): {
   nodes: Array<{ rotation?: number[]; matrix?: number[] }>;
+  materials?: Array<{ pbrMetallicRoughness?: { baseColorFactor?: number[] } }>;
+  meshes?: Array<{ primitives: Array<{ attributes: Record<string, number> }> }>;
 } {
   const view = new DataView(buffer);
   const jsonLength = view.getUint32(12, true);
@@ -67,6 +77,35 @@ describe('exportGLB', () => {
     expect(header.magic).toBe('glTF');
     expect(header.version).toBe(2);
     expect(glb.byteLength).toBeGreaterThan(12);
+  });
+
+  // #258: these pin which branch of the color handling runs. Both were
+  // previously unpinned -- the fixture always claimed source colors, and no
+  // assertion read `materials` or the mesh attributes, so reverting the fix
+  // left this suite green.
+  it('a colorless model carries its color as a linear baseColorFactor, not COLOR_0', async () => {
+    const glb = await exportGLB(tetrahedron([DEFAULT_FACE_COLOR], false));
+    const { materials, meshes } = readGlbJson(glb);
+
+    expect(Object.keys(meshes![0].primitives[0].attributes)).not.toContain('COLOR_0');
+    // glTF's baseColorFactor is linear; the sRGB #f9d72c must be converted, not
+    // passed through. Unconverted it would read [0.976, 0.843, 0.173].
+    const factor = materials![0].pbrMetallicRoughness!.baseColorFactor!;
+    expect(factor[0]).toBeCloseTo(srgbToLinear(0xf9 / 255), 4);
+    expect(factor[1]).toBeCloseTo(srgbToLinear(0xd7 / 255), 4);
+    expect(factor[2]).toBeCloseTo(srgbToLinear(0x2c / 255), 4);
+    expect(factor[0]).not.toBeCloseTo(0xf9 / 255, 2);
+  });
+
+  it('a model that used color() carries COLOR_0 instead of a base color', async () => {
+    const glb = await exportGLB(tetrahedron([[0, 128 / 255, 0, 1]], true));
+    const { materials, meshes } = readGlbJson(glb);
+
+    expect(Object.keys(meshes![0].primitives[0].attributes)).toContain('COLOR_0');
+    // White base color, so the vertex colors are not tinted by it. GLTFExporter
+    // omits baseColorFactor entirely when the material color is white.
+    const factor = materials![0].pbrMetallicRoughness?.baseColorFactor;
+    if (factor) for (const c of factor.slice(0, 3)) expect(c).toBeCloseTo(1, 5);
   });
 
   it('rotates Z-up OpenSCAD geometry to glTF Y-up via the node transform', async () => {

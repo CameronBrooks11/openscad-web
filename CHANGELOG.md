@@ -32,7 +32,10 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 - `scripts/render-geometry.mjs` now renders OFF on the Manifold backend, so the
   `static` publish surface preserves `color()` too (#258). It probes the CLI for
   `--backend` and falls back — with a warning on stderr — when it is missing.
-  `--backend` needs OpenSCAD **2025.03 or newer**; the `openscad` package on
+  Which backend you get otherwise depends on the release: 2021.01 does not
+  accept the flag at all, 2025.03 accepts it but still defaults to CGAL (so the
+  flag is what produces colored geometry there), and 2026.08 already defaults to
+  Manifold (so it is a no-op that pins the behavior). The `openscad` package on
   GitHub's `ubuntu-*` runners is 2021.01 and renders colorless geometry. See
   [docs/PUBLISHING.md](docs/PUBLISHING.md#colored-geometry).
 

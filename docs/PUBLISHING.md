@@ -174,13 +174,23 @@ artifact, so a consumer workflow drives `openscad` directly as above.)
 ### Colored geometry
 
 A model's `color()` survives into OFF as a per-face RGB suffix, which the static
-viewer renders — but **only on the Manifold backend**. The CGAL backend (still
-the CLI default) drops it, and the viewer then paints the whole model its
-default cameo yellow.
+viewer renders — but **only on the Manifold backend**. The CGAL backend drops
+it, and the viewer then paints the whole model its default cameo yellow.
+
+Which backend you get depends on the version, so the flag is worth passing
+explicitly:
+
+| OpenSCAD | `--backend`  | default backend | `color()` in OFF without the flag |
+| -------- | ------------ | --------------- | --------------------------------- |
+| 2021.01  | not accepted | CGAL            | no                                |
+| 2025.03  | accepted     | CGAL            | **no**                            |
+| 2026.08  | accepted     | Manifold        | yes                               |
 
 `render-geometry.mjs` probes the CLI and passes `--backend=Manifold` when it is
 supported, so colored geometry is the default where the toolchain allows it. It
-warns on stderr and falls back to a colorless render when it is not.
+warns on stderr and falls back to a colorless render when it is not. On a build
+that already defaults to Manifold the flag is a no-op; on 2025.03 it is what
+makes the difference, and passing it pins the behavior either way.
 
 `--backend` requires **OpenSCAD 2025.03 or newer**. `apt-get install -y openscad`
 on GitHub's `ubuntu-*` runners still installs **2021.01**, which predates both

@@ -26,10 +26,12 @@ export const DEFAULT_POSTER_SIZE = [1000, 750];
  * OpenSCAD CLI args to export OFF geometry from an entry `.scad`.
  *
  * `color()` survives into OFF as a per-face RGB(A) suffix only on the Manifold
- * backend; CGAL — still the CLI default — drops it, and the static viewer then
- * paints the whole model its default cameo yellow (#258). Pass
- * `manifold: false` for a CLI too old to know the flag (`--backend` landed
- * after 2021.01, which is what `apt-get install openscad` still gives).
+ * backend; CGAL drops it, and the static viewer then paints the whole model its
+ * default cameo yellow (#258). Which backend is the default depends on the
+ * release — 2025.03 still defaults to CGAL, 2026.08 defaults to Manifold — so
+ * pass it explicitly rather than relying on the default. Pass `manifold: false`
+ * for a CLI too old to know the flag (`--backend` landed after 2021.01, which is
+ * what `apt-get install openscad` still gives).
  */
 export function buildOffArgs(entryPath, offPath, { manifold = true } = {}) {
   const args = [entryPath, '-o', offPath];
