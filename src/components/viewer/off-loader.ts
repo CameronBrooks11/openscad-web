@@ -56,7 +56,7 @@ export function offToBufferGeometry(data: IndexedPolyhedron): THREE.BufferGeomet
 }
 
 /** sRGB (0..1) → the renderer's linear working space. Alpha is not carried by
- *  the `color` attribute, so it is dropped here. */
+ *  the `color` attribute, so it is dropped here (#282). */
 function toLinear([r, g, b]: Color): [number, number, number] {
   const c = new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace);
   return [c.r, c.g, c.b];
