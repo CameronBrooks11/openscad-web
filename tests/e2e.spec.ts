@@ -466,6 +466,93 @@ test.describe('e2e', () => {
     await expectValidOffOutput(page);
   });
 
+  // #258: `color()` reaches the viewer as a per-face RGB suffix on the OFF the
+  // WASM compiler emits (Manifold backend only). These assert both halves — that
+  // the compiler emits it, and that the viewer builds a per-vertex-colored mesh
+  // from it — rather than sampling pixels, which the renderer cannot read back
+  // reliably (`preserveDrawingBuffer` is off) and which varies with headless GL.
+  async function readModelMaterial(page: Page) {
+    return page.evaluate(() => {
+      const viewer = document.querySelector('osc-geometry-viewer') as
+        | (Element & {
+            offText?: string | null;
+            _scene?: { modelMesh?: { material?: { vertexColors?: boolean } } };
+          })
+        | null;
+      const geometry = viewer?._scene?.modelMesh?.geometry as
+        { getAttribute(name: string): { getX(i: number): number } | undefined } | undefined;
+      const color = geometry?.getAttribute('color');
+      return {
+        offText: viewer?.offText ?? '',
+        vertexColors: Boolean(viewer?._scene?.modelMesh?.material?.vertexColors),
+        firstColor: color ? [color.getX(0), color.getY(0), color.getZ(0)] : null,
+      };
+    });
+  }
+
+  /**
+   * The color suffix of each colored face in an OFF, as OpenSCAD writes it: a
+   * face line is `<n> <i0> … <in-1>`, followed by 3 (RGB) or 4 (RGBA) trailing
+   * 0-255 channels when the face carries a color. Face arity is not fixed — the
+   * app enables `lazy-union`, under which the compiler emits quads.
+   */
+  function offFaceColors(offText: string): string[] {
+    const lines = offText
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line !== '' && !line.startsWith('#'));
+    const sameLineHeader = /^OFF\s+\S/.test(lines[0]);
+    const counts = sameLineHeader ? lines[0].slice(3).trim() : lines[1];
+    const [vertexCount, faceCount] = counts.split(/\s+/).map(Number);
+    const firstFace = (sameLineHeader ? 1 : 2) + vertexCount;
+    return lines.slice(firstFace, firstFace + faceCount).flatMap((line) => {
+      const parts = line.split(/\s+/);
+      const arity = Number(parts[0]);
+      return parts.length >= arity + 4 ? [parts.slice(arity + 1).join(',')] : [];
+    });
+  }
+
+  test('a single color() model renders in that color, not the default (#258)', async ({ page }) => {
+    await loadSrc(page, 'color("green") cube(10);');
+    await waitForViewer(page);
+
+    const { offText, vertexColors, firstColor } = await readModelMaterial(page);
+    // The compiler must emit the color in the first place. CSS "green" is
+    // sRGB(0, 128, 0); the CGAL backend would emit no suffix at all.
+    expect(new Set(offFaceColors(offText))).toEqual(new Set(['0,128,0']));
+    // And the viewer must use it. Before #258 a one-color model failed the
+    // `colors.length > 1` gate here and fell back to the cameo-yellow material.
+    expect(vertexColors).toBe(true);
+    // sRGB "green" (0,128,0) converted into the renderer's linear space: green
+    // channel well above zero, red and blue at zero. Unconverted sRGB would put
+    // green at ~0.50 rather than ~0.22.
+    expect(firstColor).not.toBeNull();
+    const [r, g, b] = firstColor!;
+    expect(r).toBeCloseTo(0, 4);
+    expect(b).toBeCloseTo(0, 4);
+    expect(g).toBeGreaterThan(0.15);
+    expect(g).toBeLessThan(0.3);
+  });
+
+  test('a multi-color model keeps every color() (#258)', async ({ page }) => {
+    await loadSrc(page, 'color("green") cube(10);\ncolor("blue") translate([12,0,0]) cube(10);');
+    await waitForViewer(page);
+
+    const { vertexColors, offText } = await readModelMaterial(page);
+    expect(vertexColors).toBe(true);
+    expect(new Set(offFaceColors(offText))).toEqual(new Set(['0,128,0', '0,0,255']));
+  });
+
+  test('a colorless model still uses the single default material (#258)', async ({ page }) => {
+    await loadSrc(page, 'cube(10);');
+    await waitForViewer(page);
+
+    const { offText, vertexColors, firstColor } = await readModelMaterial(page);
+    expect(offFaceColors(offText)).toHaveLength(0);
+    expect(vertexColors).toBe(false);
+    expect(firstColor).toBeNull();
+  });
+
   test('use BOSL2', async ({ page }) => {
     await loadSrc(
       page,

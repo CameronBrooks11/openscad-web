@@ -19,6 +19,7 @@ function tetrahedron(colors: IndexedPolyhedron['colors']): IndexedPolyhedron {
       { vertices: [1, 2, 3], colorIndex: 0 },
     ],
     colors,
+    hasSourceColors: true,
   };
 }
 
