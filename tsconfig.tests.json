@@ -16,8 +16,13 @@
     // which files are admitted; this config emits nothing.
     "rootDir": "."
   },
-  // The runner configs are included deliberately: they are the part of the test
-  // tooling most likely to break silently, since a mistyped option changes
-  // runtime behaviour without failing anything.
-  "include": ["tests/**/*.ts", "playwright.config.ts", "vitest.config.ts", "vitest.setup.ts"]
+  // Every root-level authored .ts, not a hand-maintained list of three. Those
+  // are the build and runner configs, where a mistyped option changes runtime
+  // behaviour without failing anything -- and a NEW one stayed silently
+  // unchecked until someone remembered to add it here (#297). A glob cannot be
+  // forgotten.
+  //
+  // Reaching all of them depended on first fixing the two errors in
+  // vite.shared.ts that no gate caught (#295).
+  "include": ["tests/**/*.ts", "*.ts"]
 }
