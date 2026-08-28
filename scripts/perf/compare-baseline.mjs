@@ -39,7 +39,7 @@ function parseArgs(argv) {
 const budgetPct = Number.parseFloat(process.env.PERF_BUDGET_PCT ?? '20');
 const budgetMultiplier = 1 + budgetPct / 100;
 const minimumBudgetMs = Number.parseFloat(process.env.PERF_MIN_BUDGET_MS ?? '5');
-const gatedMetricKeys = new Set([
+export const gatedMetricKeys = new Set([
   // firstContentfulPaintMillis is excluded from gating: in CI headless mode it
   // measures at 60-80ms where 20% budget (~12-16ms) is smaller than run-to-run
   // scheduler jitter. Real FCP regressions are covered by appBootstrapMillis
@@ -176,7 +176,12 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+// Guarded so `gatedMetricKeys` can be imported without running the comparison
+// (refresh-baseline.mjs needs it to refuse dropping a gated metric). Matches
+// the pattern in check-bundle-budgets.mjs and render-geometry.mjs.
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}

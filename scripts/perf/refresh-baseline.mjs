@@ -19,6 +19,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { gatedMetricKeys } from './compare-baseline.mjs';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..');
 
@@ -35,7 +37,11 @@ const repoRoot = path.resolve(__dirname, '..', '..');
 export function nearestRankPercentile(values, p) {
   const sorted = [...values].sort((a, b) => a - b);
   if (sorted.length === 0) throw new Error('nearestRankPercentile: empty sample');
-  const rank = Math.ceil((p / 100) * sorted.length);
+  // Integer arithmetic: `Math.ceil((p / 100) * n)` disagrees with the exact
+  // rank for some (n, p) pairs because p/100 is not representable in binary.
+  // Not reachable at the default p90, but --percentile is user-facing.
+  const scaled = p * sorted.length;
+  const rank = Math.floor(scaled / 100) + (scaled % 100 === 0 ? 0 : 1);
   return sorted[Math.min(Math.max(rank, 1), sorted.length) - 1];
 }
 
@@ -50,14 +56,40 @@ const round = (value) => Math.round(value * 10) / 10;
 export function aggregateSection(runs, section, percentile) {
   const names = new Set(runs.flatMap((run) => Object.keys(run[section] ?? {})));
   const out = {};
+  const dropped = [];
   for (const name of names) {
     const values = runs
       .map((run) => run[section]?.[name])
       .filter((value) => typeof value === 'number' && Number.isFinite(value));
-    if (values.length !== runs.length) continue;
+    // A metric missing (or null -- aggregate-baseline.mjs writes null when no
+    // run produced it) from any input cannot be aggregated. Treating it as 0
+    // would pin the budget to the 5ms floor and fail every later run.
+    if (values.length !== runs.length) {
+      dropped.push(name);
+      continue;
+    }
     out[name] = round(nearestRankPercentile(values, percentile));
   }
-  return out;
+  return { metrics: out, dropped };
+}
+
+/**
+ * Dropping a metric removes it from the baseline, and `compare-baseline.mjs`
+ * iterates *baseline* metrics -- so a dropped metric is silently never checked
+ * again. For a gated metric that recreates the exact blindness #278 was filed
+ * about, through a new door, so refuse rather than warn.
+ */
+export function assertNoGatedDrops(section, dropped) {
+  const gated = dropped.filter((name) => gatedMetricKeys.has(`${section}.${name}`));
+  if (gated.length > 0) {
+    throw new Error(
+      `Refusing to write a baseline missing gated metric(s): ${gated
+        .map((name) => `${section}.${name}`)
+        .join(', ')}.\n` +
+        'These drive CI pass/fail; a baseline without them silently stops gating.\n' +
+        'At least one input run did not report them -- re-harvest, or drop that run.',
+    );
+  }
 }
 
 /**
@@ -67,7 +99,18 @@ export function aggregateSection(runs, section, percentile) {
  */
 export function assertCiProfiles(runs, { assumeProfile } = {}) {
   const profiles = [...new Set(runs.map((run) => run.environment?.profile ?? 'unknown'))];
-  if (assumeProfile) return [assumeProfile];
+  if (assumeProfile) {
+    // The flag exists for artifacts captured before the profile was stamped
+    // correctly -- not to relabel a workstation capture as CI. Without this it
+    // fully inverts the guard it is attached to.
+    if (!/^ci-/.test(assumeProfile)) {
+      throw new Error(
+        `--assume-profile must name a CI profile (ci-*); got '${assumeProfile}'.\n` +
+          'It cannot be used to record a local capture as a CI one.',
+      );
+    }
+    return [assumeProfile];
+  }
   const local = profiles.filter((profile) => !profile.startsWith('ci-'));
   if (local.length > 0) {
     throw new Error(
@@ -125,11 +168,27 @@ async function main() {
         'usable picture of runner variance; fewer risks anchoring on an outlier.\n',
     );
   }
+  const observedProfiles = [...new Set(runs.map((run) => run.environment?.profile ?? 'unknown'))];
   const profiles = assertCiProfiles(runs, { assumeProfile });
   if (assumeProfile) {
     process.stderr.write(
       `Recording profile '${assumeProfile}' for inputs stamped ` +
-        `'${[...new Set(runs.map((r) => r.environment?.profile))].join(', ')}'.\n`,
+        `'${observedProfiles.join(', ')}'; noted in notes.profileAssumed.\n`,
+    );
+  }
+
+  const cold = aggregateSection(runs, 'metrics', percentile);
+  const warm = aggregateSection(runs, 'warmMetrics', percentile);
+  assertNoGatedDrops('metrics', cold.dropped);
+  assertNoGatedDrops('warmMetrics', warm.dropped);
+  const dropped = [
+    ...cold.dropped.map((name) => `metrics.${name}`),
+    ...warm.dropped.map((name) => `warmMetrics.${name}`),
+  ];
+  if (dropped.length > 0) {
+    process.stderr.write(
+      `Dropped ${dropped.length} metric(s) not reported by every input run: ` +
+        `${dropped.join(', ')}. These will not be compared at all.\n`,
     );
   }
 
@@ -140,13 +199,20 @@ async function main() {
       ...(runs[0].environment ?? {}),
       profile: profiles.length === 1 ? profiles[0] : profiles.join('+'),
     },
-    metrics: aggregateSection(runs, 'metrics', percentile),
-    warmMetrics: aggregateSection(runs, 'warmMetrics', percentile),
+    metrics: cold.metrics,
+    warmMetrics: warm.metrics,
     notes: {
       aggregation: `p${percentile} (nearest rank) of per-run medians`,
       sampleCount: runs.length,
       generatedBy: 'scripts/perf/refresh-baseline.mjs',
       inputs: inputs.map((input) => path.basename(path.dirname(path.resolve(repoRoot, input)))),
+      // Recorded so a reader can audit the file's provenance. `profile` alone
+      // would claim a CI capture with nothing saying the label was asserted
+      // rather than measured.
+      ...(assumeProfile
+        ? { profileAssumed: { assumed: assumeProfile, observed: observedProfiles } }
+        : {}),
+      ...(dropped.length > 0 ? { droppedMetrics: dropped } : {}),
     },
   };
 
