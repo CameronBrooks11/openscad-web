@@ -145,9 +145,18 @@ test.describe('session distributable (#193)', () => {
     const projectRevision = await page.evaluate(
       () =>
         window.__sessionMessages?.find(
-          (m) => m?.type === 'project-ack' && m?.requestId === 'e2e-push-1',
+          (m) =>
+            m?.type === 'project-ack' &&
+            m?.requestId === 'e2e-push-1' &&
+            typeof m?.sourceRevision === 'number',
         )?.sourceRevision,
     );
+    // Narrowed rather than asserted with `expect`: every check below compares a
+    // revision against this one, so an undefined value would make them compare
+    // against undefined and pass vacuously instead of failing (#286).
+    if (typeof projectRevision !== 'number') {
+      throw new Error('project-ack carried no numeric sourceRevision.');
+    }
 
     // A genuine WASM compile fans out to a success operation-result carrying an
     // OFF artifact, PINNED to the project push's acked revision — a stray
@@ -171,8 +180,7 @@ test.describe('session distributable (#193)', () => {
     const strayEarlyResults = await page.evaluate(
       (rev) =>
         window.__sessionMessages?.filter(
-          (m) =>
-            m?.type === 'operation-result' && ((m?.result?.sourceRevision ?? rev) as number) < rev,
+          (m) => m?.type === 'operation-result' && (m?.result?.sourceRevision ?? rev) < rev,
         ).length,
       projectRevision,
     );

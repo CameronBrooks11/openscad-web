@@ -70,7 +70,11 @@ jobs:
         run: npm run build:libs
 
       - name: Type check
-        run: npx tsc --noEmit
+        # Deliberately the npm script, not an inlined `tsc` call: it covers both
+        # the src program and tsconfig.tests.json. Inlining one of them here is
+        # how tests/ went unchecked in CI even after the script grew a second
+        # program (#286).
+        run: npm run typecheck
 
       - name: Build app
         run: npm run build

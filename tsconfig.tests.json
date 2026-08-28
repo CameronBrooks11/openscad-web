@@ -1,0 +1,23 @@
+{
+  // The root config sets "rootDir": "src" and includes only src/, so
+  // `npm run typecheck` never saw the test tree. Playwright and vitest
+  // transpile without checking, and eslint is not type-aware, so a type-broken
+  // spec could not fail any gate (#286).
+  //
+  // Scope: this catches type errors WITHIN the test tree. It does not verify
+  // the specs against src/ -- as of today no spec imports from src/, so the two
+  // programs are disjoint. Acting on #292 would change that, and this comment
+  // with it. The inline type literals the specs use to reach into private
+  // internals (`shell._st`, `viewer._scene`) are self-consistent and still
+  // unverified against the real types; see #292.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Widened from "src" so the test tree is inside the program. Only affects
+    // which files are admitted; this config emits nothing.
+    "rootDir": "."
+  },
+  // The runner configs are included deliberately: they are the part of the test
+  // tooling most likely to break silently, since a mistyped option changes
+  // runtime behaviour without failing anything.
+  "include": ["tests/**/*.ts", "playwright.config.ts", "vitest.config.ts", "vitest.setup.ts"]
+}
