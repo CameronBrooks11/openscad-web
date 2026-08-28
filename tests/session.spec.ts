@@ -148,6 +148,12 @@ test.describe('session distributable (#193)', () => {
           (m) => m?.type === 'project-ack' && m?.requestId === 'e2e-push-1',
         )?.sourceRevision,
     );
+    // Narrowed rather than asserted with `expect`: every check below compares a
+    // revision against this one, so an undefined value would make them compare
+    // against undefined and pass vacuously instead of failing (#286).
+    if (typeof projectRevision !== 'number') {
+      throw new Error('project-ack carried no numeric sourceRevision.');
+    }
 
     // A genuine WASM compile fans out to a success operation-result carrying an
     // OFF artifact, PINNED to the project push's acked revision — a stray
