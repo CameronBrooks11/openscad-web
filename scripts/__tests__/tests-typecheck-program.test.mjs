@@ -33,14 +33,21 @@ const SKIP_DIRS = new Set([
   'test-results',
 ]);
 
-/** Every `*.spec.ts` anywhere in the repo, repo-relative. */
-function findSpecs(dir = repoRoot) {
+/**
+ * Authored test TypeScript, repo-relative: every `*.spec.ts` anywhere (to catch
+ * a spec parked outside tests/) plus every `.ts` under tests/ (mocks and
+ * helpers, which an `exclude` could otherwise drop while the specs stay).
+ */
+function findTestSources(dir = repoRoot) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const full = path.join(dir, entry.name);
+    const rel = path.relative(repoRoot, full);
     if (entry.isDirectory()) {
-      return SKIP_DIRS.has(entry.name) || entry.name.startsWith('.') ? [] : findSpecs(full);
+      return SKIP_DIRS.has(entry.name) ? [] : findTestSources(full);
     }
-    return entry.name.endsWith('.spec.ts') ? [path.relative(repoRoot, full)] : [];
+    if (!entry.name.endsWith('.ts')) return [];
+    const isTestTree = rel === 'tests' || rel.startsWith(`tests${path.sep}`);
+    return entry.name.endsWith('.spec.ts') || isTestTree ? [rel] : [];
   });
 }
 
@@ -71,14 +78,23 @@ describe('tests type-check program (#286)', () => {
   }
   const program = stdout
     .split('\n')
-    .filter((line) => line.startsWith('/') && !line.includes('node_modules'))
+    .filter((line) => path.isAbsolute(line.trim()) && !line.includes('node_modules'))
     .map((line) => path.relative(repoRoot, line.trim()));
 
-  it('type-checks every spec in the repo', () => {
-    const specs = findSpecs();
-    expect(specs.length).toBeGreaterThan(0);
-    // A spec outside the program is unchecked, and nothing else would say so.
-    expect(specs.filter((spec) => !program.includes(spec))).toEqual([]);
+  it('type-checks every authored test source', () => {
+    const sources = findTestSources();
+    expect(sources.length).toBeGreaterThan(0);
+    // Anything outside the program is unchecked, and nothing else would say so.
+    expect(sources.filter((file) => !program.includes(file))).toEqual([]);
+  });
+
+  it('is actually run by CI', () => {
+    // The config can be right and the script can run it, and CI can still
+    // inline its own `tsc` call -- which is exactly how tests/ stayed
+    // unchecked in the pipeline. That is the last unguarded link.
+    const workflow = readFileSync(path.join(repoRoot, '.github/workflows/ci.yml'), 'utf8');
+    const step = workflow.match(/- name: Type check\n(?:.*\n)*?\s*run: (.+)/);
+    expect(step?.[1]?.trim()).toBe('npm run typecheck');
   });
 
   it('type-checks the runner configs', () => {
