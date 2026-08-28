@@ -6,9 +6,15 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
-A pass over the verification layer. Two gates were reporting green while
+## [0.8.0] - 2026-08-28
+
+Mostly an internal-quality release. Two gates were reporting green while
 checking nothing, and an audit of the remaining fourteen found one more
 invariant with nothing enforcing it.
+
+Two changes are user-visible: a static mount whose `geometry.off` came from a
+tool other than OpenSCAD no longer renders near-black (#287), and switching to
+the CGAL backend now says why the model's colors disappeared (#283).
 
 ### Fixed
 
