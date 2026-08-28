@@ -1,17 +1,22 @@
 {
-  // The root config sets "rootDir": "src", so `npm run typecheck` cannot see
-  // tests/ at all. Playwright transpiles specs without checking them and eslint
-  // is not type-aware, so before this config a type-broken spec kept CI green
-  // (#286). The specs reach into private internals (`shell._st`, `viewer._scene`)
-  // through inline type literals that nothing else verifies, and a wrong literal
-  // makes an assertion read an always-undefined field — i.e. it passes vacuously.
+  // The root config sets "rootDir": "src" and includes only src/, so
+  // `npm run typecheck` never saw the test tree. Playwright and vitest
+  // transpile without checking, and eslint is not type-aware, so a type-broken
+  // spec could not fail any gate (#286).
+  //
+  // Scope: this catches type errors WITHIN the test tree. It does not verify
+  // the specs against src/ -- no spec imports from src/, so the two programs
+  // are disjoint. The inline type literals the specs use to reach into private
+  // internals (`shell._st`, `viewer._scene`) are self-consistent and still
+  // unverified against the real types; see #292.
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    // Widened from "src" so tests/ is inside the program. Only affects which
-    // files are admitted; this config emits nothing.
+    // Widened from "src" so the test tree is inside the program. Only affects
+    // which files are admitted; this config emits nothing.
     "rootDir": "."
   },
-  // src/ is pulled in by the specs' own imports; naming tests/ alone keeps this
-  // config's job narrow and leaves src/ coverage to the root config.
-  "include": ["tests/**/*.ts"]
+  // The runner configs are included deliberately: they are the part of the test
+  // tooling most likely to break silently, since a mistyped option changes
+  // runtime behaviour without failing anything.
+  "include": ["tests/**/*.ts", "playwright.config.ts", "vitest.config.ts", "vitest.setup.ts"]
 }

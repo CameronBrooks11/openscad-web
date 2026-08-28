@@ -145,7 +145,10 @@ test.describe('session distributable (#193)', () => {
     const projectRevision = await page.evaluate(
       () =>
         window.__sessionMessages?.find(
-          (m) => m?.type === 'project-ack' && m?.requestId === 'e2e-push-1',
+          (m) =>
+            m?.type === 'project-ack' &&
+            m?.requestId === 'e2e-push-1' &&
+            typeof m?.sourceRevision === 'number',
         )?.sourceRevision,
     );
     // Narrowed rather than asserted with `expect`: every check below compares a
@@ -177,8 +180,7 @@ test.describe('session distributable (#193)', () => {
     const strayEarlyResults = await page.evaluate(
       (rev) =>
         window.__sessionMessages?.filter(
-          (m) =>
-            m?.type === 'operation-result' && ((m?.result?.sourceRevision ?? rev) as number) < rev,
+          (m) => m?.type === 'operation-result' && (m?.result?.sourceRevision ?? rev) < rev,
         ).length,
       projectRevision,
     );
