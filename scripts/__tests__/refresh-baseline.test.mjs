@@ -6,7 +6,7 @@ import {
   nearestRankPercentile,
   aggregateSection,
   assertCiProfiles,
-  assertNoGatedDrops,
+  assertGatedMetricsPresent,
 } from '../perf/refresh-baseline.mjs';
 
 describe('nearestRankPercentile', () => {
@@ -96,21 +96,47 @@ describe('aggregateSection', () => {
   });
 });
 
-describe('assertNoGatedDrops', () => {
-  it('refuses to drop a gated metric — that silently un-gates CI', () => {
-    expect(() => assertNoGatedDrops('metrics', ['appBootstrapMillis'])).toThrow(/gated metric/);
-    expect(() => assertNoGatedDrops('warmMetrics', ['firstCompileFromBootstrapMillis'])).toThrow(
+describe('assertGatedMetricsPresent', () => {
+  const complete = {
+    metrics: { appBootstrapMillis: 1, firstCompileFromBootstrapMillis: 1 },
+    warmMetrics: { appBootstrapMillis: 1, firstCompileFromBootstrapMillis: 1 },
+  };
+
+  it('accepts a baseline carrying every gated metric', () => {
+    expect(() => assertGatedMetricsPresent(complete)).not.toThrow();
+  });
+
+  it('refuses a baseline missing a gated metric', () => {
+    expect(() =>
+      assertGatedMetricsPresent({
+        ...complete,
+        metrics: { firstCompileFromBootstrapMillis: 1 },
+      }),
+    ).toThrow(/metrics\.appBootstrapMillis/);
+  });
+
+  it('refuses when a gated metric is absent from EVERY input', () => {
+    // The earlier negative form ("nothing dropped was gated") missed this: a
+    // name absent from every run never enters the dropped set, so it vanished
+    // silently and the gate stopped checking it.
+    expect(() => assertGatedMetricsPresent({ metrics: {}, warmMetrics: {} })).toThrow(
       /gated metric/,
     );
   });
 
-  it('allows a diagnostic metric to drop', () => {
-    expect(() => assertNoGatedDrops('metrics', ['editorMountMillis'])).not.toThrow();
+  it('refuses a wholly empty baseline', () => {
+    expect(() => assertGatedMetricsPresent({})).toThrow(/gated metric/);
   });
 
-  it('is section-aware — the same name is gated in one section only where listed', () => {
-    expect(() => assertNoGatedDrops('metrics', ['appBootstrapMillis'])).toThrow();
-    expect(() => assertNoGatedDrops('notASection', ['appBootstrapMillis'])).not.toThrow();
+  it('is section-aware', () => {
+    // warmMetrics carries its own gated copies; a cold-only baseline is not enough.
+    expect(() => assertGatedMetricsPresent({ metrics: complete.metrics, warmMetrics: {} })).toThrow(
+      /warmMetrics/,
+    );
+  });
+
+  it('does not care about diagnostic metrics', () => {
+    expect(() => assertGatedMetricsPresent(complete)).not.toThrow();
   });
 });
 

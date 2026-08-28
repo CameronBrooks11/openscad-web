@@ -116,7 +116,14 @@ async function main() {
     isConfiguredMetric(entry.value),
   );
   if (configuredBaselineMetrics.length === 0) {
-    console.log(`No populated baseline metrics found in ${baselinePath}; skipping perf gate.`);
+    const message =
+      `No populated baseline metrics found in ${baselinePath}. ` +
+      'The perf gate would compare nothing and report success.';
+    // Under --strict this is a hard error: a malformed or emptied baseline is
+    // indistinguishable from a passing one otherwise, so the one job whose
+    // purpose is to go red would go green instead (#278).
+    if (strict) throw new Error(message);
+    console.log(`${message} Skipping perf gate.`);
     return;
   }
 

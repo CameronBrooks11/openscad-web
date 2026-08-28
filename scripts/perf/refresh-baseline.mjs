@@ -74,18 +74,25 @@ export function aggregateSection(runs, section, percentile) {
 }
 
 /**
- * Dropping a metric removes it from the baseline, and `compare-baseline.mjs`
- * iterates *baseline* metrics -- so a dropped metric is silently never checked
- * again. For a gated metric that recreates the exact blindness #278 was filed
- * about, through a new door, so refuse rather than warn.
+ * Every gated metric must survive into the baseline. `compare-baseline.mjs`
+ * iterates *baseline* metrics, so one that is absent is never compared again --
+ * recreating the exact blindness #278 was filed about, through a new door.
+ *
+ * Stated as a positive presence check rather than "nothing dropped was gated".
+ * The negative form missed the worse case: a metric absent from *every* input
+ * never enters the dropped set at all, because that set is built from the union
+ * of observed keys. It would then vanish silently, and a 3.3x bootstrap
+ * regression passed the resulting gate.
  */
-export function assertNoGatedDrops(section, dropped) {
-  const gated = dropped.filter((name) => gatedMetricKeys.has(`${section}.${name}`));
-  if (gated.length > 0) {
+export function assertGatedMetricsPresent({ metrics, warmMetrics }) {
+  const missing = [...gatedMetricKeys].filter((key) => {
+    const [section, name] = key.split('.');
+    const values = section === 'warmMetrics' ? warmMetrics : metrics;
+    return !(name in (values ?? {}));
+  });
+  if (missing.length > 0) {
     throw new Error(
-      `Refusing to write a baseline missing gated metric(s): ${gated
-        .map((name) => `${section}.${name}`)
-        .join(', ')}.\n` +
+      `Refusing to write a baseline missing gated metric(s): ${missing.join(', ')}.\n` +
         'These drive CI pass/fail; a baseline without them silently stops gating.\n' +
         'At least one input run did not report them -- re-harvest, or drop that run.',
     );
@@ -179,8 +186,7 @@ async function main() {
 
   const cold = aggregateSection(runs, 'metrics', percentile);
   const warm = aggregateSection(runs, 'warmMetrics', percentile);
-  assertNoGatedDrops('metrics', cold.dropped);
-  assertNoGatedDrops('warmMetrics', warm.dropped);
+  assertGatedMetricsPresent({ metrics: cold.metrics, warmMetrics: warm.metrics });
   const dropped = [
     ...cold.dropped.map((name) => `metrics.${name}`),
     ...warm.dropped.map((name) => `warmMetrics.${name}`),
