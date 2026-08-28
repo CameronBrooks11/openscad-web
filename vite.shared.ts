@@ -3,7 +3,9 @@ import { fileURLToPath } from 'node:url';
 
 import type { Plugin, UserConfig } from 'vite';
 
-// @ts-expect-error -- plain .mjs build script, no type declarations.
+// `allowJs` resolves this .mjs and infers its types, so there is nothing to
+// suppress here -- a directive would be reported as unused, and would mask a
+// real import error if one ever appeared (#295).
 import { syncMonacoAssets } from './scripts/sync-monaco-assets.mjs';
 
 const htmlInput = (name: string) => fileURLToPath(new URL(`./${name}`, import.meta.url));
