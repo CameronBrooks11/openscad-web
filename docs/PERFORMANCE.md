@@ -69,6 +69,38 @@ To create or refresh your ignored local baseline from the current local capture:
 npm run perf:accept:local
 ```
 
+### Refreshing from many CI runs
+
+`perf:accept` takes a single run. That is fine after a deliberate,
+perf-impacting change, but it anchors the baseline to one sample of a noisy
+population — and one unlucky sample sets budgets the next run cannot meet.
+
+For a periodic refresh, take the p90 across many CI runs instead. The
+`performance` job uploads `perf-baseline-candidate` on every run, so the
+samples already exist:
+
+```sh
+gh run download <run-id> -n perf-baseline-candidate -D run-<run-id>
+```
+
+Collect a dozen or more from runs on current code, then set each metric to the
+**p90 of the per-run medians**. p90 rather than the median because the budget
+is a flat +20%: anchoring at the median makes that budget narrower than
+observed CI variance for the noisier submetrics, so they WARN on nothing and
+the warnings stop meaning anything.
+
+Sanity-check a candidate baseline before committing it, by comparing it
+against each harvested run:
+
+```sh
+cp run-<id>/current-perf-baseline.json coverage/perf/current-perf-baseline.json
+node scripts/perf/compare-baseline.mjs --strict
+```
+
+It should be silent on every run of current code. Then confirm it still has
+teeth by comparing against runs from before a known improvement — those should
+fail. A baseline that passes everything is not a gate.
+
 ## Rules
 
 - Compare is automatic.
@@ -80,3 +112,7 @@ npm run perf:accept:local
 - Local compare against `perf-baseline.local.json` is enforcing.
 - CI perf uses median aggregation across three runs, not a single sample or best-of-N.
 - CI compare is enforcing only for headline startup metrics; submetrics are diagnostic.
+- Check `environment.profile` before trusting a baseline: `ci-*` was measured on
+  a runner, `local-headless` on someone's workstation. A locally captured
+  baseline sets budgets against the wrong hardware — that is how the
+  2026-06-22 baseline came to be unfailable (#278).

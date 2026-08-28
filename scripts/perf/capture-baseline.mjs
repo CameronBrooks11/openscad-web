@@ -326,7 +326,15 @@ async function main() {
         environment: {
           mode: 'production',
           browser: 'chrome',
-          profile: 'local-headless',
+          // The committed baseline is compared against CI runs, so which of the
+          // two this was measured on is load-bearing -- a laptop-captured
+          // baseline silently sets budgets CI cannot meet (or trivially beats).
+          // This was hardcoded to 'local-headless' even on CI, so the file gave
+          // no way to tell them apart (#278).
+          profile:
+            process.env.CI === 'true'
+              ? `ci-${process.env.RUNNER_OS ?? 'unknown'}`
+              : 'local-headless',
         },
         metrics: cold.metrics,
         warmMetrics: warm.metrics,

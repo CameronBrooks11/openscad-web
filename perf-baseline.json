@@ -1,46 +1,67 @@
 {
   "version": 1,
-  "capturedAt": "2026-06-22T15:12:05.450Z",
+  "capturedAt": "2026-08-28T00:00:00.000Z",
   "environment": {
     "mode": "production",
     "browser": "chrome",
-    "profile": "local-headless"
+    "profile": "ci-Linux"
   },
   "metrics": {
-    "firstContentfulPaintMillis": 864,
-    "appBootstrapMillis": 520.2,
-    "mainFsInitMillis": 129.4,
-    "librariesPreloadMillis": 154.1,
-    "languageRegisterMillis": 701.4,
-    "editorMountMillis": 93.9,
-    "firstCompileFromBootstrapMillis": 2022.9,
-    "firstCompileRoundtripMillis": 1503,
-    "workerFsInitMillis": 52.4,
+    "firstContentfulPaintMillis": 692,
+    "appBootstrapMillis": 304.8,
+    "mainFsInitMillis": 89.4,
+    "librariesPreloadMillis": 106.3,
+    "languageRegisterMillis": 777.2,
+    "editorMountMillis": 107.6,
+    "firstCompileFromBootstrapMillis": 2000.7,
+    "firstCompileRoundtripMillis": 1563,
+    "workerFsInitMillis": 90.2,
     "workerLibraryMountMillis": 0.2,
-    "workerWasmInitMillis": 499.1,
-    "workerJobTotalMillis": 1072.7
+    "workerWasmInitMillis": 433.1,
+    "workerJobTotalMillis": 1118.4
   },
   "warmMetrics": {
-    "firstContentfulPaintMillis": 364,
-    "appBootstrapMillis": 192,
-    "mainFsInitMillis": 58.9,
-    "librariesPreloadMillis": 116.7,
-    "languageRegisterMillis": 298.3,
-    "editorMountMillis": 33.9,
-    "firstCompileFromBootstrapMillis": 1016.4,
-    "firstCompileRoundtripMillis": 824.4,
-    "workerFsInitMillis": 30.3,
-    "workerLibraryMountMillis": 0.1,
-    "workerWasmInitMillis": 88.7,
-    "workerJobTotalMillis": 604.6
+    "firstContentfulPaintMillis": 284,
+    "appBootstrapMillis": 115.4,
+    "mainFsInitMillis": 51,
+    "librariesPreloadMillis": 55.4,
+    "languageRegisterMillis": 190.7,
+    "editorMountMillis": 26,
+    "firstCompileFromBootstrapMillis": 934.2,
+    "firstCompileRoundtripMillis": 780.1,
+    "workerFsInitMillis": 38.7,
+    "workerLibraryMountMillis": 0.2,
+    "workerWasmInitMillis": 95.8,
+    "workerJobTotalMillis": 568
   },
   "notes": {
-    "aggregation": "median",
-    "sampleCount": 3,
-    "inputs": [
-      "coverage/perf/runs/run-1.json",
-      "coverage/perf/runs/run-2.json",
-      "coverage/perf/runs/run-3.json"
-    ]
+    "aggregation": "p90 of per-run medians",
+    "sampleCount": 15,
+    "source": "GitHub Actions ci.yml `performance` job, ubuntu-24.04",
+    "rationale": "Each input is one CI run's median-of-3 (perf:capture:series). The previous baseline was captured locally on 2026-06-22 and never re-measured on CI, so it encoded laptop timings; after the Monaco local-AMD refactor (#254/#267) landed on 2026-08-08 the app got ~43% faster to bootstrap and the gate could no longer fail. Anchored at p90 rather than the median because a median-anchored baseline makes the 20% budget narrower than observed CI variance for four diagnostic metrics, producing WARNs that carry no signal. p90 trips none of the 22 metrics across the sampled runs while still flagging pre-refactor timings (#278).",
+    "observedVarianceMaxOverMedian": {
+      "metrics.appBootstrapMillis": 1.1,
+      "metrics.firstCompileFromBootstrapMillis": 1.03,
+      "warmMetrics.appBootstrapMillis": 1.04,
+      "warmMetrics.firstCompileFromBootstrapMillis": 1.04
+    },
+    "inputRunIds": [
+      "31240563284",
+      "31263280230",
+      "31263747855",
+      "31800971767",
+      "32482499131",
+      "32760084362",
+      "32766959624",
+      "33037657636",
+      "33040858838",
+      "33041848689",
+      "33042354995",
+      "33045378331",
+      "33045911597",
+      "33046013950",
+      "33046630768"
+    ],
+    "inputRange": ["2026-08-08T04:56:04Z", "2026-08-27T06:38:58Z"]
   }
 }
