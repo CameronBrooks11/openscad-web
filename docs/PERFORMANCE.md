@@ -102,7 +102,23 @@ is the #278 root cause made unrepeatable: the 2026-06-22 baseline was captured
 on a workstation, so the gate compared runner timings against laptop timings
 and could not fail. Artifacts captured before the profile was stamped correctly
 read `local-headless` even on CI; pass `--assume-profile ci-Linux` for those,
-and only those.
+and only those. `ci-unknown` is rejected either way — that is what a
+workstation with `CI=true` and `RUNNER_OS` unset produces, so it is not
+evidence of anything.
+
+A capture also records `environment.runId` and `runAttempt` from
+`GITHUB_RUN_ID` / `GITHUB_RUN_ATTEMPT`. `profile` is derived from environment
+variables, so a capture asserts its own provenance and nothing can check it;
+a run id is issued by Actions and can be verified after the fact:
+
+```sh
+gh api repos/<owner>/<repo>/actions/runs/<runId> --jq '.head_sha, .conclusion'
+```
+
+`notes.inputs` reads those ids out of the payloads, falling back to the input
+directory name only for captures that predate the stamp. `notes.runIdsRecorded`
+says how many inputs carried one — if it is lower than `sampleCount`, that part
+of the baseline's provenance is unverifiable.
 
 Sanity-check a candidate before committing it, by comparing it against each
 harvested run:

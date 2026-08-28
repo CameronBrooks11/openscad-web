@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "capturedAt": "2026-08-28T01:25:32.925Z",
+  "capturedAt": "2026-08-28T02:54:14.883Z",
   "environment": {
     "mode": "production",
     "browser": "chrome",
@@ -55,6 +55,7 @@
       "33046013950",
       "33046630768"
     ],
+    "runIdsRecorded": 0,
     "profileAssumed": {
       "assumed": "ci-Linux",
       "observed": ["local-headless"]

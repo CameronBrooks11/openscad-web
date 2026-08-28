@@ -187,10 +187,20 @@ describe('assertCiProfiles', () => {
   it('will not let --assume-profile launder a local capture', () => {
     // Without this the flag fully inverts the guard it is attached to.
     expect(() => assertCiProfiles(local, { assumeProfile: 'local-headless' })).toThrow(
-      /must name a CI profile/,
+      /must name a specific CI profile/,
     );
     expect(() => assertCiProfiles(local, { assumeProfile: 'my-laptop' })).toThrow(
-      /must name a CI profile/,
+      /must name a specific CI profile/,
+    );
+  });
+
+  it("rejects 'ci-unknown', which a workstation can produce", () => {
+    // capture-baseline.mjs yields ci-unknown for CI=true with RUNNER_OS unset,
+    // so it passes a bare ci-* prefix check while being no evidence at all.
+    const unknown = [{ environment: { profile: 'ci-unknown' } }];
+    expect(() => assertCiProfiles(unknown)).toThrow(/non-CI captures/);
+    expect(() => assertCiProfiles(local, { assumeProfile: 'ci-unknown' })).toThrow(
+      /not ci-unknown/,
     );
   });
 

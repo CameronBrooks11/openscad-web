@@ -78,9 +78,12 @@ async function main() {
       mode: 'production',
       browser: 'chrome',
       // Mirrors capture-baseline.mjs: a baseline that gates CI must record
-      // whether it was measured on a runner or a workstation (#278).
+      // whether it was measured on a runner or a workstation (#278), and carry
+      // a run id that can be checked against the Actions API (#296).
       profile:
         process.env.CI === 'true' ? `ci-${process.env.RUNNER_OS ?? 'unknown'}` : 'local-headless',
+      runId: process.env.GITHUB_RUN_ID ?? null,
+      runAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
     },
     metrics: aggregateMetricSection(runs, 'metrics'),
     warmMetrics: aggregateMetricSection(runs, 'warmMetrics'),

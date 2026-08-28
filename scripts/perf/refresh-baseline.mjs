@@ -114,15 +114,20 @@ export function assertCiProfiles(runs, { assumeProfile } = {}) {
     // The flag exists for artifacts captured before the profile was stamped
     // correctly -- not to relabel a workstation capture as CI. Without this it
     // fully inverts the guard it is attached to.
-    if (!/^ci-/.test(assumeProfile)) {
+    if (!/^ci-/.test(assumeProfile) || assumeProfile === 'ci-unknown') {
       throw new Error(
-        `--assume-profile must name a CI profile (ci-*); got '${assumeProfile}'.\n` +
-          'It cannot be used to record a local capture as a CI one.',
+        `--assume-profile must name a specific CI profile (ci-*, not ci-unknown); ` +
+          `got '${assumeProfile}'.\n` +
+          'It cannot be used to record a local capture as a CI one. ' +
+          "'ci-unknown' is what a workstation with CI=true and RUNNER_OS unset " +
+          'produces, so it is not evidence of anything.',
       );
     }
     return [assumeProfile];
   }
-  const local = profiles.filter((profile) => !profile.startsWith('ci-'));
+  const local = profiles.filter(
+    (profile) => !profile.startsWith('ci-') || profile === 'ci-unknown',
+  );
   if (local.length > 0) {
     throw new Error(
       `Refusing to build a CI baseline from non-CI captures: ${local.join(', ')}.\n` +
@@ -215,7 +220,16 @@ async function main() {
       aggregation: `p${percentile} (nearest rank) of per-run medians`,
       sampleCount: runs.length,
       generatedBy: 'scripts/perf/refresh-baseline.mjs',
-      inputs: inputs.map((input) => path.basename(path.dirname(path.resolve(repoRoot, input)))),
+      // Read from the payload where present, so provenance comes from the
+      // artifact rather than from whatever the containing directory happened to
+      // be called. Falls back to the directory name for captures made before
+      // runId was stamped (#296).
+      inputs: runs.map(
+        (run, index) =>
+          run.environment?.runId ??
+          path.basename(path.dirname(path.resolve(repoRoot, inputs[index]))),
+      ),
+      runIdsRecorded: runs.filter((run) => run.environment?.runId != null).length,
       // Recorded so a reader can audit the file's provenance. `profile` alone
       // would claim a CI capture with nothing saying the label was asserted
       // rather than measured.
