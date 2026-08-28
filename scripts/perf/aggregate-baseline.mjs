@@ -77,7 +77,10 @@ async function main() {
     environment: runs[0]?.environment ?? {
       mode: 'production',
       browser: 'chrome',
-      profile: 'local-headless',
+      // Mirrors capture-baseline.mjs: a baseline that gates CI must record
+      // whether it was measured on a runner or a workstation (#278).
+      profile:
+        process.env.CI === 'true' ? `ci-${process.env.RUNNER_OS ?? 'unknown'}` : 'local-headless',
     },
     metrics: aggregateMetricSection(runs, 'metrics'),
     warmMetrics: aggregateMetricSection(runs, 'warmMetrics'),

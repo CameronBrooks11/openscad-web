@@ -71,35 +71,62 @@ npm run perf:accept:local
 
 ### Refreshing from many CI runs
 
-`perf:accept` takes a single run. That is fine after a deliberate,
-perf-impacting change, but it anchors the baseline to one sample of a noisy
-population — and one unlucky sample sets budgets the next run cannot meet.
+`perf:accept` takes a single run. That is right after a deliberate,
+perf-impacting change, but it is wrong for a periodic refresh: one sample of a
+noisy population sets budgets the next run may not meet.
 
-For a periodic refresh, take the p90 across many CI runs instead. The
-`performance` job uploads `perf-baseline-candidate` on every run, so the
-samples already exist:
+The `performance` job uploads `perf-baseline-candidate` on every run, so the
+samples already exist. Harvest a dozen or more from runs on current code and
+aggregate them:
 
 ```sh
-gh run download <run-id> -n perf-baseline-candidate -D run-<run-id>
+for id in <run-ids>; do
+  gh run download "$id" -n perf-baseline-candidate -D "harvest/$id"
+done
+npm run perf:refresh -- harvest/*/current-perf-baseline.json
 ```
 
-Collect a dozen or more from runs on current code, then set each metric to the
-**p90 of the per-run medians**. p90 rather than the median because the budget
-is a flat +20%: anchoring at the median makes that budget narrower than
-observed CI variance for the noisier submetrics, so they WARN on nothing and
-the warnings stop meaning anything.
+Each input is one CI run's median-of-3. `refresh-baseline.mjs` takes the **p90
+(nearest rank)** of those per-run medians for every metric, and records the
+sample count and contributing run IDs in `notes` so the file says where its
+numbers came from.
 
-Sanity-check a candidate baseline before committing it, by comparing it
-against each harvested run:
+p90 rather than the median because the budget is a flat +20%: anchoring at the
+median makes that budget narrower than observed CI variance for the noisier
+submetrics, so they WARN on nothing and the warnings stop meaning anything.
+Nearest rank rather than an interpolated percentile so every baseline value is
+a number the app actually produced on a runner.
+
+The script **refuses** inputs whose `environment.profile` is not `ci-*`. That
+is the #278 root cause made unrepeatable: the 2026-06-22 baseline was captured
+on a workstation, so the gate compared runner timings against laptop timings
+and could not fail. Artifacts captured before the profile was stamped correctly
+read `local-headless` even on CI; pass `--assume-profile ci-Linux` for those,
+and only those.
+
+Sanity-check a candidate before committing it, by comparing it against each
+harvested run:
 
 ```sh
-cp run-<id>/current-perf-baseline.json coverage/perf/current-perf-baseline.json
+cp harvest/<id>/current-perf-baseline.json coverage/perf/current-perf-baseline.json
 node scripts/perf/compare-baseline.mjs --strict
 ```
 
 It should be silent on every run of current code. Then confirm it still has
 teeth by comparing against runs from before a known improvement — those should
 fail. A baseline that passes everything is not a gate.
+
+Two cautions when reading the results:
+
+- **Harvest by run, not by outcome.** A perf-gate failure sets the whole run's
+  conclusion to `failure`, so collecting only successful runs censors exactly
+  the slow tail you are trying to measure. Re-run attempts each keep their own
+  artifact; `gh api repos/<owner>/<repo>/actions/runs/<id>/artifacts` lists all
+  of them.
+- **A refresh ratifies whatever it measures.** Compare the new values against
+  the old before committing: any metric that got _slower_ is a regression you
+  are baselining in, and it should be a conscious decision rather than a side
+  effect.
 
 ## Rules
 
