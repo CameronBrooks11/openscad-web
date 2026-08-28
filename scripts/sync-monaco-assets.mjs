@@ -90,6 +90,19 @@ function resolveMonacoVsDir() {
   return path.join(root, 'min', 'vs');
 }
 
+/**
+ * Copy the Monaco AMD build into `destDir`.
+ *
+ * The options are annotated because `vite.shared.ts` calls this from
+ * TypeScript: without it, `destDir` has no default and no annotation, so the
+ * inferred parameter type omits it entirely and the (correct) call site fails
+ * to type-check (#295).
+ *
+ * @param {object} [options]
+ * @param {string} options.destDir Directory to populate; replaced wholesale.
+ * @param {(message: string) => void} [options.log] Progress sink.
+ * @returns {{ copied: number, skipped: number }}
+ */
 export function syncMonacoAssets({ destDir, log = console.log } = {}) {
   const srcDir = resolveMonacoVsDir();
   if (!existsSync(srcDir)) {

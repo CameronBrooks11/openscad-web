@@ -97,11 +97,15 @@ describe('tests type-check program (#286)', () => {
     expect(step?.[1]?.trim()).toBe('npm run typecheck');
   });
 
-  it('type-checks the runner configs', () => {
-    // A mistyped option here changes runtime behaviour without failing anything.
-    for (const config of ['playwright.config.ts', 'vitest.config.ts', 'vitest.setup.ts']) {
-      expect(program).toContain(config);
-    }
+  it('type-checks every root-level build and runner config', () => {
+    // Asserted exhaustively rather than by naming known files: a NEW config was
+    // silently unchecked until someone remembered to list it (#297), and a
+    // guard that only checks the files you remembered has the same gap.
+    const rootTs = readdirSync(repoRoot, { withFileTypes: true })
+      .filter((entry) => entry.isFile() && entry.name.endsWith('.ts'))
+      .map((entry) => entry.name);
+    expect(rootTs.length).toBeGreaterThan(0);
+    expect(rootTs.filter((file) => !program.includes(file))).toEqual([]);
   });
 
   it('is actually run by the typecheck script', () => {
