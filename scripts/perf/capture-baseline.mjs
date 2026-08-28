@@ -335,6 +335,14 @@ async function main() {
             process.env.CI === 'true'
               ? `ci-${process.env.RUNNER_OS ?? 'unknown'}`
               : 'local-headless',
+          // `profile` is derived from env vars, so a capture asserts its own
+          // provenance and nothing can check it -- `CI=true` on a workstation
+          // with RUNNER_OS unset yields 'ci-unknown', which looks like CI. The
+          // run id is issued by Actions and can be verified against the API
+          // after the fact, which is what makes a committed baseline auditable
+          // rather than merely self-described (#296).
+          runId: process.env.GITHUB_RUN_ID ?? null,
+          runAttempt: process.env.GITHUB_RUN_ATTEMPT ?? null,
         },
         metrics: cold.metrics,
         warmMetrics: warm.metrics,
