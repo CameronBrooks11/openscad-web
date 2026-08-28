@@ -70,6 +70,17 @@ export class OscSettingsMenu extends LitElement {
     button.item.danger {
       color: var(--osc-error);
     }
+    /* A consequence of the adjacent setting, not an action. Indented to the
+       same text column as the buttons so it reads as attached to one. */
+    .note {
+      padding: 0 16px 8px;
+      margin: 0;
+      font-size: 0.8rem;
+      color: var(--osc-fg-muted, var(--osc-fg));
+      opacity: 0.75;
+      max-width: 260px;
+      white-space: normal;
+    }
   `;
 
   @state() private _st: State | null = null;
@@ -176,6 +187,11 @@ export class OscSettingsMenu extends LitElement {
           <button
             class="item"
             role="menuitem"
+            title=${
+              backend === 'manifold'
+                ? 'CGAL does not carry color() into the rendered geometry.'
+                : 'Manifold carries color() into the rendered geometry.'
+            }
             @click=${() =>
               this._model.mutate((s) => {
                 s.params.backend = s.params.backend === 'cgal' ? 'manifold' : 'cgal';
@@ -183,6 +199,18 @@ export class OscSettingsMenu extends LitElement {
           >
             ${backend === 'manifold' ? 'Switch to CGAL backend' : 'Switch to Manifold backend'}
           </button>
+          ${
+            // Only the Manifold backend emits per-face colors, so on CGAL a
+            // model that uses color() silently reverts to the viewer's default
+            // and nothing on screen explains why (#283). The limitation is
+            // fine -- CGAL is a deliberate escape hatch -- the silence is not.
+            backend === 'cgal'
+              ? html`<p class="note" role="note">
+                  Model colors are unavailable on CGAL: <code>color()</code> is not carried into the
+                  rendered geometry.
+                </p>`
+              : ''
+          }
           ${
             isInStandaloneMode()
               ? html`
