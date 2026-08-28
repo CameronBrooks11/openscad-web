@@ -138,6 +138,30 @@ describe('assertGatedMetricsPresent', () => {
   it('does not care about diagnostic metrics', () => {
     expect(() => assertGatedMetricsPresent(complete)).not.toThrow();
   });
+
+  it('refuses a gated metric that is present but unusable', () => {
+    // compare-baseline.mjs skips a negative or non-finite metric, so presence
+    // alone is not enough -- a negative baseline would silently stop gating.
+    for (const bad of [-42, Number.NaN, Number.POSITIVE_INFINITY, '295.7', null]) {
+      expect(() =>
+        assertGatedMetricsPresent({
+          ...complete,
+          metrics: { ...complete.metrics, appBootstrapMillis: bad },
+        }),
+      ).toThrow(/metrics\.appBootstrapMillis/);
+    }
+  });
+
+  it('accepts a legitimate zero', () => {
+    // workerLibraryMount really does measure ~0.1ms; the 5ms budget floor
+    // covers it, so zero must not be mistaken for missing.
+    expect(() =>
+      assertGatedMetricsPresent({
+        ...complete,
+        metrics: { ...complete.metrics, appBootstrapMillis: 0 },
+      }),
+    ).not.toThrow();
+  });
 });
 
 describe('assertCiProfiles', () => {

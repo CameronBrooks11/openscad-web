@@ -50,7 +50,13 @@ export const gatedMetricKeys = new Set([
   'warmMetrics.firstCompileFromBootstrapMillis',
 ]);
 
-function isConfiguredMetric(value) {
+/**
+ * What this gate treats as a usable metric. Exported so a producer of baselines
+ * asserts against the consumer's own definition rather than a lookalike -- a
+ * baseline value can otherwise be present but unusable (e.g. negative), pass
+ * the writer's check, and be silently skipped here.
+ */
+export function isConfiguredMetric(value) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 

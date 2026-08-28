@@ -19,7 +19,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { gatedMetricKeys } from './compare-baseline.mjs';
+import { gatedMetricKeys, isConfiguredMetric } from './compare-baseline.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..', '..');
@@ -85,10 +85,14 @@ export function aggregateSection(runs, section, percentile) {
  * regression passed the resulting gate.
  */
 export function assertGatedMetricsPresent({ metrics, warmMetrics }) {
+  // `name in obj` would only prove presence. compare-baseline.mjs skips a
+  // metric that is present but not *usable* (negative, NaN, non-numeric), so
+  // asserting presence alone still lets a gated metric stop being compared.
+  // Reuse the consumer's predicate so the two cannot drift.
   const missing = [...gatedMetricKeys].filter((key) => {
     const [section, name] = key.split('.');
     const values = section === 'warmMetrics' ? warmMetrics : metrics;
-    return !(name in (values ?? {}));
+    return !isConfiguredMetric((values ?? {})[name]);
   });
   if (missing.length > 0) {
     throw new Error(
