@@ -39,7 +39,7 @@ function parseArgs(argv) {
 const budgetPct = Number.parseFloat(process.env.PERF_BUDGET_PCT ?? '20');
 const budgetMultiplier = 1 + budgetPct / 100;
 const minimumBudgetMs = Number.parseFloat(process.env.PERF_MIN_BUDGET_MS ?? '5');
-const gatedMetricKeys = new Set([
+export const gatedMetricKeys = new Set([
   // firstContentfulPaintMillis is excluded from gating: in CI headless mode it
   // measures at 60-80ms where 20% budget (~12-16ms) is smaller than run-to-run
   // scheduler jitter. Real FCP regressions are covered by appBootstrapMillis
@@ -50,7 +50,13 @@ const gatedMetricKeys = new Set([
   'warmMetrics.firstCompileFromBootstrapMillis',
 ]);
 
-function isConfiguredMetric(value) {
+/**
+ * What this gate treats as a usable metric. Exported so a producer of baselines
+ * asserts against the consumer's own definition rather than a lookalike -- a
+ * baseline value can otherwise be present but unusable (e.g. negative), pass
+ * the writer's check, and be silently skipped here.
+ */
+export function isConfiguredMetric(value) {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0;
 }
 
@@ -116,7 +122,14 @@ async function main() {
     isConfiguredMetric(entry.value),
   );
   if (configuredBaselineMetrics.length === 0) {
-    console.log(`No populated baseline metrics found in ${baselinePath}; skipping perf gate.`);
+    const message =
+      `No populated baseline metrics found in ${baselinePath}. ` +
+      'The perf gate would compare nothing and report success.';
+    // Under --strict this is a hard error: a malformed or emptied baseline is
+    // indistinguishable from a passing one otherwise, so the one job whose
+    // purpose is to go red would go green instead (#278).
+    if (strict) throw new Error(message);
+    console.log(`${message} Skipping perf gate.`);
     return;
   }
 
@@ -176,7 +189,12 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
-});
+// Guarded so `gatedMetricKeys` can be imported without running the comparison
+// (refresh-baseline.mjs needs it to refuse dropping a gated metric). Matches
+// the pattern in check-bundle-budgets.mjs and render-geometry.mjs.
+if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {
+  main().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+}

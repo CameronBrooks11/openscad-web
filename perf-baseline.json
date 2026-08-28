@@ -1,46 +1,63 @@
 {
   "version": 1,
-  "capturedAt": "2026-06-22T15:12:05.450Z",
+  "capturedAt": "2026-08-28T01:25:32.925Z",
   "environment": {
     "mode": "production",
     "browser": "chrome",
-    "profile": "local-headless"
+    "profile": "ci-Linux"
   },
   "metrics": {
-    "firstContentfulPaintMillis": 864,
-    "appBootstrapMillis": 520.2,
-    "mainFsInitMillis": 129.4,
-    "librariesPreloadMillis": 154.1,
-    "languageRegisterMillis": 701.4,
-    "editorMountMillis": 93.9,
-    "firstCompileFromBootstrapMillis": 2022.9,
-    "firstCompileRoundtripMillis": 1503,
-    "workerFsInitMillis": 52.4,
+    "firstContentfulPaintMillis": 704,
+    "appBootstrapMillis": 305.7,
+    "mainFsInitMillis": 91.7,
+    "librariesPreloadMillis": 109.1,
+    "languageRegisterMillis": 837.1,
+    "editorMountMillis": 110.4,
+    "firstCompileFromBootstrapMillis": 2010.6,
+    "firstCompileRoundtripMillis": 1563.7,
+    "workerFsInitMillis": 94.3,
     "workerLibraryMountMillis": 0.2,
-    "workerWasmInitMillis": 499.1,
-    "workerJobTotalMillis": 1072.7
+    "workerWasmInitMillis": 436.8,
+    "workerJobTotalMillis": 1118.5
   },
   "warmMetrics": {
-    "firstContentfulPaintMillis": 364,
-    "appBootstrapMillis": 192,
-    "mainFsInitMillis": 58.9,
-    "librariesPreloadMillis": 116.7,
-    "languageRegisterMillis": 298.3,
-    "editorMountMillis": 33.9,
-    "firstCompileFromBootstrapMillis": 1016.4,
-    "firstCompileRoundtripMillis": 824.4,
-    "workerFsInitMillis": 30.3,
-    "workerLibraryMountMillis": 0.1,
-    "workerWasmInitMillis": 88.7,
-    "workerJobTotalMillis": 604.6
+    "firstContentfulPaintMillis": 288,
+    "appBootstrapMillis": 115.4,
+    "mainFsInitMillis": 51.1,
+    "librariesPreloadMillis": 57.7,
+    "languageRegisterMillis": 193.7,
+    "editorMountMillis": 26.7,
+    "firstCompileFromBootstrapMillis": 938.4,
+    "firstCompileRoundtripMillis": 786.5,
+    "workerFsInitMillis": 41.3,
+    "workerLibraryMountMillis": 0.2,
+    "workerWasmInitMillis": 96.7,
+    "workerJobTotalMillis": 568.9
   },
   "notes": {
-    "aggregation": "median",
-    "sampleCount": 3,
+    "aggregation": "p90 (nearest rank) of per-run medians",
+    "sampleCount": 15,
+    "generatedBy": "scripts/perf/refresh-baseline.mjs",
     "inputs": [
-      "coverage/perf/runs/run-1.json",
-      "coverage/perf/runs/run-2.json",
-      "coverage/perf/runs/run-3.json"
-    ]
+      "31240563284",
+      "31263280230",
+      "31263747855",
+      "31800971767",
+      "32482499131",
+      "32760084362",
+      "32766959624",
+      "33037657636",
+      "33040858838",
+      "33041848689",
+      "33042354995",
+      "33045378331",
+      "33045911597",
+      "33046013950",
+      "33046630768"
+    ],
+    "profileAssumed": {
+      "assumed": "ci-Linux",
+      "observed": ["local-headless"]
+    }
   }
 }

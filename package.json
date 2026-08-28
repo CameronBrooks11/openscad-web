@@ -56,6 +56,7 @@
     "perf:compare": "node scripts/perf/compare-baseline.mjs",
     "perf:compare:local": "node scripts/perf/compare-baseline.mjs --baseline perf-baseline.local.json --strict",
     "perf:accept": "node scripts/perf/accept-baseline.mjs",
+    "perf:refresh": "node scripts/perf/refresh-baseline.mjs",
     "perf:accept:local": "node scripts/perf/accept-baseline.mjs --baseline perf-baseline.local.json",
     "perf:ci": "npm run perf:capture:series && npm run perf:compare",
     "security:check-install-scripts": "node ./scripts/security/check-install-scripts.mjs",
