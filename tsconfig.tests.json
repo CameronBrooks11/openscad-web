@@ -5,8 +5,9 @@
   // spec could not fail any gate (#286).
   //
   // Scope: this catches type errors WITHIN the test tree. It does not verify
-  // the specs against src/ -- no spec imports from src/, so the two programs
-  // are disjoint. The inline type literals the specs use to reach into private
+  // the specs against src/ -- as of today no spec imports from src/, so the two
+  // programs are disjoint. Acting on #292 would change that, and this comment
+  // with it. The inline type literals the specs use to reach into private
   // internals (`shell._st`, `viewer._scene`) are self-consistent and still
   // unverified against the real types; see #292.
   "extends": "./tsconfig.json",
