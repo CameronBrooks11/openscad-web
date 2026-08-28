@@ -47,7 +47,7 @@
     "build:libs:libraries": "cross-env LIBS_BUILD_MODE=libs node ./scripts/build-assets/cli.mjs",
     "build:all": "npm run build:libs && npm run build",
     "lint": "eslint .",
-    "typecheck": "npx tsc --noEmit",
+    "typecheck": "npx tsc --noEmit && npx tsc -p tsconfig.tests.json",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "perf:capture": "node scripts/perf/capture-baseline.mjs",
