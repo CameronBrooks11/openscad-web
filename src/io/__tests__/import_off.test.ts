@@ -125,3 +125,64 @@ describe('parseOff face colors', () => {
     expect(poly.faces.every((f) => f.colorIndex === 0)).toBe(true);
   });
 });
+
+// The OFF spec tells integer 0..255 from float 0..1 by the TOKEN, not the value:
+// "three or four integers | RGB ... 0..255" vs "three or four floating-point
+// numbers | RGB ... 0..1" (Geomview OOGL manual). #287.
+describe('parseOff float 0..1 face colors (#287)', () => {
+  const oneFace = (face: string) => `OFF 4 1 0\n${TRI_VERTS}\n${face}\n`;
+
+  it('reads a float channel on its own scale, not divided by 255', () => {
+    // The filed bug: 0.5 became 0.00196, i.e. near-black.
+    const poly = parseOff(oneFace('3 0 1 2 0.5 0.5 0.5'));
+    expect(poly.colors[0]).toEqual([0.5, 0.5, 0.5, 1]);
+  });
+
+  it('reads 1.0 0.0 0.0 as red, not as 1/255 near-black', () => {
+    // A value-based rule ("any channel has a fractional part") gets this wrong,
+    // and it is the form Geomview's own binary example and Antiprism emit.
+    expect(parseOff(oneFace('3 0 1 2 1.0 0.0 0.0')).colors[0]).toEqual([1, 0, 0, 1]);
+  });
+
+  it('defaults a float color to fully opaque, not to 255', () => {
+    expect(parseOff(oneFace('3 0 1 2 0.25 0.5 0.75')).colors[0][3]).toBe(1);
+  });
+
+  it('reads float alpha on the float scale', () => {
+    expect(parseOff(oneFace('3 0 1 2 0.0 1.0 0.0 0.4')).colors[0]).toEqual([0, 1, 0, 0.4]);
+  });
+
+  it('decides once per file, so one float channel makes the whole file float', () => {
+    // Deciding per face would render two faces of the same encoding differently
+    // depending on their values.
+    const poly = parseOff(twoFaces('3 0 1 2 1 0 0', '3 0 1 3 0.5 0.5 0.5'));
+    expect(poly.colors[0]).toEqual([1, 0, 0, 1]);
+    expect(poly.colors[1]).toEqual([0.5, 0.5, 0.5, 1]);
+  });
+
+  it('keeps a mixed-literal channel set on the float scale', () => {
+    // MeshLab and OpenMesh test only the first channel and would misread this.
+    expect(parseOff(oneFace('3 0 1 2 1 0.5 0')).colors[0]).toEqual([1, 0.5, 0, 1]);
+  });
+
+  it('leaves OpenSCAD integer output exactly as before', () => {
+    const poly = parseOff(twoFaces('3 0 1 2 0 128 0 127', '3 0 1 3 249 215 44'));
+    expect(poly.colors[0]).toEqual([0, 128 / 255, 0, 127 / 255]);
+    expect(poly.colors[1]).toEqual([249 / 255, 215 / 255, 44 / 255, 1]);
+  });
+
+  it('reads an all-0/1 integer file as integer, the predictable reading', () => {
+    // Genuinely undecidable -- `1 0 0` is near-black as integers and red as
+    // floats-without-decimals. Integer keeps behaviour predictable and matches
+    // MeshLab and OpenMesh, which apply the same lexical test. Asserted so the
+    // choice is visible and a change to it is deliberate.
+    expect(parseOff(oneFace('3 0 1 2 1 0 0')).colors[0]).toEqual([1 / 255, 0, 0, 1]);
+  });
+
+  it('does not treat a trailing comment as a float channel', () => {
+    // The #284 behaviour: a non-numeric 4th field means "no alpha", and the
+    // token must not be mistaken for a non-integer literal either.
+    const poly = parseOff(oneFace('3 0 1 2 0 128 0 # green'));
+    expect(poly.colors[0]).toEqual([0, 128 / 255, 0, 1]);
+  });
+});
