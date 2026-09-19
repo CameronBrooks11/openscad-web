@@ -91,7 +91,7 @@
     "@types/uzip": "^0.20201231.2",
     "@types/web": "^0.0.354",
     "@vitest/coverage-v8": "^4.1.11",
-    "adm-zip": "^0.6.0",
+    "adm-zip": "^0.6.1",
     "cross-env": "^10.1.0",
     "eslint": "^10.9.1",
     "js-yaml": "^5.4.1",
