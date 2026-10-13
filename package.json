@@ -79,7 +79,8 @@
   },
   "overrides": {
     "serialize-javascript": ">=7.0.5",
-    "dompurify": ">=3.4.12"
+    "dompurify": ">=3.4.12",
+    "compression": ">=1.8.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",
