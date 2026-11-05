@@ -35,8 +35,14 @@ function tetrahedron(
 // Layout: 12-byte header, then [uint32 chunkLength][uint32 chunkType='JSON'][bytes].
 function readGlbJson(buffer: ArrayBuffer): {
   nodes: Array<{ rotation?: number[]; matrix?: number[] }>;
-  materials?: Array<{ pbrMetallicRoughness?: { baseColorFactor?: number[] } }>;
-  meshes?: Array<{ primitives: Array<{ attributes: Record<string, number> }> }>;
+  materials?: Array<{
+    alphaMode?: string;
+    pbrMetallicRoughness?: { baseColorFactor?: number[] };
+  }>;
+  meshes?: Array<{
+    primitives: Array<{ attributes: Record<string, number>; material?: number }>;
+  }>;
+  accessors?: Array<{ type: string }>;
 } {
   const view = new DataView(buffer);
   const jsonLength = view.getUint32(12, true);
@@ -106,6 +112,37 @@ describe('exportGLB', () => {
     // omits baseColorFactor entirely when the material color is white.
     const factor = materials![0].pbrMetallicRoughness?.baseColorFactor;
     if (factor) for (const c of factor.slice(0, 3)) expect(c).toBeCloseTo(1, 5);
+  });
+
+  // #282: glTF only honours COLOR_0's alpha under alphaMode BLEND.
+  describe('alpha from color(c, alpha) (#282)', () => {
+    it('exports a translucent model as a VEC4 COLOR_0 with a BLEND material', async () => {
+      const glb = await exportGLB(tetrahedron([[0, 128 / 255, 0, 0.4]]));
+      const { materials, meshes, accessors } = readGlbJson(glb);
+      const primitives = meshes![0].primitives;
+      expect(primitives).toHaveLength(1);
+      expect(accessors![primitives[0].attributes.COLOR_0].type).toBe('VEC4');
+      expect(materials![primitives[0].material!].alphaMode).toBe('BLEND');
+    });
+
+    it('keeps the opaque faces of a mixed model on a non-blended material', async () => {
+      const data = tetrahedron([
+        [0, 128 / 255, 0, 0.5],
+        [0, 0, 1, 1],
+      ]);
+      data.faces[2].colorIndex = 1;
+      data.faces[3].colorIndex = 1;
+      const { materials, meshes } = readGlbJson(await exportGLB(data));
+      const modes = meshes![0].primitives.map((p) => materials![p.material!].alphaMode);
+      expect(modes).toEqual([undefined, 'BLEND']);
+    });
+
+    it('leaves a fully opaque model without an alphaMode', async () => {
+      const glb = await exportGLB(tetrahedron([[0, 128 / 255, 0, 1]]));
+      const { materials, meshes, accessors } = readGlbJson(glb);
+      expect(materials!.every((m) => m.alphaMode === undefined)).toBe(true);
+      expect(accessors![meshes![0].primitives[0].attributes.COLOR_0].type).toBe('VEC3');
+    });
   });
 
   it('rotates Z-up OpenSCAD geometry to glTF Y-up via the node transform', async () => {
