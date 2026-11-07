@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { CameraState } from '../../state/app-state.ts';
+import { OPAQUE_GROUP, TRANSLUCENT_GROUP } from './off-loader.ts';
 
 export type { CameraState };
 
@@ -14,6 +15,50 @@ export const MAX_PIXEL_RATIO = 2;
 export function cappedPixelRatio(devicePixelRatio: number, max = MAX_PIXEL_RATIO): number {
   if (!Number.isFinite(devicePixelRatio) || devicePixelRatio <= 0) return 1;
   return Math.min(devicePixelRatio, max);
+}
+
+/**
+ * The model material for a geometry built by `offToBufferGeometry`.
+ *
+ * An opaque model gets one opaque material, exactly as before #282. A model
+ * with translucent faces (RGBA `color` attribute, see the loader) gets one
+ * material per draw group: the opaque group stays opaque and depth-writing, the
+ * translucent group blends and does not write depth, so it never hides what is
+ * behind it. Three.js draws transparent objects after opaque ones, back to
+ * front per object, and renders a double-sided transparent material back faces
+ * first. That is correct for a single convex translucent solid; translucent
+ * faces that overlap within one model blend in buffer order rather than depth
+ * order, a deliberate trade against order-independent transparency.
+ */
+export function createModelMaterial(
+  geometry: THREE.BufferGeometry,
+  color: THREE.ColorRepresentation,
+): THREE.Material | THREE.Material[] {
+  // Use per-vertex colors when the OFF loader generated them, i.e. the model
+  // used color(). A colorless model has none and takes the single material.
+  const hasVertexColors = geometry.hasAttribute('color');
+  const phong = (extra: THREE.MeshPhongMaterialParameters = {}) =>
+    new THREE.MeshPhongMaterial({
+      color: hasVertexColors ? 0xffffff : color,
+      vertexColors: hasVertexColors,
+      side: THREE.DoubleSide,
+      shininess: 40,
+      specular: new THREE.Color(0x222222),
+      ...extra,
+    });
+  if (!hasTranslucentFaces(geometry)) return phong();
+  const materials: THREE.Material[] = [];
+  materials[OPAQUE_GROUP] = phong();
+  materials[TRANSLUCENT_GROUP] = phong({ transparent: true, depthWrite: false });
+  return materials;
+}
+
+function hasTranslucentFaces(geometry: THREE.BufferGeometry): boolean {
+  return geometry.getAttribute('color')?.itemSize === 4;
+}
+
+function disposeMaterial(material: THREE.Material | THREE.Material[]): void {
+  for (const m of Array.isArray(material) ? material : [material]) m.dispose();
 }
 
 export interface NamedPosition {
@@ -197,7 +242,7 @@ export class ThreeScene {
     if (this.modelMesh) {
       this.scene.remove(this.modelMesh);
       this.modelMesh.geometry.dispose();
-      (this.modelMesh.material as THREE.Material).dispose();
+      disposeMaterial(this.modelMesh.material);
       this.modelMesh = null;
     }
     if (this.axesObject) {
@@ -224,21 +269,11 @@ export class ThreeScene {
     if (this.modelMesh) {
       this.scene.remove(this.modelMesh);
       this.modelMesh.geometry.dispose();
-      (this.modelMesh.material as THREE.Material).dispose();
+      disposeMaterial(this.modelMesh.material);
       this.modelMesh = null;
     }
 
-    // Use per-vertex colors when the OFF loader generated them, i.e. the model
-    // used color(). A colorless model has none and takes the single material.
-    const hasVertexColors = geometry.hasAttribute('color');
-    const material = new THREE.MeshPhongMaterial({
-      color: hasVertexColors ? 0xffffff : color,
-      vertexColors: hasVertexColors,
-      side: THREE.DoubleSide,
-      shininess: 40,
-      specular: new THREE.Color(0x222222),
-    });
-    this.modelMesh = new THREE.Mesh(geometry, material);
+    this.modelMesh = new THREE.Mesh(geometry, createModelMaterial(geometry, color));
     this.scene.add(this.modelMesh);
     this.fitCameraToMesh(this.modelMesh);
     this.requestRender();
@@ -369,11 +404,14 @@ export class ThreeScene {
 
   setModelColor(color: THREE.ColorRepresentation): void {
     if (this.modelMesh) {
-      const mat = this.modelMesh.material as THREE.MeshPhongMaterial;
+      const material = this.modelMesh.material;
       // A model that declared its own color() wins over a host-supplied color:
       // per-vertex colors are already baked into the geometry, so this is a no-op
-      // for it. See docs/EMBEDDING-VSCODE.md on setViewerSettings.
-      if (!mat.vertexColors) mat.color.set(color);
+      // for it. See docs/EMBEDDING-VSCODE.md on setViewerSettings. A material
+      // array only ever comes from color(c, alpha), so it is always such a model.
+      if (!Array.isArray(material) && !material.vertexColors) {
+        (material as THREE.MeshPhongMaterial).color.set(color);
+      }
       this.requestRender();
     }
   }

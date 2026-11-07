@@ -10,7 +10,11 @@ import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 
 import { DEFAULT_FACE_COLOR, type IndexedPolyhedron } from './common.ts';
-import { offToBufferGeometry } from '../components/viewer/off-loader.ts';
+import {
+  OPAQUE_GROUP,
+  offToBufferGeometry,
+  TRANSLUCENT_GROUP,
+} from '../components/viewer/off-loader.ts';
 
 /**
  * Serialize a parsed OFF polyhedron to a binary glTF (.glb) byte array.
@@ -27,16 +31,30 @@ export async function exportGLB(data: IndexedPolyhedron): Promise<ArrayBuffer> {
   const { hasSourceColors } = data;
 
   const [r, g, b] = data.colors[0] ?? DEFAULT_FACE_COLOR;
-  const material = new THREE.MeshStandardMaterial({
-    vertexColors: hasSourceColors,
-    // glTF's baseColorFactor is linear, and so is Three.js' working space, so
-    // the sRGB face color has to be converted — `new THREE.Color(r, g, b)`
-    // would take these as linear values and skew the exported color.
-    color: hasSourceColors ? 0xffffff : new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace),
-    metalness: 0,
-    roughness: 1,
-    side: THREE.DoubleSide,
-  });
+  const standard = (extra: THREE.MeshStandardMaterialParameters = {}) =>
+    new THREE.MeshStandardMaterial({
+      vertexColors: hasSourceColors,
+      // glTF's baseColorFactor is linear, and so is Three.js' working space, so
+      // the sRGB face color has to be converted — `new THREE.Color(r, g, b)`
+      // would take these as linear values and skew the exported color.
+      color: hasSourceColors ? 0xffffff : new THREE.Color().setRGB(r, g, b, THREE.SRGBColorSpace),
+      metalness: 0,
+      roughness: 1,
+      side: THREE.DoubleSide,
+      ...extra,
+    });
+  // color(c, alpha) (#282): the loader emits an RGBA COLOR_0 and splits the
+  // faces into an opaque and a translucent draw group. glTF ignores COLOR_0's
+  // alpha unless the material is alphaMode BLEND, which GLTFExporter writes for
+  // a `transparent` material, and it exports one primitive per group.
+  let material: THREE.Material | THREE.Material[];
+  if (geometry.getAttribute('color')?.itemSize === 4) {
+    material = [];
+    material[OPAQUE_GROUP] = standard();
+    material[TRANSLUCENT_GROUP] = standard({ transparent: true, depthWrite: false });
+  } else {
+    material = standard();
+  }
 
   const mesh = new THREE.Mesh(geometry, material);
   // OpenSCAD is Z-up; glTF is Y-up. Bake the conversion into the node transform.
