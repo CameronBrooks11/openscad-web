@@ -6,6 +6,18 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`color(c, alpha)` rendered fully opaque** (#282): the OFF parser kept the
+  alpha OpenSCAD's Manifold backend writes, but the viewer built an RGB color
+  attribute and an opaque material, so it never reached the screen. A model
+  with translucent faces now gets an RGBA color attribute and two draw groups:
+  opaque faces stay opaque and depth-writing, translucent ones blend without
+  writing depth. GLB export carries the same split, as an RGBA `COLOR_0` with
+  an `alphaMode: BLEND` material for the translucent faces. Translucent faces
+  that overlap within one model blend in buffer order, not depth order. Fully
+  opaque models are built exactly as before.
+
 ## [0.8.0] - 2026-08-28
 
 Mostly an internal-quality release. Two gates were reporting green while
