@@ -21,7 +21,7 @@ inputs:
     description: Mount path inside the published site tree, for example / or /model/.
     required: false
   version:
-    description: Publish artifact version to download. Defaults to the action tag, including major aliases like v0.
+    description: Publish artifact version to download. Defaults to the action's ref, including major aliases like v0; nested in a composite action, where github.action_ref is empty, the ref is read from the action's path.
     required: false
   output-dir:
     description: Final assembled site directory. Overrides site.outDir from config when provided.
@@ -92,15 +92,15 @@ runs:
           requested_ref="${ACTION_REF}"
         fi
 
-        if [[ -z "${requested_ref}" ]]; then
-          echo "Could not determine an artifact version. Pass the version input explicitly." >&2
-          exit 1
+        # Nested in a composite action, github.action_ref is empty; the resolver
+        # then reads the ref from the action path instead.
+        args=( --action-path "${GITHUB_ACTION_PATH}" --repo "CameronBrooks11/openscad-web" )
+        if [[ -n "${requested_ref}" ]]; then
+          args+=( --requested-ref "${requested_ref}" )
         fi
 
         resolved_version="$(
-          node "${GITHUB_ACTION_PATH}/scripts/resolve-release-version.mjs" \
-            --requested-ref "${requested_ref}" \
-            --repo "CameronBrooks11/openscad-web"
+          node "${GITHUB_ACTION_PATH}/scripts/resolve-release-version.mjs" "${args[@]}"
         )"
 
         echo "resolved-version=${resolved_version}" >> "${GITHUB_OUTPUT}"

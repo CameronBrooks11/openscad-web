@@ -67,6 +67,28 @@ export function resolveRequestedReleaseTag(requestedRef, releases) {
   return candidates[0];
 }
 
+// The runner checks a downloaded action out at .../_actions/<owner>/<repo>/<ref>.
+// When the action runs nested in a composite action, github.action_ref is empty,
+// but GITHUB_ACTION_PATH still ends in the ref, so it can stand in.
+export function refFromActionPath(actionPath, repoFullName) {
+  if (typeof actionPath !== 'string' || actionPath.trim() === '') {
+    return null;
+  }
+
+  const parts = actionPath.trim().replace(/\\/g, '/').replace(/\/+$/, '').split('/');
+  const at = parts.lastIndexOf('_actions');
+  if (at < 0 || parts.length !== at + 4) {
+    return null;
+  }
+
+  const [owner, repo, ref] = parts.slice(at + 1);
+  if (`${owner}/${repo}`.toLowerCase() !== String(repoFullName).toLowerCase()) {
+    return null;
+  }
+
+  return ref;
+}
+
 export async function fetchGitHubReleases(repoFullName, token, fetchImpl = fetch) {
   const headers = {
     Accept: 'application/vnd.github+json',
@@ -121,13 +143,14 @@ function parseCliArgs(argv) {
       throw new Error(`Missing value for --${rawFlag}`);
     }
 
-    if (!['requested-ref', 'repo', 'token'].includes(rawFlag)) {
+    if (!['requested-ref', 'action-path', 'repo', 'token'].includes(rawFlag)) {
       throw new Error(`Unknown flag: --${rawFlag}`);
     }
 
     index += 1;
 
     if (rawFlag === 'requested-ref') parsed.requestedRef = value;
+    if (rawFlag === 'action-path') parsed.actionPath = value;
     if (rawFlag === 'repo') parsed.repo = value;
     if (rawFlag === 'token') parsed.token = value;
   }
@@ -139,13 +162,20 @@ export async function runResolveReleaseVersion(argv = process.argv.slice(2)) {
   const args = parseCliArgs(argv);
   if (args.help) {
     process.stdout.write(
-      'Usage: node scripts/resolve-release-version.mjs --requested-ref v0 --repo CameronBrooks11/openscad-web\n',
+      'Usage: node scripts/resolve-release-version.mjs [--requested-ref v0] [--action-path PATH] --repo CameronBrooks11/openscad-web\n',
     );
     return { helpPrinted: true };
   }
 
   if (typeof args.requestedRef !== 'string' || args.requestedRef.trim() === '') {
-    throw new Error('--requested-ref is required.');
+    const fromPath = refFromActionPath(args.actionPath, args.repo);
+    if (fromPath == null) {
+      throw new Error(
+        'Could not determine an artifact version: no --requested-ref, and the action path does not name a ref. Pass the version input explicitly.',
+      );
+    }
+    process.stderr.write(`Using ref ${fromPath} from the action path ${args.actionPath}.\n`);
+    args.requestedRef = fromPath;
   }
 
   const releases =
