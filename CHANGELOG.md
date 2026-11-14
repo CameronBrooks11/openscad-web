@@ -6,6 +6,11 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-11-14
+
+Two fixes: the Action now works nested in another composite action without a
+`version` input, and `color()` with an alpha renders translucent.
+
 ### Fixed
 
 - **The Action couldn't find its version inside a composite action** (#339):
@@ -23,6 +28,11 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
   an `alphaMode: BLEND` material for the translucent faces. Translucent faces
   that overlap within one model blend in buffer order, not depth order. Fully
   opaque models are built exactly as before.
+
+### Dependencies
+
+- `dompurify` is raised to 3.4.17 (#332) and `compression` to 1.8.2 (#325)
+  through overrides, and Dependabot bumped the rest (24 updates since 0.8.0).
 
 ## [0.8.0] - 2026-08-28
 
