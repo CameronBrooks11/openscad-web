@@ -8,6 +8,12 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ### Fixed
 
+- **The Action couldn't find its version inside a composite action** (#339):
+  nested in another composite action, `github.action_ref` is empty, so the
+  "Resolve publish artifact version" step stopped unless `version` was passed.
+  It now reads the ref from the action's path, which the runner names after it
+  (`.../_actions/CameronBrooks11/openscad-web/v0`), and logs where the ref came
+  from. An explicit `version` still wins.
 - **`color(c, alpha)` rendered fully opaque** (#282): the OFF parser kept the
   alpha OpenSCAD's Manifold backend writes, but the viewer built an RGB color
   attribute and an opaque material, so it never reached the screen. A model

@@ -2,7 +2,12 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { parseSemverTag, resolveRequestedReleaseTag } from '../resolve-release-version.mjs';
+import {
+  parseSemverTag,
+  refFromActionPath,
+  resolveRequestedReleaseTag,
+  runResolveReleaseVersion,
+} from '../resolve-release-version.mjs';
 
 describe('parseSemverTag', () => {
   it('parses semver tags', () => {
@@ -44,5 +49,66 @@ describe('resolveRequestedReleaseTag', () => {
     expect(() =>
       resolveRequestedReleaseTag('v2', [{ tag_name: 'v1.0.0', draft: false, prerelease: false }]),
     ).toThrow(/No published release found/i);
+  });
+});
+
+describe('refFromActionPath', () => {
+  const repo = 'CameronBrooks11/openscad-web';
+
+  it('reads the ref from a downloaded action path', () => {
+    expect(
+      refFromActionPath('/home/runner/work/_actions/CameronBrooks11/openscad-web/v0', repo),
+    ).toBe('v0');
+    expect(
+      refFromActionPath('/home/runner/work/_actions/CameronBrooks11/openscad-web/v0.8.0/', repo),
+    ).toBe('v0.8.0');
+  });
+
+  it('reads a Windows runner path', () => {
+    expect(refFromActionPath('D:\\a\\_actions\\CameronBrooks11\\openscad-web\\v0', repo)).toBe(
+      'v0',
+    );
+  });
+
+  it('matches the repo regardless of case', () => {
+    expect(refFromActionPath('/w/_actions/cameronbrooks11/OpenSCAD-Web/v0', repo)).toBe('v0');
+  });
+
+  it('returns null for a path that names no ref of this repo', () => {
+    expect(refFromActionPath('', repo)).toBeNull();
+    expect(refFromActionPath(undefined, repo)).toBeNull();
+    expect(refFromActionPath('/home/runner/work/openscad-web/openscad-web', repo)).toBeNull();
+    expect(refFromActionPath('/w/_actions/someone-else/openscad-web/v0', repo)).toBeNull();
+    expect(
+      refFromActionPath('/w/_actions/CameronBrooks11/openscad-web/feature/x', repo),
+    ).toBeNull();
+  });
+});
+
+describe('runResolveReleaseVersion', () => {
+  it('falls back to the action path when no ref is given', async () => {
+    const result = await runResolveReleaseVersion([
+      '--action-path',
+      '/home/runner/work/_actions/CameronBrooks11/openscad-web/v0.8.0',
+      '--repo',
+      'CameronBrooks11/openscad-web',
+    ]);
+    expect(result.resolvedTag).toBe('v0.8.0');
+  });
+
+  it('prefers an explicit ref over the action path', async () => {
+    const result = await runResolveReleaseVersion([
+      '--requested-ref',
+      'v0.7.1',
+      '--action-path',
+      '/home/runner/work/_actions/CameronBrooks11/openscad-web/v0.8.0',
+    ]);
+    expect(result.resolvedTag).toBe('v0.7.1');
+  });
+
+  it('fails clearly when neither names a ref', async () => {
+    await expect(
+      runResolveReleaseVersion(['--action-path', '/home/runner/work/openscad-web/openscad-web']),
+    ).rejects.toThrow(/Pass the version input explicitly/);
   });
 });
