@@ -6,6 +6,11 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-11-14
+
+One fix: the Action finds its own version when nested in a composite action
+that was itself downloaded, as the docs engine is.
+
 ### Fixed
 
 - **The Action took its parent's ref as its own version** (#339): nested in a
