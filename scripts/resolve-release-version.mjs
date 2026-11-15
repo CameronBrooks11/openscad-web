@@ -68,8 +68,9 @@ export function resolveRequestedReleaseTag(requestedRef, releases) {
 }
 
 // The runner checks a downloaded action out at .../_actions/<owner>/<repo>/<ref>.
-// When the action runs nested in a composite action, github.action_ref is empty,
-// but GITHUB_ACTION_PATH still ends in the ref, so it can stand in.
+// Nested in a composite action, github.action_ref is empty when the parent is a
+// local action and the parent's own ref when it is a downloaded one, so the path
+// names this action's ref when github.action_ref may not.
 export function refFromActionPath(actionPath, repoFullName) {
   if (typeof actionPath !== 'string' || actionPath.trim() === '') {
     return null;
@@ -143,7 +144,7 @@ function parseCliArgs(argv) {
       throw new Error(`Missing value for --${rawFlag}`);
     }
 
-    if (!['requested-ref', 'action-path', 'repo', 'token'].includes(rawFlag)) {
+    if (!['requested-ref', 'action-path', 'action-ref', 'repo', 'token'].includes(rawFlag)) {
       throw new Error(`Unknown flag: --${rawFlag}`);
     }
 
@@ -151,6 +152,7 @@ function parseCliArgs(argv) {
 
     if (rawFlag === 'requested-ref') parsed.requestedRef = value;
     if (rawFlag === 'action-path') parsed.actionPath = value;
+    if (rawFlag === 'action-ref') parsed.actionRef = value;
     if (rawFlag === 'repo') parsed.repo = value;
     if (rawFlag === 'token') parsed.token = value;
   }
@@ -162,20 +164,24 @@ export async function runResolveReleaseVersion(argv = process.argv.slice(2)) {
   const args = parseCliArgs(argv);
   if (args.help) {
     process.stdout.write(
-      'Usage: node scripts/resolve-release-version.mjs [--requested-ref v0] [--action-path PATH] --repo CameronBrooks11/openscad-web\n',
+      'Usage: node scripts/resolve-release-version.mjs [--requested-ref v0] [--action-path PATH] [--action-ref REF] --repo CameronBrooks11/openscad-web\n',
     );
     return { helpPrinted: true };
   }
 
+  // An explicit version wins, then the action path, then github.action_ref.
   if (typeof args.requestedRef !== 'string' || args.requestedRef.trim() === '') {
     const fromPath = refFromActionPath(args.actionPath, args.repo);
-    if (fromPath == null) {
+    if (fromPath != null) {
+      process.stderr.write(`Using ref ${fromPath} from the action path ${args.actionPath}.\n`);
+      args.requestedRef = fromPath;
+    } else if (typeof args.actionRef === 'string' && args.actionRef.trim() !== '') {
+      args.requestedRef = args.actionRef;
+    } else {
       throw new Error(
-        'Could not determine an artifact version: no --requested-ref, and the action path does not name a ref. Pass the version input explicitly.',
+        'Could not determine an artifact version: no --requested-ref, the action path does not name a ref, and there is no --action-ref. Pass the version input explicitly.',
       );
     }
-    process.stderr.write(`Using ref ${fromPath} from the action path ${args.actionPath}.\n`);
-    args.requestedRef = fromPath;
   }
 
   const releases =
