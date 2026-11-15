@@ -6,6 +6,17 @@ release (changelog upkeep and tagging had lapsed between `0.1.0` and `0.2.0`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Action took its parent's ref as its own version** (#339): nested in a
+  composite action that was itself downloaded, such as a docs engine used as
+  `build@v1` or `build@<sha>`, `github.action_ref` is the parent's ref, and
+  the "Resolve publish artifact version" step tried to resolve it ("Unsupported
+  version ref"). 0.8.1 read the action's path only when `github.action_ref`
+  was empty, which is true only under a local parent (`uses: ./build`). The
+  path now comes first: an explicit `version`, then the ref the path names,
+  then `github.action_ref`.
+
 ## [0.8.1] - 2026-11-14
 
 Two fixes: the Action now works nested in another composite action without a

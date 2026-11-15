@@ -21,7 +21,7 @@ inputs:
     description: Mount path inside the published site tree, for example / or /model/.
     required: false
   version:
-    description: Publish artifact version to download. Defaults to the action's ref, including major aliases like v0; nested in a composite action, where github.action_ref is empty, the ref is read from the action's path.
+    description: Publish artifact version to download. Defaults to the action's ref, including major aliases like v0, read from the action's path, or from github.action_ref when the path names none.
     required: false
   output-dir:
     description: Final assembled site directory. Overrides site.outDir from config when provided.
@@ -87,16 +87,15 @@ runs:
       run: |
         set -euo pipefail
 
-        requested_ref="${INPUT_VERSION}"
-        if [[ -z "${requested_ref}" ]]; then
-          requested_ref="${ACTION_REF}"
-        fi
-
-        # Nested in a composite action, github.action_ref is empty; the resolver
-        # then reads the ref from the action path instead.
+        # The resolver takes the version input first, then the ref the action
+        # path names, then github.action_ref. Nested in a composite action that
+        # was itself downloaded, github.action_ref is the parent's ref, not ours.
         args=( --action-path "${GITHUB_ACTION_PATH}" --repo "CameronBrooks11/openscad-web" )
-        if [[ -n "${requested_ref}" ]]; then
-          args+=( --requested-ref "${requested_ref}" )
+        if [[ -n "${INPUT_VERSION}" ]]; then
+          args+=( --requested-ref "${INPUT_VERSION}" )
+        fi
+        if [[ -n "${ACTION_REF}" ]]; then
+          args+=( --action-ref "${ACTION_REF}" )
         fi
 
         resolved_version="$(

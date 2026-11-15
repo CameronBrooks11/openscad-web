@@ -106,6 +106,26 @@ describe('runResolveReleaseVersion', () => {
     expect(result.resolvedTag).toBe('v0.7.1');
   });
 
+  it('prefers the action path over a parent action ref', async () => {
+    const result = await runResolveReleaseVersion([
+      '--action-path',
+      '/home/runner/work/_actions/CameronBrooks11/openscad-web/v0.8.0',
+      '--action-ref',
+      '3cbdca08b1b3ca69fc47d4ffb22a12051e239a4b',
+    ]);
+    expect(result.resolvedTag).toBe('v0.8.0');
+  });
+
+  it('falls back to the action ref when the path names none', async () => {
+    const result = await runResolveReleaseVersion([
+      '--action-path',
+      '/home/runner/work/openscad-web/openscad-web',
+      '--action-ref',
+      'v0.8.0',
+    ]);
+    expect(result.resolvedTag).toBe('v0.8.0');
+  });
+
   it('fails clearly when neither names a ref', async () => {
     await expect(
       runResolveReleaseVersion(['--action-path', '/home/runner/work/openscad-web/openscad-web']),
